@@ -1,8 +1,0 @@
-version: '3.2'
-services:
-  prometheus_etcd_sd:
-    image: docker.mobike.io/database/drc/prometheus_sd:paas-c3d223c
-    restart: always
-    volumes:
-      - /mobike-data/prometheus/tgroups:/
-    command: ["/prometheus_sd", "-server=localhost:2379"]

@@ -143,7 +143,7 @@ func TestMongoJson(t *testing.T) {
 	coll := session.DB(t.Name()).C(t.Name())
 
 	for i := 0; i < operations; i++ {
-		r.NoError(coll.Insert(&person{"Foo", time.Now().Format(time.RFC3339)}))
+		r.NoError(coll.Insert(&person{"Foo" + strconv.Itoa(i), time.Now().Format(time.RFC3339)}))
 	}
 
 	<-done

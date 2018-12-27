@@ -1,0 +1,61 @@
+version: '3.2'
+services:
+  source-db:
+    image: mysql:5.7.18
+    container_name: source-db-test
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+    command:
+      # test for binlog rotate case
+      - --max-binlog-size=409600
+    logging:
+      driver: none
+    volumes:
+      - ./mycnf:/etc/mysql/conf.d
+
+  target-db:
+    image: mysql:5.7.18
+    container_name: target-db-test
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+    logging:
+      driver: none
+    volumes:
+      - ./mycnf:/etc/mysql/conf.d
+
+  mongo:
+    image: mongo:4.1
+    ports:
+      - 27017
+    logging:
+      driver: none
+    command: mongod --replSet rs1
+
+  zookeeper:
+    image: zookeeper:3.4.10
+    container_name: zookeeper
+    logging:
+      driver: none
+
+  kafka:
+    image: confluentinc/cp-kafka:5.1.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    logging:
+      driver: none
+
+  drc-test:
+    build:
+      context: ./
+      dockerfile: Dockerfile.test.gravity
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_HOST=mongo
+      - KAFKA_BROKER=kafka:9092
+    command: ["bash", "./wait-for-it.sh", "source-db:3306","-t", "0",  "--", "./wait-for-it.sh", "target-db:3306","-t", "0",  "--", "./wait-for-it.sh", "mongo:27017", "-t", "0", "--", "./wait-for-it.sh", "kafka:9092", "-t", "0", "--", "make", "go-test"]
