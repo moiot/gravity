@@ -10,16 +10,24 @@ services:
 
 jobs:
   include:
-    - name: "build"
+    - stage: "test"
+      name: "build"
       script:
         - make build-linux
-        - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         - docker build -t moiot/gravity:${TRAVIS_COMMIT::8} -f Dockerfile.gravity .
-        - docker push moiot/gravity:${TRAVIS_COMMIT::8}
         - docker build -t moiot/gravity-operator:${TRAVIS_COMMIT::8} -f Dockerfile.operator .
-        - docker push moiot/gravity-operator:${TRAVIS_COMMIT::8}
         - docker build -t moiot/gravity-gatekeeper:${TRAVIS_COMMIT::8} -f Dockerfile.gatekeeper .
-        - docker push moiot/gravity-gatekeeper:${TRAVIS_COMMIT::8}
     - name: "test"
       script: make test
       after_script: make test-down
+    - stage: "publish"
+      if: tag IS present
+      script:
+        - make build-linux
+        - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        - docker build -t moiot/gravity:${TRAVIS_TAG} -f Dockerfile.gravity .
+        - docker push moiot/gravity:${TRAVIS_TAG}
+        - docker build -t moiot/gravity-operator:${TRAVIS_TAG} -f Dockerfile.operator .
+        - docker push moiot/gravity-operator:${TRAVIS_TAG}
+        - docker build -t moiot/gravity-gatekeeper:${TRAVIS_TAG} -f Dockerfile.gatekeeper .
+        - docker push moiot/gravity-gatekeeper:${TRAVIS_TAG}
