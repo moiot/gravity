@@ -14,7 +14,7 @@ enable-delete = true
 binlog-list = ["bin.001", "bin.002"]
 
 [padder.mysql.target]
-host = "mbk-dev01.oceanbase.org.cn"
+host = "localhost"
 username = "root"
 password = ""
 port = 3306
@@ -37,7 +37,7 @@ var _ = Describe("config test", func() {
 
 		Expect(padderConf.MySQLConfig).NotTo(BeNil())
 
-		Expect(padderConf.MySQLConfig.Target.Host).To(BeEquivalentTo("mbk-dev01.oceanbase.org.cn"))
+		Expect(padderConf.MySQLConfig.Target.Host).To(BeEquivalentTo("localhost"))
 		Expect(padderConf.MySQLConfig.Target.Username).To(BeEquivalentTo("root"))
 		Expect(padderConf.MySQLConfig.Target.Password).To(BeEquivalentTo(""))
 		Expect(padderConf.MySQLConfig.Target.Port).To(BeEquivalentTo(3306))
