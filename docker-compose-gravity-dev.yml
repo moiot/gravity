@@ -1,0 +1,11 @@
+version: '3.2'
+services:
+  source-db:
+    image: mysql
+    container_name: source-db-dev
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+    ports:
+      - 3478:3306
+    volumes:
+      - ./mycnf:/etc/mysql/conf.d

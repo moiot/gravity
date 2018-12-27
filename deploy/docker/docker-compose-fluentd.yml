@@ -1,0 +1,9 @@
+version: '3.2'
+services:
+  fluentd:
+    image: fluent/fluentd:v1.1.3
+    container_name: fluentd
+    network_mode: host
+    volumes:
+      - ./fluent.conf:/fluentd/etc/fluent.conf
+    restart: always

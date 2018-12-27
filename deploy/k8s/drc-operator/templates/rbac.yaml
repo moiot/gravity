@@ -1,0 +1,38 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "drc-operator.fullname" . }}-role
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "pods", "services", "endpoints", "events"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+- apiGroups: ["mobike.io"]
+  resources: ["*"]
+  verbs: ["*"]
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: drc-operator-rolebinding
+subjects:
+- kind: ServiceAccount
+  name: {{ include "drc-operator.fullname" . }}
+
+roleRef:
+  kind: Role
+  name: {{ include "drc-operator.fullname" . }}-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "drc-operator.fullname" . }}

@@ -1,0 +1,31 @@
+syntax = "proto3";
+package dcp;
+
+message Message {
+    string id = 1;
+
+    string tag = 2;
+
+    oneof body {
+        uint64 barrier = 3;
+        Payload payload = 4;
+    }
+
+    uint64 timestamp = 14;
+    string checksum = 15;
+}
+
+message Payload {
+    string id = 1;
+    string content = 2;
+}
+
+message Response {
+    string id = 1;
+    int32 code = 2;
+    string msg = 3;
+}
+
+service DCPService {
+    rpc Process (stream Message) returns (stream Response) {}
+}

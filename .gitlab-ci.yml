@@ -1,0 +1,39 @@
+---
+before_script:
+  - export git_branch=$(git rev-parse --abbrev-ref HEAD)
+  - export git_hash=$(git rev-parse --short HEAD)
+  - docker image prune -f
+  - export PS4='\t '
+  - set -x
+
+after_script:
+  - set +x
+
+build:
+  stage: build
+  variables:
+    builder_work_dir: /go/src/github.com/moiot/gravity
+  script:
+    - docker pull docker.mobike.io/common/golang:1.11.4
+    - docker build -t golang-builder -f Dockerfile.build .
+    - docker run --rm -e LOCAL_USER_ID=`id -u $USER` -v `pwd`:$builder_work_dir -w $builder_work_dir golang-builder make build-linux
+    - docker build -t docker.mobike.io/$CI_PROJECT_PATH/drc:$CI_COMMIT_REF_NAME-$git_hash -f Dockerfile.drc .
+    - docker push docker.mobike.io/$CI_PROJECT_PATH/drc:$CI_COMMIT_REF_NAME-$git_hash
+    - docker build -t docker.mobike.io/$CI_PROJECT_PATH/operator:$CI_COMMIT_REF_NAME-$git_hash -f Dockerfile.operator .
+    - docker push docker.mobike.io/$CI_PROJECT_PATH/operator:$CI_COMMIT_REF_NAME-$git_hash
+    - docker build -t docker.mobike.io/$CI_PROJECT_PATH/gatekeeper:$CI_COMMIT_REF_NAME-$git_hash -f Dockerfile.gatekeeper .
+    - docker push docker.mobike.io/$CI_PROJECT_PATH/gatekeeper:$CI_COMMIT_REF_NAME-$git_hash
+  after_script:
+    - docker rmi golang-builder
+    - docker rmi $(docker images --filter=reference="docker.mobike.io/$CI_PROJECT_PATH/*" -q)
+
+test:
+  stage: build
+  dependencies: []
+  script:
+    - make test
+  after_script:
+    - make test-down
+
+stages:
+  - build

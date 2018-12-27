@@ -1,0 +1,88 @@
+version: '3.2'
+services:
+  source-db:
+    image: docker.mobike.io/common/mysql:5.7.18
+    container_name: source-db-test
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+    command:
+    # test for binlog rotate case
+      - --max-binlog-size=409600
+    logging:
+      driver: none
+    volumes:
+      - ./mycnf:/etc/mysql/conf.d
+
+  target-db:
+    image: docker.mobike.io/common/mysql:5.7.18
+    container_name: target-db-test
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+    logging:
+      driver: none
+    volumes:
+      - ./mycnf:/etc/mysql/conf.d
+
+  etcd:
+    image: docker.mobike.io/common/etcd
+    logging:
+      driver: none
+    command:
+      - /usr/local/bin/etcd
+      - -name
+      - etcd
+      - --data-dir
+      - /etcd_data
+      - -advertise-client-urls
+      - http://etcd:2379
+      - -listen-client-urls
+      - http://0.0.0.0:2379
+      - -initial-advertise-peer-urls
+      - http://etcd:2380
+      - -listen-peer-urls
+      - http://0.0.0.0:2380
+      - -initial-cluster
+      - etcd=http://etcd:2380
+
+  mongo:
+    image: docker.mobike.io/common/mongo
+    ports:
+      - 27017
+    logging:
+      driver: none
+    command: mongod --replSet rs1 --smallfiles
+
+  zookeeper:
+    image: docker.mobike.io/common/zookeeper:3.4.10
+    container_name: zookeeper
+    logging:
+      driver: none
+
+  kafka:
+    image: docker.mobike.io/common/kafka:0.10.2.1
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ADVERTISED_PORT: 9092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    logging:
+      driver: none
+
+  drc-test:
+    build:
+      context: ./
+      dockerfile: Dockerfile.test.drc
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_HOST=mongo
+      - KAFKA_BROKER=kafka:9092
+#      - DB_HOST=$DB_HOST
+#      - DB_PORT=$DB_PORT
+#      - DB_USER=$DB_USER
+#      - DB_URL=$DB_USER:@tcp($DB_HOST:$DB_PORT)/?charset=utf8&interpolateParams=true&readTimeout=30s
+    command: ["bash", "./wait-for-it.sh", "source-db:3306","-t", "0",  "--", "./wait-for-it.sh", "target-db:3306","-t", "0",  "--", "./wait-for-it.sh", "etcd:2379", "-t", "0", "--", "./wait-for-it.sh", "mongo:27017", "-t", "0", "--", "./wait-for-it.sh", "kafka:9092", "-t", "0", "--", "make", "go-test"]

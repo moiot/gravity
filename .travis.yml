@@ -1,0 +1,7 @@
+language: golang
+
+services:
+  - docker
+
+script:
+  - go env

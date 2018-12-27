@@ -1,0 +1,7 @@
+FROM docker.mobike.io/common/golang:1.11.4
+
+WORKDIR /go/src/github.com/moiot/gravity
+
+COPY . /go/src/github.com/moiot/gravity
+
+CMD ["make go-test"]

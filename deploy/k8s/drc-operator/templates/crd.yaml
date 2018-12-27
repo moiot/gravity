@@ -1,0 +1,60 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: drcclusters.mobike.io
+  annotations:
+    "helm.sh/hook": crd-install
+spec:
+  scope: Namespaced
+  group: mobike.io
+  version: v1alpha1
+  names:
+    kind: DrcCluster
+    plural: drcclusters
+    singular: drccluster
+    shortNames:
+      - dc
+  subresources:
+    status: {}
+  additionalPrinterColumns:
+    - name: Total
+      type: integer
+      description: Total number of pipelines.
+      JSONPath: .status.pipelines
+    - name: Updated
+      type: integer
+      description: Total number of pipelines which version match current deployment rule.
+      JSONPath: .status.updatedPipelines
+    - name: Available
+      type: integer
+      description: Total number of available pipelines (ready for at least minReadySeconds).
+      JSONPath: .status.availablePipelines
+    - name: Unavailable
+      type: integer
+      description: Total number of unavailable pipelines.
+      JSONPath: .status.unavailablePipelines
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: drcpipelines.mobike.io
+  annotations:
+    "helm.sh/hook": crd-install
+spec:
+  scope: Namespaced
+  group: mobike.io
+  version: v1alpha1
+  names:
+    kind: DrcPipeline
+    plural: drcpipelines
+    singular: drcpipeline
+    shortNames:
+      - dp
+  subresources:
+    status: {}
+  additionalPrinterColumns:
+    - name: Position
+      type: string
+      description: Position of the pipeline.
+      JSONPath: .status.position

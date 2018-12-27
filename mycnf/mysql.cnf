@@ -1,0 +1,7 @@
+[mysqld]
+log-bin=mysql-bin
+server-id=100
+gtid_mode=ON
+enforce-gtid-consistency=true
+transaction-isolation=READ-COMMITTED
+explicit_defaults_for_timestamp=true

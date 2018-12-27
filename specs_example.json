@@ -1,0 +1,77 @@
+{
+  "gravity": {
+    "config": {
+      "static-route-config": {
+        "routes": [
+          {
+            "source-table": "",
+            "source-db": "",
+            "dml-target-topic": ""
+          }
+        ]
+      },
+      "kafka-global": {
+        "broker-addrs": [
+          "$kafkaHost:$kafkaPort"
+        ],
+        "partitions": {
+          "test": 1
+        }
+      },
+      "input": "mysql",
+      "output-format": "pb",
+      "mysql": {
+        "source": {
+          "location": "Asia/Shanghai",
+          "host": "$sourceMysqlHost",
+          "port": 4001,
+          "password": "",
+          "username": ""
+        }
+      },
+      "output": "kafka"
+    }
+  },
+  "nuclear": {
+    "config": {
+      "target-mysql": {
+        "location": "Local",
+        "host": "$targetMysqlHost",
+        "port": 4002,
+        "password": "",
+        "username": ""
+      },
+      "kafka-global": {
+        "consume-from": "newest", // or oldest
+        "broker-addrs": [
+          "$kafkaHost:$kafkaPort"
+        ],
+        "group-id": "e2e-mysql-full-test",
+        "topics": [
+          "" // Must be the same as gravity.static-route-config.routes.dml-target-topic
+        ]
+      },
+      "input": "kafka",
+      "routes": [
+        {
+          "source-table-name": "", // Must be the same as gravity.static-route-config.routes.source-table
+          "target-schema-name": "", // Must be the same as gravity.static-route-config.routes.source-db
+          "target-table-name": "",
+          "source-schema-name": ""
+        }
+      ],
+      "offset-store": {
+        "type": "db",
+        "db": {
+          "location": "Asia/Shanghai",
+          "host": "$offsetStoreHost",
+          "port": 4002,
+          "password": "",
+          "username": ""
+        }
+      },
+      "output": "mysql"
+    }
+  },
+  "name": "developer-guide"
+}

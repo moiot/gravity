@@ -1,0 +1,13 @@
+apiVersion: mobike.io/v1alpha1
+kind: DrcCluster
+metadata:
+  name: {{ include "drc-operator.fullname" . }}-cluster
+  labels:
+    app.kubernetes.io/name: {{ include "drc-operator.name" . }}-cluster
+    helm.sh/chart: {{ include "drc-operator.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  rolling: "25%"
+  deploymentRules:
+{{ toYaml .Values.deploymentRules | indent 4}}

@@ -1,0 +1,3 @@
+{
+  "Enable": ["vet", "staticcheck", "errcheck", "gas", "safesql", "golint", "gosimple", "unconvert", "interfacer", "unused", "ineffassign"]
+}

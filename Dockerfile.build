@@ -1,0 +1,11 @@
+FROM docker.mobike.io/common/golang:1.11.4
+
+ADD http://dbtools-1252726293.coscd.myqcloud.com/bin/gosu-amd64 /usr/local/bin/gosu
+
+RUN chmod +x /usr/local/bin/gosu
+
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
