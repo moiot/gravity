@@ -11,7 +11,16 @@ services:
 jobs:
   include:
     - name: "build"
-      script: make build-linux
+      script:
+        - make build-linux
+        - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        - docker build -t $DOCKER_USERNAME/gravity:$$(git rev-parse --short HEAD) -f Dockerfile.gravity .
+        - docker push $DOCKER_USERNAME/gravity:$$(git rev-parse --short HEAD)
+        - docker build -t $DOCKER_USERNAME/gravity-operator:$$(git rev-parse --short HEAD) -f Dockerfile.operator .
+        - docker push $DOCKER_USERNAME/gravity-operator:$$(git rev-parse --short HEAD)
+        - docker build -t $DOCKER_USERNAME/gravity-gatekeeper:$$(git rev-parse --short HEAD) -f Dockerfile.gatekeeper .
+        - docker push $DOCKER_USERNAME/gravity-gatekeeper:$$(git rev-parse --short HEAD)
+        - docker rmi $(docker images --filter=reference="$DOCKER_USERNAME/gravity*" -q)
     - name: "test"
       script: make test
       after_script: make test-down

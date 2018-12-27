@@ -25,7 +25,7 @@ dev-down:
 	docker-compose -f docker-compose-gravity-dev.yml down
 
 go-test:
-	go test -failfast -v -race ./integration_test
+	go test -failfast -race ./integration_test
 	go test -failfast -coverprofile=cover.out $(TEST_DIRS) && go tool cover -func=cover.out | tail -n 1
 
 test-local:
@@ -97,8 +97,3 @@ mock:
 	mockgen github.com/Shopify/sarama Client > mocks/pkg/kafka_client/kafka_client.go
 	mockgen github.com/moiot/gravity/pkg/worker_pool Scheduler,Job,JobSubmitter,JobAcker > mocks/pkg/worker_pool/worker_pool.go
 	mockgen github.com/moiot/gravity/sql_execution_engine SQlExecutionEngine > mocks/sql_execution_engine/sql_execution_engine.go
-
-image:
-	docker build -t moiot/gravity:$$(git rev-parse --short HEAD) -f Dockerfile.gravity .
-	docker build -t moiot/gravity/operator:$$(git rev-parse --short HEAD) -f Dockerfile.operator .
-	docker build -t moiot/gravity/gatekeeper:$$(git rev-parse --short HEAD) -f Dockerfile.gatekeeper .
