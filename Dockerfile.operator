@@ -8,4 +8,4 @@ RUN cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo "Asia/Shanghai" 
 
 WORKDIR /
 
-COPY bin/drc-operator-linux-amd64 /drc-operator
+COPY bin/gravity-operator-linux-amd64 /drc-operator

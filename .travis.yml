@@ -14,12 +14,12 @@ jobs:
       script:
         - make build-linux
         - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        - docker build -t $DOCKER_USERNAME/gravity:${TRAVIS_COMMIT::8} -f Dockerfile.gravity .
-        - docker push $DOCKER_USERNAME/gravity:${TRAVIS_COMMIT::8}
-        - docker build -t $DOCKER_USERNAME/gravity-operator:${TRAVIS_COMMIT::8} -f Dockerfile.operator .
-        - docker push $DOCKER_USERNAME/gravity-operator:${TRAVIS_COMMIT::8}
-        - docker build -t $DOCKER_USERNAME/gravity-gatekeeper:${TRAVIS_COMMIT::8} -f Dockerfile.gatekeeper .
-        - docker push $DOCKER_USERNAME/gravity-gatekeeper:${TRAVIS_COMMIT::8}
+        - docker build -t moiot/gravity:${TRAVIS_COMMIT::8} -f Dockerfile.gravity .
+        - docker push moiot/gravity:${TRAVIS_COMMIT::8}
+        - docker build -t moiot/gravity-operator:${TRAVIS_COMMIT::8} -f Dockerfile.operator .
+        - docker push moiot/gravity-operator:${TRAVIS_COMMIT::8}
+        - docker build -t moiot/gravity-gatekeeper:${TRAVIS_COMMIT::8} -f Dockerfile.gatekeeper .
+        - docker push moiot/gravity-gatekeeper:${TRAVIS_COMMIT::8}
     - name: "test"
       script: make test
       after_script: make test-down
