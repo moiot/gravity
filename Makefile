@@ -32,11 +32,10 @@ test-local:
 	make test; make test-down
 
 test:
-	docker-compose -f docker-compose-drc-test.yml down -v
-	docker-compose -f docker-compose-drc-test.yml up --build --abort-on-container-exit
+	docker-compose -f docker-compose-gravity-test.yml up --build --abort-on-container-exit
 
 test-down:
-	docker-compose -f docker-compose-drc-test.yml down -v
+	docker-compose -f docker-compose-gravity-test.yml down -v
 
 run-dev:
 	docker-compose -f docker-compose-gravity-dev.yml up -d --force-recreate

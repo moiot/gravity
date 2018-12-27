@@ -1,7 +1,17 @@
-language: golang
+language: go
+
+go:
+  - "1.11"
+
+install: true
 
 services:
   - docker
 
-script:
-  - go env
+jobs:
+  include:
+    - name: "build"
+      script: make build-linux
+    - name: "test"
+      script: make test
+      after_script: make test-down
