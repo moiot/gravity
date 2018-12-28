@@ -236,16 +236,22 @@ func (plugin *mysqlFullInput) Wait() {
 }
 
 func (plugin *mysqlFullInput) Close() {
-	log.Infof("[scanner server] closing...")
 
 	plugin.closeOnce.Do(func() {
-		plugin.cancel()
+		log.Infof("[scanner server] closing...")
+
+		if plugin.cancel != nil {
+			plugin.cancel()
+		}
 
 		for i := range plugin.tableScanners {
 			plugin.tableScanners[i].Wait()
 		}
 
-		plugin.sourceDB.Close()
+		if plugin.sourceDB != nil {
+			plugin.sourceDB.Close()
+		}
+
 
 		if plugin.scanDB != nil {
 			plugin.scanDB.Close()
@@ -254,9 +260,10 @@ func (plugin *mysqlFullInput) Close() {
 		if plugin.sourceSchemaStore != nil {
 			plugin.sourceSchemaStore.Close()
 		}
+
+		log.Infof("[mysqlFullInput] closed")
 	})
 
-	log.Infof("[mysqlFullInput] closed")
 }
 
 func (plugin *mysqlFullInput) waitFinish() {

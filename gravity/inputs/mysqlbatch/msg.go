@@ -1,6 +1,7 @@
 package mysqlbatch
 
 import (
+	"github.com/moiot/gravity/position_store"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -22,7 +23,8 @@ func NewMsg(
 	rowPtrs []interface{},
 	columnTypes []*sql.ColumnType,
 	sourceTableDef *schema_store.Table,
-	callbackFunc core.AfterMsgCommitFunc) *core.Msg {
+	callbackFunc core.AfterMsgCommitFunc,
+	position position_store.MySQLTablePosition) *core.Msg {
 
 	columnDataMap := mysql.SQLDataPtrs2Val(rowPtrs, columnTypes)
 	msg := core.Msg{
@@ -57,6 +59,7 @@ func NewMsg(
 	msg.OutputStreamKey = utils.NewStringPtr(msg.GetPkSign())
 	msg.Done = make(chan struct{})
 	msg.AfterCommitCallback = callbackFunc
+	msg.InputContext = position
 	msg.Metrics = core.Metrics{
 		MsgCreateTime: time.Now(),
 	}

@@ -176,19 +176,10 @@ func (i *TwoStageInputPlugin) Start(emitter core.Emitter) error {
 }
 
 func (i *TwoStageInputPlugin) Close() {
-	i.transitionMutex.Lock()
-	defer i.transitionMutex.Unlock()
-
-	if i.closed {
-		return
-	}
-
-	i.closed = true
-	if i.Stage() == stages.InputStageIncremental {
-		i.incremental.Close()
-	} else {
-		i.full.Close()
-	}
+	// it is ok to just close these two input without guard from
+	// transitionMutex
+	i.full.Close()
+	i.incremental.Close()
 }
 
 type twoStagePositionStore struct {
