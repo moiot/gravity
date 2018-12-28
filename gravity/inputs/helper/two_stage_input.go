@@ -135,12 +135,18 @@ func (i *TwoStageInputPlugin) Start(emitter core.Emitter) error {
 		}
 
 		go func() {
+
+			pos, ok := <-i.full.Done()
+			if !ok {
+				log.Info("[TwoStageInputPlugin] full stage done")
+				return
+			}
+
 			i.transitionMutex.Lock()
 			defer i.transitionMutex.Unlock()
 
-			pos, ok := <-i.full.Done()
-			if !ok || i.closed {
-				log.Info("[TwoStageInputPlugin] full stage cancelled")
+			if i.closed {
+				log.Info("[TwoStageInputPlugin] full stage closed")
 				return
 			}
 
@@ -176,10 +182,19 @@ func (i *TwoStageInputPlugin) Start(emitter core.Emitter) error {
 }
 
 func (i *TwoStageInputPlugin) Close() {
-	// it is ok to just close these two input without guard from
-	// transitionMutex
-	i.full.Close()
-	i.incremental.Close()
+	i.transitionMutex.Lock()
+	defer i.transitionMutex.Unlock()
+
+	if i.closed {
+		return
+	}
+
+	i.closed = true
+	if i.Stage() == stages.InputStageIncremental {
+		i.incremental.Close()
+	} else {
+		i.full.Close()
+	}
 }
 
 type twoStagePositionStore struct {
