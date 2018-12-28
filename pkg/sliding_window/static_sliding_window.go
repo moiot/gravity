@@ -42,8 +42,8 @@ type staticSlidingWindow struct {
 	lastEnqueueEventTime   int64
 	lastCommitEventTime    int64
 
-	processHistogram prometheus.Histogram
-	eventHistogram   prometheus.Histogram
+	processHistogram prometheus.Observer
+	eventHistogram   prometheus.Observer
 }
 
 func (w *staticSlidingWindow) AddWindowItem(item WindowItem) {
