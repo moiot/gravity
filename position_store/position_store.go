@@ -19,7 +19,7 @@ var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
 
 var (
 	oldTable                     = `cluster_gravity_binlog_position`
-	positionTableName            = `gravity_binlog_position`
+	positionTableName            = `gravity_positions`
 	positionFullTableName        = fmt.Sprintf("%s.%s", config.GravityDBName, positionTableName)
 	createPositionTableStatement = fmt.Sprintf(`
 	CREATE TABLE IF NOT EXISTS %s (

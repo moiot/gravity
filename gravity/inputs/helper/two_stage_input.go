@@ -135,12 +135,18 @@ func (i *TwoStageInputPlugin) Start(emitter core.Emitter) error {
 		}
 
 		go func() {
+
+			pos, ok := <-i.full.Done()
+			if !ok {
+				log.Info("[TwoStageInputPlugin] full stage done")
+				return
+			}
+
 			i.transitionMutex.Lock()
 			defer i.transitionMutex.Unlock()
 
-			pos, ok := <-i.full.Done()
-			if !ok || i.closed {
-				log.Info("[TwoStageInputPlugin] full stage cancelled")
+			if i.closed {
+				log.Info("[TwoStageInputPlugin] full stage closed")
 				return
 			}
 

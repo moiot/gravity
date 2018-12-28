@@ -220,19 +220,28 @@ func (plugin *mysqlInputPlugin) Start(emitter core.Emitter) error {
 }
 
 func (plugin *mysqlInputPlugin) Close() {
-	log.Infof("[mysqlInputPlugin] closing...")
 
 	plugin.closeOnce.Do(func() {
-		plugin.binlogChecker.Stop()
+		log.Infof("[mysqlInputPlugin] closing...")
 
-		plugin.binlogTailer.Close()
-
-		plugin.sourceSchemaStore.Close()
-
-		if err := plugin.sourceDB.Close(); err != nil {
-			log.Errorf("[mysqlInputPlugin.Close] error close db. %s", errors.Trace(err))
+		if plugin.binlogChecker != nil {
+			plugin.binlogChecker.Stop()
 		}
-	})
 
-	log.Infof("[mysqlInputPlugin] closed")
+		if plugin.binlogTailer != nil {
+			plugin.binlogTailer.Close()
+		}
+
+		if plugin.sourceSchemaStore != nil {
+			plugin.sourceSchemaStore.Close()
+		}
+
+		if plugin.sourceDB != nil {
+			if err := plugin.sourceDB.Close(); err != nil {
+				log.Errorf("[mysqlInputPlugin.Close] error close db. %s", errors.Trace(err))
+			}
+		}
+
+		log.Infof("[mysqlInputPlugin] closed")
+	})
 }

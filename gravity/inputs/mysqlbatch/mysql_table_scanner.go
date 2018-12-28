@@ -235,6 +235,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 		tableScanner.positionStore.PutCurrent(utils.TableIdentity(tableDef.Schema, tableDef.Name), min)
 		currentMinPos = min
 	}
+	log.Infof("[LoopInBatch] prepare current: %v", currentMinPos)
 
 	currentMinValue := currentMinPos.Value
 	resultCount := 0
@@ -312,9 +313,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 			posV := mysql.NormalizeSQLType(reflect.ValueOf(rowPtrs[scanIdx]).Elem().Interface())
 			position := position_store.MySQLTablePosition{Value: posV, Column: scanColumn}
 
-			msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit)
-			msg.AfterCommitCallback = tableScanner.AfterMsgCommit
-			msg.InputContext = position
+			msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, position)
 
 			if err := tableScanner.emitter.Emit(msg); err != nil {
 				log.Fatalf("[LoopInBatch] failed to emit job: %v", errors.ErrorStack(err))
@@ -355,7 +354,7 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 
 	for i := range allData {
 		rowPtrs := allData[i]
-		msg := NewMsg(rowPtrs, columnTypes, tableDef, nil)
+		msg := NewMsg(rowPtrs, columnTypes, tableDef, nil, position_store.MySQLTablePosition{})
 		if err := tableScanner.emitter.Emit(msg); err != nil {
 			log.Fatalf("[tableScanner] failed to emit: %v", errors.ErrorStack(err))
 		}

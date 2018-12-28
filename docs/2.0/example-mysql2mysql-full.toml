@@ -1,0 +1,61 @@
+# 整个配置由 4 部分组成：
+# - input: 定义 input plugin 的配置
+# - filters: 定义 filters plugin 的配置，filter 用来对数据流做变更操作
+# - output: 定义 output plugin 的配置
+# - system: 定义系统级配置
+#
+# 围绕 core.Msg, 系统定义若干个 match 函数，在配置文件里使用 match 函数
+# 来匹配 filter 和 output 的路由，filter/output 里的每一个 match 函数
+# 都匹配才算满足匹配规则
+#
+[input.mysql]
+mode = "stream"
+ignore-bidirectional-data = true
+
+[input.mysql]
+mode = "stream"
+[input.mysql.source]
+host = "127.0.0.1"
+username = "root"
+password = ""
+port = 3306
+
+[[filters]]
+type = "reject"
+match-schema = "test_db"
+match-table = "test_table"
+
+[[filters]]
+type = "rename-dml-column"
+match-schema = "test"
+match-table = "test_table_2"
+from = ["b"]
+to = ["d"]
+
+[[filters]]
+type = "delete-dml-column"
+match-schema = "test"
+match-table = "test_table"
+columns = ["e", "f"]
+
+[[filters]]
+type = "dml-pk-override"
+match-schema = "test"
+match-table = "test_table"
+id = "another_id"
+
+[output.kafka]
+broker-addrs = ["1.2.3.4:9002"]
+mode = "async"
+
+[[output.kafka.routes]]
+match-schema = "test_db"
+match-table = "test_table_2"
+dml-topic = "binlog.test_db.test_table_2"
+
+[system.scheduler]
+type = "batch-scheduler"
+nr-worker = 1
+batch-size = 2
+queue-size = 1024
+sliding-window-size = 1024
