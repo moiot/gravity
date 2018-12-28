@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	_ "net/http/pprof"
 	"strings"
 	"testing"
@@ -14,7 +15,6 @@ import (
 	"github.com/moiot/gravity/gravity/inputs/stages"
 
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/util/rand"
 
 	"github.com/moiot/gravity/gravity"
 	gravityConfig "github.com/moiot/gravity/gravity/config"

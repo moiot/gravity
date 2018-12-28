@@ -731,14 +731,6 @@
   pruneopts = "T"
   revision = "287cf08546ab5e7e37d55a84f7ed3fd1db036de5"
 
-[[projects]]
-  digest = "1:e2035d60919705a125feeb8b13926383aff8817634b2c4550743c19ca21f3b08"
-  name = "k8s.io/apimachinery"
-  packages = ["pkg/util/rand"]
-  pruneopts = "T"
-  revision = "103fd098999dc9c0c88536f5c9ad2e5da39373ae"
-  version = "kubernetes-1.11.1"
-
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
@@ -779,7 +771,6 @@
     "gopkg.in/mgo.v2",
     "gopkg.in/mgo.v2/bson",
     "gopkg.in/natefinch/lumberjack.v2",
-    "k8s.io/apimachinery/pkg/util/rand",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

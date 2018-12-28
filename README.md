@@ -55,4 +55,4 @@ DRC 的设计目标是：
 
 [配置手册](docs/2.0/02-config-index.md)
 
-[集群部署](docs/2.0/07-k8s.md)
+[集群部署](https://github.com/moiot/gravity-operator)
