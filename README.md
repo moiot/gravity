@@ -1,7 +1,6 @@
-# Gravity
-
 ![2.0 Product](docs/2.0/product.png)
 
+# Gravity
 
 Gravity 是一款数据复制组件，提供全量、增量数据同步，以及向消息队列发布数据更新。
 

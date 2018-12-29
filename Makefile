@@ -46,12 +46,10 @@ run-dev:
 	mysql -h 127.0.0.1 -P 3478 -u root < gravity/configdata/seed_dev.sql
 	bin/gravity -config=gravity/configdata/dev.toml -meta=gravity/configdata/gravity.meta -bootstrap-mode
 
-build: build-darwin build-linux
-
-build-darwin:
-	GOARCH=amd64 GOOS=darwin $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-darwin-amd64 cmd/gravity/single_binary.go
-	GOARCH=amd64 GOOS=darwin $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-operator-darwin-amd64 cmd/k8s_operator/main.go
-	GOARCH=amd64 GOOS=darwin $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-gatekeeper-darwin-amd64 cmd/k8s_operator/gatekeeper.go
+build:
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity cmd/gravity/single_binary.go
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-operator cmd/k8s_operator/main.go
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-operator cmd/k8s_operator/gatekeeper.go
 	#$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/padder cmd/padder/main.go
 
 
