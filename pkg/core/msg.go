@@ -7,10 +7,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/util/rand"
-
 	"github.com/moiot/gravity/pkg/mongo/gtm"
+	log "github.com/sirupsen/logrus"
 )
 
 type MsgType string
@@ -111,7 +109,17 @@ type TaskReportStatus struct {
 func HashConfig(config string) string {
 	hasher := fnv.New32a()
 	_, _ = hasher.Write([]byte(config))
-	return rand.SafeEncodeString(fmt.Sprint(hasher.Sum32()))
+	return SafeEncodeString(fmt.Sprint(hasher.Sum32()))
+}
+
+const alphanums = "bcdfghjklmnpqrstvwxz2456789"
+
+func SafeEncodeString(s string) string {
+	r := make([]byte, len(s))
+	for i, b := range []rune(s) {
+		r[i] = alphanums[(int(b) % len(alphanums))]
+	}
+	return string(r)
 }
 
 //

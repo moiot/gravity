@@ -74,8 +74,6 @@ type Msg struct {
 
 ## DRC Cluster architecture
 
-DRC Cluster supports cluster deployment on Kubernetes natively.
+DRC Cluster supports cluster deployment on Kubernetes natively. Please see [here](https://github.com/moiot/gravity-operator).
 
-![DRC Cluster architecture](./k8s-160.png)
-
-DRC Cluster provides the Rest API to create the data synchronization task to report the task status. It manages each DRC task in the Web interface (DRC Admin).
+It provides Rest API to create the data synchronization task to report the task status. It manages each DRC task in the Web interface (DRC Admin).

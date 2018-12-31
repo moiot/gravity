@@ -39,8 +39,3 @@ scripts/set_position.py
 default.etcd
 
 gravity_mongo.meta.toml
-
-__pycache__
-/deploy/k8s/drc/charts/
-
-k8s_operator/mock_gravity/mock-linux

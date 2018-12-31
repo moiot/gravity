@@ -11,11 +11,7 @@ const (
 	PartitionTag = "partition"
 	stageTag     = "stage"
 
-	ComponentTag = "component"
-	ScannerTag   = "scanner"
-	GravityTag   = "gravity"
-	NuclearTag   = "nuclear"
-	PadderTag    = "padder"
+	PadderTag = "padder"
 )
 
 var testCounter = prometheus.NewCounter(prometheus.CounterOpts{
@@ -30,71 +26,6 @@ var WaterMarkHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 	Help:      "Histogram of watermark in seconds.",
 	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
 }, []string{PipelineTag, "type"})
-
-//master
-
-//deprecated
-var MasterSyncCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "drc_v2",
-	Subsystem: "master_v2",
-	Name:      "sync_counter",
-	Help:      "Number of sync",
-}, []string{PipelineTag, "task", "result"})
-
-//deprecated
-var MasterSyncPendingGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-	Namespace: "drc_v2",
-	Subsystem: "master_v2",
-	Name:      "sync_pending_gauge",
-	Help:      "Number of pending sync",
-})
-
-//deprecated
-var MasterProcessDownCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "drc_v2",
-	Subsystem: "master_v2",
-	Name:      "process_down",
-	Help:      "Number of process down",
-}, []string{PipelineTag, "task"})
-
-//deprecated
-var MasterScheduleHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-	Namespace: "drc_v2",
-	Subsystem: "master_v2",
-	Name:      "schedule_duration_seconds",
-	Help:      "Bucketed histogram of processing time of schedule.",
-	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-}, []string{PipelineTag})
-
-// Operator metrics
-var OperatorSyncCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "drc_v2",
-	Subsystem: "operator",
-	Name:      "sync_counter",
-	Help:      "Number of sync",
-}, []string{PipelineTag, "controller", "result"})
-
-var OperatorScheduleHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-	Namespace: "drc_v2",
-	Subsystem: "operator",
-	Name:      "schedule_duration_seconds",
-	Help:      "Bucketed histogram of processing time of schedule.",
-	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-}, []string{PipelineTag, "controller"})
-
-var OperatorPipelineUnavailable = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-	Namespace: "drc_v2",
-	Subsystem: "operator",
-	Name:      "pipeline_unavailable",
-	Help:      "Number of pipeline unavailable",
-}, []string{PipelineTag})
-
-var OperatorClusterStatus = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-	Namespace: "drc_v2",
-	Subsystem: "operator",
-	Name:      "cluster_status",
-	Help:      "Number of pipelines in different status",
-}, []string{"status"})
 
 // Gravity metrics
 var GravityKafkaEnqueuedCount = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -428,16 +359,6 @@ func init() {
 
 	prometheus.MustRegister(WaterMarkHistogram)
 
-	prometheus.MustRegister(MasterSyncCount)
-	prometheus.MustRegister(MasterSyncPendingGauge)
-	prometheus.MustRegister(MasterProcessDownCount)
-	prometheus.MustRegister(MasterScheduleHistogram)
-
-	prometheus.MustRegister(OperatorSyncCount)
-	prometheus.MustRegister(OperatorScheduleHistogram)
-	prometheus.MustRegister(OperatorPipelineUnavailable)
-	prometheus.MustRegister(OperatorClusterStatus)
-
 	prometheus.MustRegister(GravityKafkaEnqueuedCount)
 	prometheus.MustRegister(GravityKafkaSuccessCount)
 	prometheus.MustRegister(GravityKafkaErrorCount)
@@ -459,18 +380,6 @@ func init() {
 	prometheus.MustRegister(GravityOplogTimeoutCountHistogram)
 	prometheus.MustRegister(GravityOplogFetchDuration)
 	prometheus.MustRegister(GravityMsgHistogram)
-
-	//prometheus.MustRegister(NuclearOffsetLagGaugeVec)
-	//prometheus.MustRegister(NuclearE2eMsgHistogram)
-	//prometheus.MustRegister(NuclearReceiveMsgHistogram)
-	//prometheus.MustRegister(NuclearKafkaMsgCounterVec)
-	//prometheus.MustRegister(NuclearWarningCounterVec)
-	//prometheus.MustRegister(NuclearSqlCommitHistogram)
-	//prometheus.MustRegister(NuclearSqlRetriesTotal)
-	//prometheus.MustRegister(NuclearSqlCommitCount)
-	//prometheus.MustRegister(NuclearBatchCommitSize)
-	//prometheus.MustRegister(NuclearSlidingWindowRatio)
-	//prometheus.MustRegister(NuclearSlidingWindowSize)
 
 	prometheus.MustRegister(ScannerBatchQueryDuration)
 	prometheus.MustRegister(ScannerSingleScanDuration)

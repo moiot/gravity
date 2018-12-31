@@ -48,19 +48,11 @@ run-dev:
 
 build:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity cmd/gravity/single_binary.go
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-operator cmd/k8s_operator/main.go
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-operator cmd/k8s_operator/gatekeeper.go
 	#$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/padder cmd/padder/main.go
 
 
 build-linux:
 	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-linux-amd64 cmd/gravity/single_binary.go
-	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-operator-linux-amd64 cmd/k8s_operator/main.go
-	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-gatekeeper-linux-amd64 cmd/k8s_operator/gatekeeper.go
-
-operator:
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/k8s_operator cmd/k8s_operator/main.go
-	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/k8s_operator-linux-amd64 cmd/k8s_operator/main.go
 
 check:
 	@echo "gofmt"
