@@ -168,10 +168,10 @@ func (t *BinlogTailer) createMsgs(
 				dmlMsg.Operation = core.Update
 				old := make(map[string]interface{})
 				for index, value := range mutation.Row.Columns {
-					old[colInfoList[index].Name] = deserialize(value, colInfoList[index].MysqlType)
+					data[colInfoList[index].Name] = deserialize(value, colInfoList[index].MysqlType)
 				}
 				for index, value := range mutation.ChangeRow.Columns {
-					data[colInfoList[index].Name] = deserialize(value, colInfoList[index].MysqlType)
+					old[colInfoList[index].Name] = deserialize(value, colInfoList[index].MysqlType)
 				}
 				dmlMsg.Old = old
 			case pb.MutationType_Delete:
