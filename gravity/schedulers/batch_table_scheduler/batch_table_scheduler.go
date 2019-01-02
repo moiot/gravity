@@ -1,6 +1,7 @@
 package batch_table_scheduler
 
 import (
+	"github.com/moiot/gravity/pkg/utils/retry"
 	"sync"
 	"time"
 
@@ -22,11 +23,17 @@ import (
 	"github.com/moiot/gravity/pkg/utils"
 )
 
+const (
+	DefaultNrRetries = 3
+	DefaultRetrySleep = time.Second
+)
 var DefaultConfig = map[string]interface{}{
 	"nr-worker":           1,
 	"batch-size":          1,
 	"queue-size":          1024,
 	"sliding-window-size": 1024 * 10,
+	"nr-retries": DefaultNrRetries,
+	"retry-sleep": DefaultRetrySleep,
 }
 
 // batch_scheduler package implements scheduler that dispatch job to workers that
@@ -49,6 +56,9 @@ type BatchSchedulerConfig struct {
 	MaxBatchPerWorker int `mapstructure:"batch-size"json:"batch-size"`
 	QueueSize         int `mapstructure:"queue-size"json:"queue-size"`
 	SlidingWindowSize int `mapstructure:"sliding-window-size"json:"sliding-window-size"`
+	NrRetries int `mapstructure:"nr-retries" json:"nr-retries"`
+	RetrySleepString string `mapstructure:"retry-sleep" json:"retry-sleep"'`
+	RetrySleep time.Duration `mapstructure:"-" json:"-"'`
 }
 
 type slidingWindowItem struct {
@@ -101,11 +111,28 @@ func init() {
 
 func (scheduler *batchScheduler) Configure(pipelineName string, configData map[string]interface{}) error {
 	scheduler.pipelineName = pipelineName
+
 	schedulerConfig := BatchSchedulerConfig{}
 	err := mapstructure.Decode(configData, &schedulerConfig)
 	if err != nil {
 		return errors.Trace(err)
 	}
+
+	if schedulerConfig.NrRetries <= 0 {
+		schedulerConfig.NrRetries = DefaultNrRetries
+	}
+
+	if schedulerConfig.RetrySleepString != "" {
+		d, err := time.ParseDuration(schedulerConfig.RetrySleepString)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		schedulerConfig.RetrySleep = d
+	} else {
+		schedulerConfig.RetrySleep = DefaultRetrySleep
+	}
+
+
 	scheduler.cfg = &schedulerConfig
 
 	metrics.WorkerPoolWorkerCountGauge.WithLabelValues(pipelineName).Set(float64(schedulerConfig.NrWorker))
@@ -166,7 +193,11 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 				execStartTime := time.Now()
 
 				if scheduler.syncOutput != nil {
-					if err := scheduler.syncOutput.Execute(msgBatch); err != nil {
+					err := retry.Do(func() error {
+						return scheduler.syncOutput.Execute(msgBatch)
+					}, scheduler.cfg.NrRetries, scheduler.cfg.RetrySleep)
+
+					if err != nil {
 						log.Fatalf("[batchScheduler] output exec error: %v", errors.ErrorStack(err))
 					}
 
