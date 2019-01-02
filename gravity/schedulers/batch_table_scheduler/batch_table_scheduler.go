@@ -25,6 +25,7 @@ import (
 
 const (
 	DefaultNrRetries = 3
+	DefaultRetrySleepString = "1s"
 	DefaultRetrySleep = time.Second
 )
 var DefaultConfig = map[string]interface{}{
@@ -33,7 +34,7 @@ var DefaultConfig = map[string]interface{}{
 	"queue-size":          1024,
 	"sliding-window-size": 1024 * 10,
 	"nr-retries": DefaultNrRetries,
-	"retry-sleep": DefaultRetrySleep,
+	"retry-sleep": DefaultRetrySleepString,
 }
 
 // batch_scheduler package implements scheduler that dispatch job to workers that
