@@ -57,6 +57,12 @@ func main() {
 		log.Fatal("config must not be empty")
 	}
 
+	content, err := ioutil.ReadFile(cfg.ConfigFile)
+	if err != nil {
+		log.Fatalf("fail to read file %s. err: %s", cfg.ConfigFile, err)
+	}
+	hash := core.HashConfig(string(content))
+
 	logutil.MustInitLogger(&cfg.Log)
 	utils.LogRawInfo("gravity")
 
@@ -64,12 +70,6 @@ func main() {
 	if err := config.ValidatePipelineConfig(pipelineConfig); err != nil {
 		log.Fatalf("[gravity] pipeline config validation failed: %v", errors.ErrorStack(err))
 	}
-
-	configString, err := myJson.MarshalToString(pipelineConfig)
-	if err != nil {
-		log.Fatal(err)
-	}
-	hash := core.HashConfig(configString)
 
 	logutil.PipelineName = pipelineConfig.PipelineName
 
@@ -96,7 +96,7 @@ func main() {
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
 		http.HandleFunc("/reset", resetHandler(server, lock, pipelineConfig))
-		http.HandleFunc("/status", statusHandler(server, pipelineConfig))
+		http.HandleFunc("/status", statusHandler(server, pipelineConfig.PipelineName, hash))
 		http.HandleFunc("/healthz", healthzHandler(server))
 		err = http.ListenAndServe(cfg.HttpAddr, nil)
 		if err != nil {
@@ -181,13 +181,7 @@ func healthzHandler(server *gravity.Server) func(http.ResponseWriter, *http.Requ
 	}
 }
 
-func statusHandler(server *gravity.Server, pipelineConfig *config.PipelineConfigV2) func(http.ResponseWriter, *http.Request) {
-	configString, err := myJson.MarshalToString(pipelineConfig)
-	if err != nil {
-		log.Fatal(err)
-	}
-	hash := core.HashConfig(configString)
-
+func statusHandler(server *gravity.Server, name, config string) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		pos, err := myJson.MarshalToString(server.Input.PositionStore().Position().Raw)
 		if err != nil {
@@ -201,8 +195,8 @@ func statusHandler(server *gravity.Server, pipelineConfig *config.PipelineConfig
 		}
 
 		ret := core.TaskReportStatus{
-			Name:       pipelineConfig.PipelineName,
-			ConfigHash: hash,
+			Name:       name,
+			ConfigHash: config,
 			Position:   pos,
 			Stage:      state,
 			Version:    utils.Version,
