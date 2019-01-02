@@ -65,3 +65,24 @@ func NewMsg(
 	}
 	return &msg
 }
+
+func NewCreateTableMsg(table *schema_store.Table, createTblStmt string) *core.Msg {
+	msg := core.Msg{
+		Host:      "",
+		Database:  table.Schema,
+		Table:     table.Name,
+		Timestamp: time.Now(),
+		DdlMsg: &core.DDLMsg{
+			Statement: createTblStmt,
+		},
+	}
+
+	msg.Type = core.MsgDDL
+	msg.InputStreamKey = utils.NewStringPtr(utils.TableIdentity(table.Schema, table.Name))
+	msg.OutputStreamKey = utils.NewStringPtr("")
+	msg.Done = make(chan struct{})
+	msg.Metrics = core.Metrics{
+		MsgCreateTime: time.Now(),
+	}
+	return &msg
+}

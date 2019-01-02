@@ -3,7 +3,6 @@ package mysqlbatch
 import (
 	"database/sql"
 	"fmt"
-
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/mysql"
 
@@ -54,7 +53,12 @@ func (tableScanner *TableScanner) Start() error {
 					return
 				}
 
-				err := tableScanner.InitTablePosition(work.TableDef, work.TableConfig)
+				err := tableScanner.initTableDDL(work.TableDef)
+				if err != nil {
+					log.Fatalf("[TableScanner] initTableDDL for %s.%s, err: %s", work.TableDef.Schema, work.TableDef.Name, err)
+				}
+
+				err = tableScanner.InitTablePosition(work.TableDef, work.TableConfig)
 				if err == ErrTableEmpty {
 					log.Infof("[TableScanner] Target table is empty. schema: %v, table: %v",
 						work.TableDef.Schema, work.TableDef.Name)
@@ -368,6 +372,25 @@ func (tableScanner *TableScanner) AfterMsgCommit(msg *core.Msg) error {
 	}
 
 	tableScanner.positionStore.PutCurrent(*msg.InputStreamKey, p)
+
+	return nil
+}
+
+func (tableScanner *TableScanner) initTableDDL(table *schema_store.Table) error {
+	row := tableScanner.db.QueryRow(fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", table.Schema, table.Name))
+	var t, create string
+	err := row.Scan(&t, &create)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	msg := NewCreateTableMsg(table, create)
+
+	if err := tableScanner.emitter.Emit(msg); err != nil {
+		return errors.Trace(err)
+	}
+
+	<-msg.Done
 
 	return nil
 }
