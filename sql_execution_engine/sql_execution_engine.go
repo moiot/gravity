@@ -26,13 +26,13 @@ const (
 )
 
 type MySQLExecutionEngineConfig struct {
-	EnableDDL          bool     `mapstructure:"enable-ddl" json:"enable-ddl"`
-	UseBidirection     bool     `mapstructure:"use-bidirection" json:"use-bidirection"`
-	UseShadingProxy    bool     `mapstructure:"use-shading-proxy"  json:"use-shading-proxy"`
-	SQLExecutionEngine string   `mapstructure:"sql-execution-engine"json:"sql-execution-engine"`
-	DetectConflict     bool     `mapstructure:"detect-conflict"json:"detect-conflict"`
-	MaxConflictRetry   int      `mapstructure:"max-conflict-retry"json:"max-conflict-retry"`
-	OverrideConflict   bool     `mapstructure:"override-conflict"json:"override-conflict"`
+	EngineType       string `mapstructure:"type" json:"type"`
+	EnableDDL        bool   `mapstructure:"enable-ddl" json:"enable-ddl"`
+	UseBidirection   bool   `mapstructure:"use-bidirection" json:"use-bidirection"`
+	UseShadingProxy  bool   `mapstructure:"use-shading-proxy"  json:"use-shading-proxy"`
+	DetectConflict   bool   `mapstructure:"detect-conflict"json:"detect-conflict"`
+	MaxConflictRetry int    `mapstructure:"max-conflict-retry"json:"max-conflict-retry"`
+	OverrideConflict bool   `mapstructure:"override-conflict"json:"override-conflict"`
 	SQLTemplate        string   `mapstructure:"sql-template" json:"sql-template"`
 	SQLArgExpr         []string `mapstructure:"sql-arg-expr" json:"sql-arg-expr"`
 }
@@ -89,7 +89,7 @@ func SelectEngine(DetectConflict bool, UserBidirection bool, UseShadingProxy boo
 
 func NewSQLExecutionEngine(db *sql.DB, engineConfig MySQLExecutionEngineConfig) SQlExecutionEngine {
 	var engine SQlExecutionEngine
-	name := engineConfig.SQLExecutionEngine
+	name := engineConfig.EngineType
 	switch name {
 	case MySQLReplaceEngine:
 		engine = NewMySQLReplaceEngine(db)
