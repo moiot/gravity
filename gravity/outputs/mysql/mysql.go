@@ -64,6 +64,12 @@ func (output *MySQLOutput) Configure(pipelineName string, data map[string]interf
 		pluginConfig.EngineConfig.EngineType = engine
 	}
 
+	if pluginConfig.EngineConfig.EngineType == sql_execution_engine.ManualEngine {
+		if err := sql_execution_engine.ValidateSQLTemplate(pluginConfig.EngineConfig.SQLTemplate); err != nil {
+			return errors.Trace(err)
+		}
+	}
+
 	output.cfg = &pluginConfig
 
 	// init routes

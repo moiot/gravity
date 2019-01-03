@@ -2,9 +2,10 @@ package sql_execution_engine
 
 import (
 	"database/sql"
-
+	"fmt"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
+	"strings"
 
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/schema_store"
@@ -36,12 +37,23 @@ func (engine *manualSQLEngine) Execute(msgBatch []*core.Msg, tableDef *schema_st
 		sqlArgs[i] = msg.DmlMsg.Data[field]
 	}
 
-	_, err := engine.db.Exec(engine.sqlTemplate, sqlArgs...)
+	// assume that the sqlTemplate be something like this:
+	// UPDATE %s.%s SET ...
+	query := fmt.Sprintf(engine.sqlTemplate, tableDef.Schema, tableDef.Name)
+	_, err := engine.db.Exec(query, sqlArgs...)
 	if err != nil {
 		log.Errorf("[manualSQLEngine] error sql: %s, sqlArgs: %v, err: %v", engine.sqlTemplate, sqlArgs, err.Error())
 		return errors.Trace(err)
 	}
 	return nil
+}
+
+func ValidateSQLTemplate(template string) error {
+	if strings.Contains(template,"`%s`.`%s`") {
+		return nil
+	} else {
+		return errors.Errorf("invalid sql template: %s", template)
+	}
 }
 
 func NewManualSQLEngine(db *sql.DB, config MySQLExecutionEngineConfig) SQlExecutionEngine {
