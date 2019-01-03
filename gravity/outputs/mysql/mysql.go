@@ -21,7 +21,7 @@ import (
 type MySQLPluginConfig struct {
 	DBConfig     *utils.DBConfig                                 `mapstructure:"target"  json:"target"`
 	Routes       []map[string]interface{}                        `mapstructure:"routes"  json:"routes"`
-	EngineConfig sql_execution_engine.MySQLExecutionEngineConfig `mapstructure:"execution-engine"  json:"execution-engine"`
+	EngineConfig sql_execution_engine.MySQLExecutionEngineConfig `mapstructure:"sql-engine-config"  json:"sql-engine-config"`
 }
 
 type MySQLOutput struct {
@@ -53,7 +53,7 @@ func (output *MySQLOutput) Configure(pipelineName string, data map[string]interf
 	}
 
 	engineConfig := pluginConfig.EngineConfig
-	if pluginConfig.EngineConfig.SQLExecutionEngine == "" {
+	if pluginConfig.EngineConfig.EngineType == "" {
 		engine, err := sql_execution_engine.SelectEngine(
 			engineConfig.DetectConflict,
 			engineConfig.UseBidirection,
@@ -61,7 +61,7 @@ func (output *MySQLOutput) Configure(pipelineName string, data map[string]interf
 		if err != nil {
 			return errors.Trace(err)
 		}
-		pluginConfig.EngineConfig.SQLExecutionEngine = engine
+		pluginConfig.EngineConfig.EngineType = engine
 	}
 
 	output.cfg = &pluginConfig
