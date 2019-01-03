@@ -14,8 +14,10 @@
 package kv
 
 import (
+	"context"
+
 	"github.com/pingcap/tidb/store/tikv/oracle"
-	goctx "golang.org/x/net/context"
+	"github.com/pingcap/tidb/util/execdetails"
 )
 
 // Transaction options
@@ -30,10 +32,8 @@ const (
 	PresumeKeyNotExistsError
 	// BinlogInfo contains the binlog data and client.
 	BinlogInfo
-	// Skip existing check when "prewrite".
-	SkipCheckForWrite
-	// SchemaLeaseChecker is used for schema lease check.
-	SchemaLeaseChecker
+	// SchemaChecker is used for checking schema-validity.
+	SchemaChecker
 	// IsolationLevel sets isolation level for current transaction. The default level is SI.
 	IsolationLevel
 	// Priority marks the priority of this transaction.
@@ -42,6 +42,8 @@ const (
 	NotFillCache
 	// SyncLog decides whether the WAL(write-ahead log) of this request should be synchronized.
 	SyncLog
+	// KeyOnly retrieve only keys, it can be used in scan now.
+	KeyOnly
 )
 
 // Priority value for transaction priority.
@@ -76,15 +78,17 @@ type Retriever interface {
 	// Get gets the value for key k from kv store.
 	// If corresponding kv pair does not exist, it returns nil and ErrNotExist.
 	Get(k Key) ([]byte, error)
-	// Seek creates an Iterator positioned on the first entry that k <= entry's key.
+	// Iter creates an Iterator positioned on the first entry that k <= entry's key.
 	// If such entry is not found, it returns an invalid Iterator with no error.
+	// It yields only keys that < upperBound. If upperBound is nil, it means the upperBound is unbounded.
 	// The Iterator must be Closed after use.
-	Seek(k Key) (Iterator, error)
+	Iter(k Key, upperBound Key) (Iterator, error)
 
-	// SeekReverse creates a reversed Iterator positioned on the first entry which key is less than k.
+	// IterReverse creates a reversed Iterator positioned on the first entry which key is less than k.
 	// The returned iterator will iterate from greater key to smaller key.
 	// If k is nil, the returned iterator will be positioned at the last key.
-	SeekReverse(k Key) (Iterator, error)
+	// TODO: Add lower bound limit
+	IterReverse(k Key) (Iterator, error)
 }
 
 // Mutator is the interface wraps the basic Set and Delete methods.
@@ -121,7 +125,7 @@ type MemBuffer interface {
 type Transaction interface {
 	MemBuffer
 	// Commit commits the transaction operations to KV store.
-	Commit(goctx.Context) error
+	Commit(context.Context) error
 	// Rollback undoes the transaction operations to KV store.
 	Rollback() error
 	// String implements fmt.Stringer interface.
@@ -144,12 +148,14 @@ type Transaction interface {
 	GetMemBuffer() MemBuffer
 	// GetSnapshot returns the snapshot of this transaction.
 	GetSnapshot() Snapshot
+	// SetVars sets variables to the transaction.
+	SetVars(vars *Variables)
 }
 
 // Client is used to send request to KV layer.
 type Client interface {
 	// Send sends request to KV layer, returns a Response.
-	Send(ctx goctx.Context, req *Request) Response
+	Send(ctx context.Context, req *Request, vars *Variables) Response
 
 	// IsRequestTypeSupported checks if reqType and subType is supported.
 	IsRequestTypeSupported(reqType, subType int64) bool
@@ -157,10 +163,11 @@ type Client interface {
 
 // ReqTypes.
 const (
-	ReqTypeSelect  = 101
-	ReqTypeIndex   = 102
-	ReqTypeDAG     = 103
-	ReqTypeAnalyze = 104
+	ReqTypeSelect   = 101
+	ReqTypeIndex    = 102
+	ReqTypeDAG      = 103
+	ReqTypeAnalyze  = 104
+	ReqTypeChecksum = 105
 
 	ReqSubTypeBasic      = 0
 	ReqSubTypeDesc       = 10000
@@ -169,7 +176,6 @@ const (
 	ReqSubTypeSignature  = 10003
 	ReqSubTypeAnalyzeIdx = 10004
 	ReqSubTypeAnalyzeCol = 10005
-	ReqSubTypeStreamAgg  = 10006
 )
 
 // Request represents a kv request.
@@ -200,12 +206,22 @@ type Request struct {
 	Streaming bool
 }
 
+// ResultSubset represents a result subset from a single storage unit.
+// TODO: Find a better interface for ResultSubset that can reuse bytes.
+type ResultSubset interface {
+	// GetData gets the data.
+	GetData() []byte
+	// GetStartKey gets the start key.
+	GetStartKey() Key
+	// GetExecDetails gets the detail information.
+	GetExecDetails() *execdetails.ExecDetails
+}
+
 // Response represents the response returned from KV layer.
 type Response interface {
 	// Next returns a resultSubset from a single storage unit.
 	// When full result set is returned, nil is returned.
-	// TODO: Find a better interface for resultSubset that can avoid allocation and reuse bytes.
-	Next() (resultSubset []byte, err error)
+	Next(ctx context.Context) (resultSubset ResultSubset, err error)
 	// Close response.
 	Close() error
 }
@@ -215,6 +231,8 @@ type Snapshot interface {
 	Retriever
 	// BatchGet gets a batch of values from snapshot.
 	BatchGet(keys []Key) (map[string][]byte, error)
+	// SetPriority snapshot set the priority
+	SetPriority(priority int)
 }
 
 // Driver is the interface that must be implemented by a KV storage.

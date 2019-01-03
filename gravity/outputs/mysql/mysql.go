@@ -3,17 +3,18 @@ package mysql
 import (
 	"database/sql"
 
+	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/model"
+	"github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/gravity/outputs/routers"
 	"github.com/moiot/gravity/gravity/registry"
-	"github.com/moiot/gravity/pkg/utils"
-
-	"github.com/juju/errors"
-
-	"github.com/moiot/gravity/pkg/core"
-
 	"github.com/moiot/gravity/pkg/config"
+	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/mysql"
+	"github.com/moiot/gravity/pkg/utils"
 	"github.com/moiot/gravity/schema_store"
 	"github.com/moiot/gravity/sql_execution_engine"
 )
@@ -126,27 +127,58 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 			}
 		}
 
-		// none of the routes matched, skip this msg
-		if !matched {
-			continue
-		}
+		switch msg.Type {
+		case core.MsgDDL:
+			switch node := msg.DdlMsg.AST.(type) {
+			case *ast.CreateTableStmt:
+				if !matched {
+					logrus.Info("ignore no router table ddl:", msg.DdlMsg.Statement)
+					return nil
+				}
 
-		if targetTableDef == nil {
-			schema, err := output.targetSchemaStore.GetSchema(targetSchema)
-			if err != nil {
+				shadow := *node
+				shadow.Table.Name = model.CIStr{
+					O: targetTable,
+				}
+				shadow.Table.Schema = model.CIStr{
+					O: targetSchema,
+				}
+				shadow.IfNotExists = true
+				stmt := mysql.RestoreCreateTblStmt(&shadow)
+				_, err := output.db.Exec(stmt)
+				if err != nil {
+					logrus.Fatal("error exec", stmt, ". err:", err)
+				}
+
+			default:
+				logrus.Info("[output-mysql] ignore ddl", msg.DdlMsg.Statement)
+			}
+
+			return nil
+
+		case core.MsgDML:
+			// none of the routes matched, skip this msg
+			if !matched {
+				continue
+			}
+
+			if targetTableDef == nil {
+				schema, err := output.targetSchemaStore.GetSchema(targetSchema)
+				if err != nil {
+					return errors.Trace(err)
+				}
+
+				targetTableDef = schema[targetTable]
+			}
+
+			// go through a serial of filters inside this output plugin
+			// right now, we only support AddMissingColumn
+			if _, err := AddMissingColumn(msg, targetTableDef); err != nil {
 				return errors.Trace(err)
 			}
 
-			targetTableDef = schema[targetTable]
+			targetMsgs = append(targetMsgs, msg)
 		}
-
-		// go through a serial of filters inside this output plugin
-		// right now, we only support AddMissingColumn
-		if _, err := AddMissingColumn(msg, targetTableDef); err != nil {
-			return errors.Trace(err)
-		}
-
-		targetMsgs = append(targetMsgs, msg)
 	}
 
 	batches := splitMsgBatchWithDelete(targetMsgs)

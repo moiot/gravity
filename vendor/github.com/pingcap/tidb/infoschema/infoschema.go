@@ -17,12 +17,12 @@ import (
 	"sort"
 	"sync/atomic"
 
+	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/meta/autoid"
-	"github.com/pingcap/tidb/model"
-	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/table"
-	"github.com/pingcap/tidb/terror"
 )
 
 var (
@@ -50,6 +50,10 @@ var (
 	ErrColumnExists = terror.ClassSchema.New(codeColumnExists, "Duplicate column name '%s'")
 	// ErrIndexExists returns for index already exists.
 	ErrIndexExists = terror.ClassSchema.New(codeIndexExists, "Duplicate Index")
+	// ErrKeyNameDuplicate returns for index duplicate when rename index.
+	ErrKeyNameDuplicate = terror.ClassSchema.New(codeKeyNameDuplicate, "Duplicate key name '%s'")
+	// ErrKeyNotExists returns for index not exists.
+	ErrKeyNotExists = terror.ClassSchema.New(codeKeyNotExists, "Key '%s' doesn't exist in table '%s'")
 	// ErrMultiplePriKey returns for multiple primary keys.
 	ErrMultiplePriKey = terror.ClassSchema.New(codeMultiplePriKey, "Multiple primary key defined")
 	// ErrTooManyKeyParts returns for too many key parts.
@@ -66,6 +70,7 @@ type InfoSchema interface {
 	TableByName(schema, table model.CIStr) (table.Table, error)
 	TableExists(schema, table model.CIStr) bool
 	SchemaByID(id int64) (*model.DBInfo, bool)
+	SchemaByTable(tableInfo *model.TableInfo) (*model.DBInfo, bool)
 	TableByID(id int64) (table.Table, bool)
 	AllocByID(id int64) (autoid.Allocator, bool)
 	AllSchemaNames() []string
@@ -169,7 +174,7 @@ func (is *infoSchema) TableByName(schema, table model.CIStr) (t table.Table, err
 			return
 		}
 	}
-	return nil, ErrTableNotExists.GenByArgs(schema, table)
+	return nil, ErrTableNotExists.GenWithStackByArgs(schema, table)
 }
 
 func (is *infoSchema) TableExists(schema, table model.CIStr) bool {
@@ -185,6 +190,20 @@ func (is *infoSchema) SchemaByID(id int64) (val *model.DBInfo, ok bool) {
 	for _, v := range is.schemaMap {
 		if v.dbInfo.ID == id {
 			return v.dbInfo, true
+		}
+	}
+	return nil, false
+}
+
+func (is *infoSchema) SchemaByTable(tableInfo *model.TableInfo) (val *model.DBInfo, ok bool) {
+	if tableInfo == nil {
+		return nil, false
+	}
+	for _, v := range is.schemaMap {
+		if tbl, ok := v.tables[tableInfo.Name.L]; ok {
+			if tbl.Meta().ID == tableInfo.ID {
+				return v.dbInfo, true
+			}
 		}
 	}
 	return nil, false
@@ -279,13 +298,15 @@ const (
 	codeForeignKeyNotExists = 1091
 	codeWrongFkDef          = 1239
 
-	codeDatabaseExists  = 1007
-	codeTableExists     = 1050
-	codeBadTable        = 1051
-	codeColumnExists    = 1060
-	codeIndexExists     = 1831
-	codeMultiplePriKey  = 1068
-	codeTooManyKeyParts = 1070
+	codeDatabaseExists   = 1007
+	codeTableExists      = 1050
+	codeBadTable         = 1051
+	codeColumnExists     = 1060
+	codeIndexExists      = 1831
+	codeMultiplePriKey   = 1068
+	codeTooManyKeyParts  = 1070
+	codeKeyNameDuplicate = 1061
+	codeKeyNotExists     = 1176
 )
 
 func init() {
@@ -304,6 +325,8 @@ func init() {
 		codeIndexExists:         mysql.ErrDupIndex,
 		codeMultiplePriKey:      mysql.ErrMultiplePriKey,
 		codeTooManyKeyParts:     mysql.ErrTooManyKeyParts,
+		codeKeyNameDuplicate:    mysql.ErrDupKeyName,
+		codeKeyNotExists:        mysql.ErrKeyDoesNotExist,
 	}
 	terror.ErrClassToMySQLCodes[terror.ClassSchema] = schemaMySQLErrCodes
 	initInfoSchemaDB()

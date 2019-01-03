@@ -14,24 +14,25 @@
 package testkit
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"sort"
 	"sync/atomic"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/check"
-	"github.com/pingcap/tidb"
-	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/kv"
+	"github.com/pingcap/tidb/session"
+	"github.com/pingcap/tidb/util/sqlexec"
 	"github.com/pingcap/tidb/util/testutil"
-	goctx "golang.org/x/net/context"
 )
 
 // TestKit is a utility to run sql test.
 type TestKit struct {
 	c     *check.C
 	store kv.Storage
-	Se    tidb.Session
+	Se    session.Session
 }
 
 // Result is the result returned by MustQuery.
@@ -43,9 +44,15 @@ type Result struct {
 
 // Check asserts the result equals the expected results.
 func (res *Result) Check(expected [][]interface{}) {
-	got := fmt.Sprintf("%s", res.rows)
-	need := fmt.Sprintf("%s", expected)
-	res.c.Assert(got, check.Equals, need, res.comment)
+	resBuff := bytes.NewBufferString("")
+	for _, row := range res.rows {
+		fmt.Fprintf(resBuff, "%s\n", row)
+	}
+	needBuff := bytes.NewBufferString("")
+	for _, row := range expected {
+		fmt.Fprintf(needBuff, "%s\n", row)
+	}
+	res.c.Assert(resBuff.String(), check.Equals, needBuff.String(), res.comment)
 }
 
 // CheckAt asserts the result of selected columns equals the expected results.
@@ -116,18 +123,18 @@ func NewTestKitWithInit(c *check.C, store kv.Storage) *TestKit {
 var connectionID uint64
 
 // Exec executes a sql statement.
-func (tk *TestKit) Exec(sql string, args ...interface{}) (ast.RecordSet, error) {
+func (tk *TestKit) Exec(sql string, args ...interface{}) (sqlexec.RecordSet, error) {
 	var err error
 	if tk.Se == nil {
-		tk.Se, err = tidb.CreateSession4Test(tk.store)
+		tk.Se, err = session.CreateSession4Test(tk.store)
 		tk.c.Assert(err, check.IsNil)
 		id := atomic.AddUint64(&connectionID, 1)
 		tk.Se.SetConnectionID(id)
 	}
-	goCtx := goctx.Background()
+	ctx := context.Background()
 	if len(args) == 0 {
-		var rss []ast.RecordSet
-		rss, err = tk.Se.Execute(goCtx, sql)
+		var rss []sqlexec.RecordSet
+		rss, err = tk.Se.Execute(ctx, sql)
 		if err == nil && len(rss) > 0 {
 			return rss[0], nil
 		}
@@ -137,7 +144,7 @@ func (tk *TestKit) Exec(sql string, args ...interface{}) (ast.RecordSet, error) 
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	rs, err := tk.Se.ExecutePreparedStmt(goCtx, stmtID, args...)
+	rs, err := tk.Se.ExecutePreparedStmt(ctx, stmtID, args...)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -152,6 +159,11 @@ func (tk *TestKit) Exec(sql string, args ...interface{}) (ast.RecordSet, error) 
 func (tk *TestKit) CheckExecResult(affectedRows, insertID int64) {
 	tk.c.Assert(affectedRows, check.Equals, int64(tk.Se.AffectedRows()))
 	tk.c.Assert(insertID, check.Equals, int64(tk.Se.LastInsertID()))
+}
+
+// CheckLastMessage checks last message after executing MustExec
+func (tk *TestKit) CheckLastMessage(msg string) {
+	tk.c.Assert(tk.Se.LastMessage(), check.Equals, msg)
 }
 
 // MustExec executes a sql statement and asserts nil error.
@@ -170,7 +182,22 @@ func (tk *TestKit) MustQuery(sql string, args ...interface{}) *Result {
 	rs, err := tk.Exec(sql, args...)
 	tk.c.Assert(errors.ErrorStack(err), check.Equals, "", comment)
 	tk.c.Assert(rs, check.NotNil, comment)
-	rows, err := tidb.GetRows4Test(goctx.Background(), rs)
+	return tk.ResultSetToResult(rs, comment)
+}
+
+// ExecToErr executes a sql statement and discard results.
+func (tk *TestKit) ExecToErr(sql string, args ...interface{}) error {
+	res, err := tk.Exec(sql, args...)
+	if res != nil {
+		tk.c.Assert(res.Close(), check.IsNil)
+	}
+	return err
+}
+
+// ResultSetToResult converts sqlexec.RecordSet to testkit.Result.
+// It is used to check results of execute statement in binary mode.
+func (tk *TestKit) ResultSetToResult(rs sqlexec.RecordSet, comment check.CommentInterface) *Result {
+	rows, err := session.GetRows4Test(context.Background(), tk.Se, rs)
 	tk.c.Assert(errors.ErrorStack(err), check.Equals, "", comment)
 	err = rs.Close()
 	tk.c.Assert(errors.ErrorStack(err), check.Equals, "", comment)

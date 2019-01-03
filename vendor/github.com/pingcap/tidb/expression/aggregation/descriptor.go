@@ -14,27 +14,22 @@
 package aggregation
 
 import (
-	"bytes"
+	"fmt"
 	"math"
-	"strings"
+	"strconv"
 
-	"github.com/cznic/mathutil"
-	"github.com/pingcap/tidb/ast"
-	"github.com/pingcap/tidb/context"
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/expression"
-	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/types"
-	"github.com/pingcap/tidb/util/charset"
 )
 
 // AggFuncDesc describes an aggregation function signature, only used in planner.
 type AggFuncDesc struct {
-	// Name represents the aggregation function name.
-	Name string
-	// Args represents the arguments of the aggregation function.
-	Args []expression.Expression
-	// RetTp represents the return type of the aggregation function.
-	RetTp *types.FieldType
+	baseFuncDesc
 	// Mode represents the execution mode of the aggregation function.
 	Mode AggFunctionMode
 	// HasDistinct represents whether the aggregation function contains distinct attribute.
@@ -42,94 +37,127 @@ type AggFuncDesc struct {
 }
 
 // NewAggFuncDesc creates an aggregation function signature descriptor.
-func NewAggFuncDesc(ctx context.Context, name string, args []expression.Expression, hasDistinct bool) *AggFuncDesc {
-	a := &AggFuncDesc{
-		Name:        strings.ToLower(name),
-		Args:        args,
-		HasDistinct: hasDistinct,
-	}
-	a.typeInfer(ctx)
-	return a
+func NewAggFuncDesc(ctx sessionctx.Context, name string, args []expression.Expression, hasDistinct bool) *AggFuncDesc {
+	b := newBaseFuncDesc(ctx, name, args)
+	return &AggFuncDesc{baseFuncDesc: b, HasDistinct: hasDistinct}
 }
 
 // Equal checks whether two aggregation function signatures are equal.
-func (a *AggFuncDesc) Equal(ctx context.Context, other *AggFuncDesc) bool {
-	if a.Name != other.Name || a.HasDistinct != other.HasDistinct || len(a.Args) != len(other.Args) {
+func (a *AggFuncDesc) Equal(ctx sessionctx.Context, other *AggFuncDesc) bool {
+	if a.HasDistinct != other.HasDistinct {
 		return false
 	}
-	for i := range a.Args {
-		if !a.Args[i].Equal(other.Args[i], ctx) {
-			return false
-		}
-	}
-	return true
+	return a.baseFuncDesc.equal(ctx, &other.baseFuncDesc)
 }
 
 // Clone copies an aggregation function signature totally.
 func (a *AggFuncDesc) Clone() *AggFuncDesc {
 	clone := *a
-	for i := range a.Args {
-		clone.Args[i] = a.Args[i].Clone()
-	}
+	clone.baseFuncDesc = *a.baseFuncDesc.clone()
 	return &clone
 }
 
-// String implements the fmt.Stringer interface.
-func (a *AggFuncDesc) String() string {
-	buffer := bytes.NewBufferString(a.Name)
-	buffer.WriteString("(")
-	for i, arg := range a.Args {
-		buffer.WriteString(arg.String())
-		if i+1 != len(a.Args) {
-			buffer.WriteString(", ")
+// Split splits `a` into two aggregate descriptors for partial phase and
+// final phase individually.
+// This function is only used when executing aggregate function parallelly.
+// ordinal indicates the column ordinal of the intermediate result.
+func (a *AggFuncDesc) Split(ordinal []int) (partialAggDesc, finalAggDesc *AggFuncDesc) {
+	partialAggDesc = a.Clone()
+	if a.Mode == CompleteMode {
+		partialAggDesc.Mode = Partial1Mode
+	} else if a.Mode == FinalMode {
+		partialAggDesc.Mode = Partial2Mode
+	} else {
+		panic("Error happened during AggFuncDesc.Split, the AggFunctionMode is not CompleteMode or FinalMode.")
+	}
+	finalAggDesc = &AggFuncDesc{
+		Mode:        FinalMode, // We only support FinalMode now in final phase.
+		HasDistinct: a.HasDistinct,
+	}
+	finalAggDesc.Name = a.Name
+	finalAggDesc.RetTp = a.RetTp
+	switch a.Name {
+	case ast.AggFuncAvg:
+		args := make([]expression.Expression, 0, 2)
+		args = append(args, &expression.Column{
+			ColName: model.NewCIStr(fmt.Sprintf("avg_final_col_%d", ordinal[0])),
+			Index:   ordinal[0],
+			RetType: types.NewFieldType(mysql.TypeLonglong),
+		})
+		args = append(args, &expression.Column{
+			ColName: model.NewCIStr(fmt.Sprintf("avg_final_col_%d", ordinal[1])),
+			Index:   ordinal[1],
+			RetType: a.RetTp,
+		})
+		finalAggDesc.Args = args
+	default:
+		args := make([]expression.Expression, 0, 1)
+		args = append(args, &expression.Column{
+			ColName: model.NewCIStr(fmt.Sprintf("%s_final_col_%d", a.Name, ordinal[0])),
+			Index:   ordinal[0],
+			RetType: a.RetTp,
+		})
+		finalAggDesc.Args = args
+		if finalAggDesc.Name == ast.AggFuncGroupConcat {
+			finalAggDesc.Args = append(finalAggDesc.Args, a.Args[len(a.Args)-1]) // separator
 		}
 	}
-	buffer.WriteString(")")
-	return buffer.String()
+	return
 }
 
-// typeInfer infers the arguments and return types of an aggregation function.
-func (a *AggFuncDesc) typeInfer(ctx context.Context) {
-	switch a.Name {
-	case ast.AggFuncCount:
-		a.typeInfer4Count(ctx)
-	case ast.AggFuncSum:
-		a.typeInfer4Sum(ctx)
-	case ast.AggFuncAvg:
-		a.typeInfer4Avg(ctx)
-	case ast.AggFuncGroupConcat:
-		a.typeInfer4GroupConcat(ctx)
-	case ast.AggFuncMax, ast.AggFuncMin, ast.AggFuncFirstRow:
-		a.typeInfer4MaxMin(ctx)
-	case ast.AggFuncBitAnd, ast.AggFuncBitOr, ast.AggFuncBitXor:
-		a.typeInfer4BitFuncs(ctx)
-	default:
-		panic("unsupported agg function: " + a.Name)
-	}
-}
-
-// CalculateDefaultValue gets the default value when the aggregation function's input is null.
-// The input stands for the schema of Aggregation's child. If the function can't produce a default value, the second
+// EvalNullValueInOuterJoin gets the null value when the aggregation is upon an outer join,
+// and the aggregation function's input is null.
+// If there is no matching row for the inner table of an outer join,
+// an aggregation function only involves constant and/or columns belongs to the inner table
+// will be set to the null value.
+// The input stands for the schema of Aggregation's child. If the function can't produce a null value, the second
 // return value will be false.
-func (a *AggFuncDesc) CalculateDefaultValue(ctx context.Context, schema *expression.Schema) (types.Datum, bool) {
+// e.g.
+// Table t with only one row:
+// +-------+---------+---------+
+// | Table | Field   | Type    |
+// +-------+---------+---------+
+// | t     | a       | int(11) |
+// +-------+---------+---------+
+// +------+
+// | a    |
+// +------+
+// |    1 |
+// +------+
+//
+// Table s which is empty:
+// +-------+---------+---------+
+// | Table | Field   | Type    |
+// +-------+---------+---------+
+// | s     | a       | int(11) |
+// +-------+---------+---------+
+//
+// Query: `select t.a as `t.a`,  count(95), sum(95), avg(95), bit_or(95), bit_and(95), bit_or(95), max(95), min(95), s.a as `s.a`, avg(95) from t left join s on t.a = s.a;`
+// +------+-----------+---------+---------+------------+-------------+------------+---------+---------+------+----------+
+// | t.a  | count(95) | sum(95) | avg(95) | bit_or(95) | bit_and(95) | bit_or(95) | max(95) | min(95) | s.a  | avg(s.a) |
+// +------+-----------+---------+---------+------------+-------------+------------+---------+---------+------+----------+
+// |    1 |         1 |      95 | 95.0000 |         95 |          95 |         95 |      95 |      95 | NULL |     NULL |
+// +------+-----------+---------+---------+------------+-------------+------------+---------+---------+------+----------+
+func (a *AggFuncDesc) EvalNullValueInOuterJoin(ctx sessionctx.Context, schema *expression.Schema) (types.Datum, bool) {
 	switch a.Name {
 	case ast.AggFuncCount:
-		return a.calculateDefaultValue4Count(ctx, schema)
-	case ast.AggFuncSum, ast.AggFuncMax, ast.AggFuncMin, ast.AggFuncFirstRow:
-		return a.calculateDefaultValue4Sum(ctx, schema)
+		return a.evalNullValueInOuterJoin4Count(ctx, schema)
+	case ast.AggFuncSum, ast.AggFuncMax, ast.AggFuncMin,
+		ast.AggFuncFirstRow:
+		return a.evalNullValueInOuterJoin4Sum(ctx, schema)
 	case ast.AggFuncAvg, ast.AggFuncGroupConcat:
 		return types.Datum{}, false
 	case ast.AggFuncBitAnd:
-		return a.calculateDefaultValue4BitAnd(ctx, schema)
+		return a.evalNullValueInOuterJoin4BitAnd(ctx, schema)
 	case ast.AggFuncBitOr, ast.AggFuncBitXor:
-		return a.calculateDefaultValue4BitOr(ctx, schema)
+		return a.evalNullValueInOuterJoin4BitOr(ctx, schema)
 	default:
 		panic("unsupported agg function")
 	}
 }
 
 // GetAggFunc gets an evaluator according to the aggregation function signature.
-func (a *AggFuncDesc) GetAggFunc() Aggregation {
+func (a *AggFuncDesc) GetAggFunc(ctx sessionctx.Context) Aggregation {
 	aggFunc := aggFunction{AggFuncDesc: a}
 	switch a.Name {
 	case ast.AggFuncSum:
@@ -139,7 +167,18 @@ func (a *AggFuncDesc) GetAggFunc() Aggregation {
 	case ast.AggFuncAvg:
 		return &avgFunction{aggFunction: aggFunc}
 	case ast.AggFuncGroupConcat:
-		return &concatFunction{aggFunction: aggFunc}
+		var s string
+		var err error
+		var maxLen uint64
+		s, err = variable.GetSessionSystemVar(ctx.GetSessionVars(), variable.GroupConcatMaxLen)
+		if err != nil {
+			panic(fmt.Sprintf("Error happened when GetAggFunc: no system variable named '%s'", variable.GroupConcatMaxLen))
+		}
+		maxLen, err = strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			panic(fmt.Sprintf("Error happened when GetAggFunc: illegal value for system variable named '%s'", variable.GroupConcatMaxLen))
+		}
+		return &concatFunction{aggFunction: aggFunc, maxLen: maxLen}
 	case ast.AggFuncMax:
 		return &maxMinFunction{aggFunction: aggFunc, isMax: true}
 	case ast.AggFuncMin:
@@ -157,71 +196,7 @@ func (a *AggFuncDesc) GetAggFunc() Aggregation {
 	}
 }
 
-func (a *AggFuncDesc) typeInfer4Count(ctx context.Context) {
-	a.RetTp = types.NewFieldType(mysql.TypeLonglong)
-	a.RetTp.Flen = 21
-	types.SetBinChsClnFlag(a.RetTp)
-}
-
-// For child returns integer or decimal type, "sum" should returns a "decimal", otherwise it returns a "double".
-func (a *AggFuncDesc) typeInfer4Sum(ctx context.Context) {
-	switch a.Args[0].GetType().Tp {
-	case mysql.TypeTiny, mysql.TypeShort, mysql.TypeInt24, mysql.TypeLong, mysql.TypeLonglong, mysql.TypeNewDecimal:
-		a.RetTp = types.NewFieldType(mysql.TypeNewDecimal)
-		a.RetTp.Flen, a.RetTp.Decimal = mysql.MaxDecimalWidth, a.Args[0].GetType().Decimal
-		if a.RetTp.Decimal < 0 || a.RetTp.Decimal > mysql.MaxDecimalScale {
-			a.RetTp.Decimal = mysql.MaxDecimalScale
-		}
-		// TODO: a.Args[0] = expression.WrapWithCastAsDecimal(ctx, a.Args[0])
-	default:
-		a.RetTp = types.NewFieldType(mysql.TypeDouble)
-		a.RetTp.Flen, a.RetTp.Decimal = mysql.MaxRealWidth, a.Args[0].GetType().Decimal
-		//TODO: a.Args[0] = expression.WrapWithCastAsReal(ctx, a.Args[0])
-	}
-	types.SetBinChsClnFlag(a.RetTp)
-}
-
-// For child returns integer or decimal type, "avg" should returns a "decimal", otherwise it returns a "double".
-func (a *AggFuncDesc) typeInfer4Avg(ctx context.Context) {
-	switch a.Args[0].GetType().Tp {
-	case mysql.TypeTiny, mysql.TypeShort, mysql.TypeInt24, mysql.TypeLong, mysql.TypeLonglong, mysql.TypeNewDecimal:
-		a.RetTp = types.NewFieldType(mysql.TypeNewDecimal)
-		if a.Args[0].GetType().Decimal < 0 {
-			a.RetTp.Decimal = mysql.MaxDecimalScale
-		} else {
-			a.RetTp.Decimal = mathutil.Min(a.Args[0].GetType().Decimal+types.DivFracIncr, mysql.MaxDecimalScale)
-		}
-		a.RetTp.Flen = mysql.MaxDecimalWidth
-		// TODO: a.Args[0] = expression.WrapWithCastAsDecimal(ctx, a.Args[0])
-	default:
-		a.RetTp = types.NewFieldType(mysql.TypeDouble)
-		a.RetTp.Flen, a.RetTp.Decimal = mysql.MaxRealWidth, a.Args[0].GetType().Decimal
-		// TODO: a.Args[0] = expression.WrapWithCastAsReal(ctx, a.Args[0])
-	}
-	types.SetBinChsClnFlag(a.RetTp)
-}
-
-func (a *AggFuncDesc) typeInfer4GroupConcat(ctx context.Context) {
-	a.RetTp = types.NewFieldType(mysql.TypeVarString)
-	a.RetTp.Charset = charset.CharsetUTF8
-	a.RetTp.Collate = charset.CollationUTF8
-	a.RetTp.Flen, a.RetTp.Decimal = mysql.MaxBlobWidth, 0
-	// TODO: a.Args[i] = expression.WrapWithCastAsString(ctx, a.Args[i])
-}
-
-func (a *AggFuncDesc) typeInfer4MaxMin(ctx context.Context) {
-	a.RetTp = a.Args[0].GetType()
-}
-
-func (a *AggFuncDesc) typeInfer4BitFuncs(ctx context.Context) {
-	a.RetTp = types.NewFieldType(mysql.TypeLonglong)
-	a.RetTp.Flen = 21
-	types.SetBinChsClnFlag(a.RetTp)
-	a.RetTp.Flag |= mysql.UnsignedFlag | mysql.NotNullFlag
-	// TODO: a.Args[0] = expression.WrapWithCastAsInt(ctx, a.Args[0])
-}
-
-func (a *AggFuncDesc) calculateDefaultValue4Count(ctx context.Context, schema *expression.Schema) (types.Datum, bool) {
+func (a *AggFuncDesc) evalNullValueInOuterJoin4Count(ctx sessionctx.Context, schema *expression.Schema) (types.Datum, bool) {
 	for _, arg := range a.Args {
 		result := expression.EvaluateExprWithNull(ctx, schema, arg)
 		con, ok := result.(*expression.Constant)
@@ -232,7 +207,7 @@ func (a *AggFuncDesc) calculateDefaultValue4Count(ctx context.Context, schema *e
 	return types.NewDatum(1), true
 }
 
-func (a *AggFuncDesc) calculateDefaultValue4Sum(ctx context.Context, schema *expression.Schema) (types.Datum, bool) {
+func (a *AggFuncDesc) evalNullValueInOuterJoin4Sum(ctx sessionctx.Context, schema *expression.Schema) (types.Datum, bool) {
 	result := expression.EvaluateExprWithNull(ctx, schema, a.Args[0])
 	con, ok := result.(*expression.Constant)
 	if !ok || con.Value.IsNull() {
@@ -241,7 +216,7 @@ func (a *AggFuncDesc) calculateDefaultValue4Sum(ctx context.Context, schema *exp
 	return con.Value, true
 }
 
-func (a *AggFuncDesc) calculateDefaultValue4BitAnd(ctx context.Context, schema *expression.Schema) (types.Datum, bool) {
+func (a *AggFuncDesc) evalNullValueInOuterJoin4BitAnd(ctx sessionctx.Context, schema *expression.Schema) (types.Datum, bool) {
 	result := expression.EvaluateExprWithNull(ctx, schema, a.Args[0])
 	con, ok := result.(*expression.Constant)
 	if !ok || con.Value.IsNull() {
@@ -250,7 +225,7 @@ func (a *AggFuncDesc) calculateDefaultValue4BitAnd(ctx context.Context, schema *
 	return con.Value, true
 }
 
-func (a *AggFuncDesc) calculateDefaultValue4BitOr(ctx context.Context, schema *expression.Schema) (types.Datum, bool) {
+func (a *AggFuncDesc) evalNullValueInOuterJoin4BitOr(ctx sessionctx.Context, schema *expression.Schema) (types.Datum, bool) {
 	result := expression.EvaluateExprWithNull(ctx, schema, a.Args[0])
 	con, ok := result.(*expression.Constant)
 	if !ok || con.Value.IsNull() {

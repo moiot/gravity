@@ -14,16 +14,19 @@
 package statistics
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 
-	"github.com/juju/errors"
-	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
-	"github.com/pingcap/tidb/terror"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/chunk"
+	"github.com/pingcap/tidb/util/sqlexec"
 	"github.com/pingcap/tipb/go-tipb"
-	goctx "golang.org/x/net/context"
 )
 
 // SampleCollector will collect Samples and calculate the count and ndv of an attribute.
@@ -36,12 +39,14 @@ type SampleCollector struct {
 	MaxSampleSize int64
 	FMSketch      *FMSketch
 	CMSketch      *CMSketch
+	TotalSize     int64 // TotalSize is the total size of column.
 }
 
 // MergeSampleCollector merges two sample collectors.
 func (c *SampleCollector) MergeSampleCollector(sc *stmtctx.StatementContext, rc *SampleCollector) {
 	c.NullCount += rc.NullCount
 	c.Count += rc.Count
+	c.TotalSize += rc.TotalSize
 	c.FMSketch.mergeFMSketch(rc.FMSketch)
 	if rc.CMSketch != nil {
 		err := c.CMSketch.MergeCMSketch(rc.CMSketch)
@@ -59,6 +64,7 @@ func SampleCollectorToProto(c *SampleCollector) *tipb.SampleCollector {
 		NullCount: c.NullCount,
 		Count:     c.Count,
 		FmSketch:  FMSketchToProto(c.FMSketch),
+		TotalSize: &c.TotalSize,
 	}
 	if c.CMSketch != nil {
 		collector.CmSketch = CMSketchToProto(c.CMSketch)
@@ -69,6 +75,8 @@ func SampleCollectorToProto(c *SampleCollector) *tipb.SampleCollector {
 	return collector
 }
 
+const maxSampleValueLength = mysql.MaxFieldVarCharLength / 2
+
 // SampleCollectorFromProto converts SampleCollector from its protobuf representation.
 func SampleCollectorFromProto(collector *tipb.SampleCollector) *SampleCollector {
 	s := &SampleCollector{
@@ -76,9 +84,15 @@ func SampleCollectorFromProto(collector *tipb.SampleCollector) *SampleCollector 
 		Count:     collector.Count,
 		FMSketch:  FMSketchFromProto(collector.FmSketch),
 	}
+	if collector.TotalSize != nil {
+		s.TotalSize = *collector.TotalSize
+	}
 	s.CMSketch = CMSketchFromProto(collector.CmSketch)
 	for _, val := range collector.Samples {
-		s.Samples = append(s.Samples, types.NewBytesDatum(val))
+		// When store the histogram bucket boundaries to kv, we need to limit the length of the value.
+		if len(val) <= maxSampleValueLength {
+			s.Samples = append(s.Samples, types.NewBytesDatum(val))
+		}
 	}
 	return s
 }
@@ -96,6 +110,8 @@ func (c *SampleCollector) collect(sc *stmtctx.StatementContext, d types.Datum) e
 		if c.CMSketch != nil {
 			c.CMSketch.InsertBytes(d.GetBytes())
 		}
+		// Minus one is to remove the flag byte.
+		c.TotalSize += int64(len(d.GetBytes()) - 1)
 	}
 	c.seenValues++
 	// The following code use types.CopyDatum(d) because d may have a deep reference
@@ -117,7 +133,7 @@ func (c *SampleCollector) collect(sc *stmtctx.StatementContext, d types.Datum) e
 // Also, if primary key is handle, it will directly build histogram for it.
 type SampleBuilder struct {
 	Sc              *stmtctx.StatementContext
-	RecordSet       ast.RecordSet
+	RecordSet       sqlexec.RecordSet
 	ColLen          int // ColLen is the number of columns need to be sampled.
 	PkBuilder       *SortedBuilder
 	MaxBucketSize   int64
@@ -145,31 +161,44 @@ func (s SampleBuilder) CollectColumnStats() ([]*SampleCollector, *SortedBuilder,
 			collectors[i].CMSketch = NewCMSketch(s.CMSketchDepth, s.CMSketchWidth)
 		}
 	}
-	goCtx := goctx.TODO()
+	ctx := context.TODO()
+	chk := s.RecordSet.NewChunk()
+	it := chunk.NewIterator4Chunk(chk)
 	for {
-		row, err := s.RecordSet.Next(goCtx)
+		err := s.RecordSet.Next(ctx, chk)
 		if err != nil {
 			return nil, nil, errors.Trace(err)
 		}
-		if row == nil {
+		if chk.NumRows() == 0 {
 			return collectors, s.PkBuilder, nil
 		}
 		if len(s.RecordSet.Fields()) == 0 {
 			panic(fmt.Sprintf("%T", s.RecordSet))
 		}
-		datums := ast.RowToDatums(row, s.RecordSet.Fields())
-		if s.PkBuilder != nil {
-			err = s.PkBuilder.Iterate(datums[0])
-			if err != nil {
-				return nil, nil, errors.Trace(err)
+		for row := it.Begin(); row != it.End(); row = it.Next() {
+			datums := RowToDatums(row, s.RecordSet.Fields())
+			if s.PkBuilder != nil {
+				err = s.PkBuilder.Iterate(datums[0])
+				if err != nil {
+					return nil, nil, errors.Trace(err)
+				}
+				datums = datums[1:]
 			}
-			datums = datums[1:]
-		}
-		for i, val := range datums {
-			err = collectors[i].collect(s.Sc, val)
-			if err != nil {
-				return nil, nil, errors.Trace(err)
+			for i, val := range datums {
+				err = collectors[i].collect(s.Sc, val)
+				if err != nil {
+					return nil, nil, errors.Trace(err)
+				}
 			}
 		}
 	}
+}
+
+// RowToDatums converts row to datum slice.
+func RowToDatums(row chunk.Row, fields []*ast.ResultField) []types.Datum {
+	datums := make([]types.Datum, len(fields))
+	for i, f := range fields {
+		datums[i] = row.GetDatum(i, &f.Column.FieldType)
+	}
+	return datums
 }

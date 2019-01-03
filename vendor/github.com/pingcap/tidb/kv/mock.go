@@ -14,9 +14,10 @@
 package kv
 
 import (
-	"github.com/juju/errors"
+	"context"
+
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/store/tikv/oracle"
-	goctx "golang.org/x/net/context"
 )
 
 // mockTxn is a txn that returns a retryAble error when called Commit.
@@ -26,7 +27,7 @@ type mockTxn struct {
 }
 
 // Commit always returns a retryable error.
-func (t *mockTxn) Commit(ctx goctx.Context) error {
+func (t *mockTxn) Commit(ctx context.Context) error {
 	return ErrRetryable
 }
 
@@ -68,11 +69,11 @@ func (t *mockTxn) Get(k Key) ([]byte, error) {
 	return nil, nil
 }
 
-func (t *mockTxn) Seek(k Key) (Iterator, error) {
+func (t *mockTxn) Iter(k Key, upperBound Key) (Iterator, error) {
 	return nil, nil
 }
 
-func (t *mockTxn) SeekReverse(k Key) (Iterator, error) {
+func (t *mockTxn) IterReverse(k Key) (Iterator, error) {
 	return nil, nil
 }
 
@@ -111,6 +112,10 @@ func (t *mockTxn) SetCap(cap int) {
 
 func (t *mockTxn) Reset() {
 	t.valid = false
+}
+
+func (t *mockTxn) SetVars(vars *Variables) {
+
 }
 
 // NewMockTxn new a mockTxn.
@@ -188,6 +193,10 @@ func (s *mockSnapshot) Get(k Key) ([]byte, error) {
 	return s.store.Get(k)
 }
 
+func (s *mockSnapshot) SetPriority(priority int) {
+
+}
+
 func (s *mockSnapshot) BatchGet(keys []Key) (map[string][]byte, error) {
 	m := make(map[string][]byte)
 	for _, k := range keys {
@@ -203,10 +212,10 @@ func (s *mockSnapshot) BatchGet(keys []Key) (map[string][]byte, error) {
 	return m, nil
 }
 
-func (s *mockSnapshot) Seek(k Key) (Iterator, error) {
-	return s.store.Seek(k)
+func (s *mockSnapshot) Iter(k Key, upperBound Key) (Iterator, error) {
+	return s.store.Iter(k, upperBound)
 }
 
-func (s *mockSnapshot) SeekReverse(k Key) (Iterator, error) {
-	return s.store.SeekReverse(k)
+func (s *mockSnapshot) IterReverse(k Key) (Iterator, error) {
+	return s.store.IterReverse(k)
 }

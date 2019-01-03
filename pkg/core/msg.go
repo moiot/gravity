@@ -5,10 +5,11 @@ import (
 	"hash/fnv"
 	"time"
 
+	"github.com/pingcap/parser/ast"
 	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/mongo/gtm"
-	log "github.com/sirupsen/logrus"
 )
 
 type MsgType string
@@ -81,6 +82,7 @@ func (msg Msg) GetPkSign() string {
 
 type DDLMsg struct {
 	Statement string
+	AST       ast.DDLNode
 }
 
 type DMLMsg struct {

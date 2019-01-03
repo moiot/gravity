@@ -14,9 +14,10 @@
 package aggregation
 
 import (
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/chunk"
 )
 
 type firstRowFunction struct {
@@ -24,8 +25,8 @@ type firstRowFunction struct {
 }
 
 // Update implements Aggregation interface.
-func (ff *firstRowFunction) Update(ctx *AggEvaluateContext, sc *stmtctx.StatementContext, row types.Row) error {
-	if ctx.GotFirstRow {
+func (ff *firstRowFunction) Update(evalCtx *AggEvaluateContext, sc *stmtctx.StatementContext, row chunk.Row) error {
+	if evalCtx.GotFirstRow {
 		return nil
 	}
 	if len(ff.Args) != 1 {
@@ -33,19 +34,23 @@ func (ff *firstRowFunction) Update(ctx *AggEvaluateContext, sc *stmtctx.Statemen
 	}
 	value, err := ff.Args[0].Eval(row)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
-	ctx.Value = types.CopyDatum(value)
-	ctx.GotFirstRow = true
+	evalCtx.Value = types.CopyDatum(value)
+	evalCtx.GotFirstRow = true
 	return nil
 }
 
 // GetResult implements Aggregation interface.
-func (ff *firstRowFunction) GetResult(ctx *AggEvaluateContext) types.Datum {
-	return ctx.Value
+func (ff *firstRowFunction) GetResult(evalCtx *AggEvaluateContext) types.Datum {
+	return evalCtx.Value
+}
+
+func (ff *firstRowFunction) ResetContext(_ *stmtctx.StatementContext, evalCtx *AggEvaluateContext) {
+	evalCtx.GotFirstRow = false
 }
 
 // GetPartialResult implements Aggregation interface.
-func (ff *firstRowFunction) GetPartialResult(ctx *AggEvaluateContext) []types.Datum {
-	return []types.Datum{ff.GetResult(ctx)}
+func (ff *firstRowFunction) GetPartialResult(evalCtx *AggEvaluateContext) []types.Datum {
+	return []types.Datum{ff.GetResult(evalCtx)}
 }

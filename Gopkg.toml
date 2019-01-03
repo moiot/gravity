@@ -119,3 +119,7 @@
 [[constraint]]
   branch = "master"
   name = "github.com/pingcap/parser"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/pingcap/tidb"

@@ -14,19 +14,22 @@
 package executor
 
 import (
+	"context"
+	"fmt"
 	"strings"
 
-	"github.com/juju/errors"
-	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/tidb/infoschema"
-	"github.com/pingcap/tidb/model"
-	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/sessionctx/variable"
-	"github.com/pingcap/tidb/sessionctx/varsutil"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/chunk"
-	goctx "golang.org/x/net/context"
+	"github.com/pingcap/tidb/util/sqlexec"
+	log "github.com/sirupsen/logrus"
 )
 
 // DDLExec represents a DDL executor.
@@ -39,27 +42,43 @@ type DDLExec struct {
 	done bool
 }
 
-// Next implements Execution Next interface.
-func (e *DDLExec) Next(goCtx goctx.Context) (Row, error) {
-	if e.done {
-		return nil, nil
+// toErr converts the error to the ErrInfoSchemaChanged when the schema is outdated.
+func (e *DDLExec) toErr(err error) error {
+	if e.ctx.GetSessionVars().StmtCtx.IsDDLJobInQueue {
+		return errors.Trace(err)
 	}
-	err := e.run(goCtx)
-	e.done = true
-	return nil, errors.Trace(err)
-}
 
-// NextChunk implements the Executor NextChunk interface.
-func (e *DDLExec) NextChunk(goCtx goctx.Context, chk *chunk.Chunk) error {
-	if e.done {
-		return nil
+	// Before the DDL job is ready, it encouters an error that may be due to the outdated schema information.
+	// After the DDL job is ready, the ErrInfoSchemaChanged error won't happen because we are getting the schema directly from storage.
+	// So we needn't to consider this condition.
+	// Here we distinguish the ErrInfoSchemaChanged error from other errors.
+	dom := domain.GetDomain(e.ctx)
+	checker := domain.NewSchemaChecker(dom, e.is.SchemaMetaVersion(), nil)
+	txn, err1 := e.ctx.Txn(true)
+	if err1 != nil {
+		log.Error(err)
+		return errors.Trace(err1)
 	}
-	err := e.run(goCtx)
-	e.done = true
+	schemaInfoErr := checker.Check(txn.StartTS())
+	if schemaInfoErr != nil {
+		return errors.Trace(schemaInfoErr)
+	}
 	return errors.Trace(err)
 }
 
-func (e *DDLExec) run(goCtx goctx.Context) (err error) {
+// Next implements the Executor Next interface.
+func (e *DDLExec) Next(ctx context.Context, chk *chunk.Chunk) (err error) {
+	if e.done {
+		return nil
+	}
+	e.done = true
+
+	// For each DDL, we should commit the previous transaction and create a new transaction.
+	if err = e.ctx.NewTxn(ctx); err != nil {
+		return errors.Trace(err)
+	}
+	defer func() { e.ctx.GetSessionVars().StmtCtx.IsDDLJobInQueue = false }()
+
 	switch x := e.stmt.(type) {
 	case *ast.TruncateTableStmt:
 		err = e.executeTruncateTable(x)
@@ -67,6 +86,8 @@ func (e *DDLExec) run(goCtx goctx.Context) (err error) {
 		err = e.executeCreateDatabase(x)
 	case *ast.CreateTableStmt:
 		err = e.executeCreateTable(x)
+	case *ast.CreateViewStmt:
+		err = e.executeCreateView(x)
 	case *ast.CreateIndexStmt:
 		err = e.executeCreateIndex(x)
 	case *ast.DropDatabaseStmt:
@@ -81,7 +102,7 @@ func (e *DDLExec) run(goCtx goctx.Context) (err error) {
 		err = e.executeRenameTable(x)
 	}
 	if err != nil {
-		return errors.Trace(err)
+		return errors.Trace(e.toErr(err))
 	}
 
 	dom := domain.GetDomain(e.ctx)
@@ -108,7 +129,8 @@ func (e *DDLExec) executeRenameTable(s *ast.RenameTableStmt) error {
 	}
 	oldIdent := ast.Ident{Schema: s.OldTable.Schema, Name: s.OldTable.Name}
 	newIdent := ast.Ident{Schema: s.NewTable.Schema, Name: s.NewTable.Name}
-	err := domain.GetDomain(e.ctx).DDL().RenameTable(e.ctx, oldIdent, newIdent)
+	isAlterTable := false
+	err := domain.GetDomain(e.ctx).DDL().RenameTable(e.ctx, oldIdent, newIdent, isAlterTable)
 	return errors.Trace(err)
 }
 
@@ -135,20 +157,12 @@ func (e *DDLExec) executeCreateDatabase(s *ast.CreateDatabaseStmt) error {
 }
 
 func (e *DDLExec) executeCreateTable(s *ast.CreateTableStmt) error {
-	ident := ast.Ident{Schema: s.Table.Schema, Name: s.Table.Name}
-	var err error
-	if s.ReferTable == nil {
-		err = domain.GetDomain(e.ctx).DDL().CreateTable(e.ctx, ident, s.Cols, s.Constraints, s.Options)
-	} else {
-		referIdent := ast.Ident{Schema: s.ReferTable.Schema, Name: s.ReferTable.Name}
-		err = domain.GetDomain(e.ctx).DDL().CreateTableWithLike(e.ctx, ident, referIdent)
-	}
-	if infoschema.ErrTableExists.Equal(err) {
-		if s.IfNotExists {
-			return nil
-		}
-		return err
-	}
+	err := domain.GetDomain(e.ctx).DDL().CreateTable(e.ctx, s)
+	return errors.Trace(err)
+}
+
+func (e *DDLExec) executeCreateView(s *ast.CreateViewStmt) error {
+	err := domain.GetDomain(e.ctx).DDL().CreateView(e.ctx, s)
 	return errors.Trace(err)
 }
 
@@ -160,27 +174,52 @@ func (e *DDLExec) executeCreateIndex(s *ast.CreateIndexStmt) error {
 
 func (e *DDLExec) executeDropDatabase(s *ast.DropDatabaseStmt) error {
 	dbName := model.NewCIStr(s.Name)
+
+	// Protect important system table from been dropped by a mistake.
+	// I can hardly find a case that a user really need to do this.
+	if dbName.L == "mysql" {
+		return errors.New("Drop 'mysql' database is forbidden")
+	}
+
 	err := domain.GetDomain(e.ctx).DDL().DropSchema(e.ctx, dbName)
 	if infoschema.ErrDatabaseNotExists.Equal(err) {
 		if s.IfExists {
 			err = nil
 		} else {
-			err = infoschema.ErrDatabaseDropExists.GenByArgs(s.Name)
+			err = infoschema.ErrDatabaseDropExists.GenWithStackByArgs(s.Name)
 		}
 	}
 	sessionVars := e.ctx.GetSessionVars()
 	if err == nil && strings.ToLower(sessionVars.CurrentDB) == dbName.L {
 		sessionVars.CurrentDB = ""
-		err = varsutil.SetSessionSystemVar(sessionVars, variable.CharsetDatabase, types.NewStringDatum("utf8"))
+		err = variable.SetSessionSystemVar(sessionVars, variable.CharsetDatabase, types.NewStringDatum("utf8"))
 		if err != nil {
 			return errors.Trace(err)
 		}
-		err = varsutil.SetSessionSystemVar(sessionVars, variable.CollationDatabase, types.NewStringDatum("utf8_unicode_ci"))
+		err = variable.SetSessionSystemVar(sessionVars, variable.CollationDatabase, types.NewStringDatum("utf8_unicode_ci"))
 		if err != nil {
 			return errors.Trace(err)
 		}
 	}
 	return errors.Trace(err)
+}
+
+// If one drop those tables by mistake, it's difficult to recover.
+// In the worst case, the whole TiDB cluster fails to bootstrap, so we prevent user from dropping them.
+var systemTables = map[string]struct{}{
+	"tidb":                 {},
+	"gc_delete_range":      {},
+	"gc_delete_range_done": {},
+}
+
+func isSystemTable(schema, table string) bool {
+	if schema != "mysql" {
+		return false
+	}
+	if _, ok := systemTables[table]; ok {
+		return true
+	}
+	return false
 }
 
 func (e *DDLExec) executeDropTable(s *ast.DropTableStmt) error {
@@ -202,6 +241,21 @@ func (e *DDLExec) executeDropTable(s *ast.DropTableStmt) error {
 			return errors.Trace(err)
 		}
 
+		// Protect important system table from been dropped by a mistake.
+		// I can hardly find a case that a user really need to do this.
+		if isSystemTable(tn.Schema.L, tn.Name.L) {
+			return errors.Errorf("Drop tidb system table '%s.%s' is forbidden", tn.Schema.L, tn.Name.L)
+		}
+
+		if config.CheckTableBeforeDrop {
+			log.Warnf("admin check table `%s`.`%s` before drop.", fullti.Schema.O, fullti.Name.O)
+			sql := fmt.Sprintf("admin check table `%s`.`%s`", fullti.Schema.O, fullti.Name.O)
+			_, _, err = e.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(e.ctx, sql)
+			if err != nil {
+				return errors.Trace(err)
+			}
+		}
+
 		err = domain.GetDomain(e.ctx).DDL().DropTable(e.ctx, fullti)
 		if infoschema.ErrDatabaseNotExists.Equal(err) || infoschema.ErrTableNotExists.Equal(err) {
 			notExistTables = append(notExistTables, fullti.String())
@@ -210,7 +264,7 @@ func (e *DDLExec) executeDropTable(s *ast.DropTableStmt) error {
 		}
 	}
 	if len(notExistTables) > 0 && !s.IfExists {
-		return infoschema.ErrTableDropExists.GenByArgs(strings.Join(notExistTables, ","))
+		return infoschema.ErrTableDropExists.GenWithStackByArgs(strings.Join(notExistTables, ","))
 	}
 	return nil
 }

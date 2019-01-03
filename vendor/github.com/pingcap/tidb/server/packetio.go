@@ -37,9 +37,11 @@ package server
 import (
 	"bufio"
 	"io"
+	"time"
 
-	"github.com/juju/errors"
-	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/terror"
 )
 
 const defaultWriterSize = 16 * 1024
@@ -49,6 +51,7 @@ type packetIO struct {
 	bufReadConn *bufferedReadConn
 	bufWriter   *bufio.Writer
 	sequence    uint8
+	readTimeout time.Duration
 }
 
 func newPacketIO(bufReadConn *bufferedReadConn) *packetIO {
@@ -62,16 +65,24 @@ func (p *packetIO) setBufferedReadConn(bufReadConn *bufferedReadConn) {
 	p.bufWriter = bufio.NewWriterSize(bufReadConn, defaultWriterSize)
 }
 
+func (p *packetIO) setReadTimeout(timeout time.Duration) {
+	p.readTimeout = timeout
+}
+
 func (p *packetIO) readOnePacket() ([]byte, error) {
 	var header [4]byte
-
+	if p.readTimeout > 0 {
+		if err := p.bufReadConn.SetReadDeadline(time.Now().Add(p.readTimeout)); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := io.ReadFull(p.bufReadConn, header[:]); err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	sequence := header[3]
 	if sequence != p.sequence {
-		return nil, errInvalidSequence.Gen("invalid sequence %d != %d", sequence, p.sequence)
+		return nil, errInvalidSequence.GenWithStack("invalid sequence %d != %d", sequence, p.sequence)
 	}
 
 	p.sequence++
@@ -79,6 +90,11 @@ func (p *packetIO) readOnePacket() ([]byte, error) {
 	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
 
 	data := make([]byte, length)
+	if p.readTimeout > 0 {
+		if err := p.bufReadConn.SetReadDeadline(time.Now().Add(p.readTimeout)); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := io.ReadFull(p.bufReadConn, data); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -95,7 +111,7 @@ func (p *packetIO) readPacket() ([]byte, error) {
 		return data, nil
 	}
 
-	// handle muliti-packet
+	// handle multi-packet
 	for {
 		buf, err := p.readOnePacket()
 		if err != nil {
@@ -140,6 +156,7 @@ func (p *packetIO) writePacket(data []byte) error {
 	data[3] = p.sequence
 
 	if n, err := p.bufWriter.Write(data); err != nil {
+		terror.Log(errors.Trace(err))
 		return errors.Trace(mysql.ErrBadConn)
 	} else if n != len(data) {
 		return errors.Trace(mysql.ErrBadConn)

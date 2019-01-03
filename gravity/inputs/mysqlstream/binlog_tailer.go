@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/parser"
+
 	"github.com/moiot/gravity/gravity/binlog_checker"
 	config2 "github.com/moiot/gravity/gravity/config"
 	"github.com/moiot/gravity/pkg/core"
@@ -78,6 +80,7 @@ type BinlogTailer struct {
 	gravityServerID uint32
 	sourceDB        *sql.DB
 	binlogSyncer    *replication.BinlogSyncer
+	parser          *parser.Parser
 
 	msgTxnBuffer []*core.Msg
 
@@ -120,6 +123,7 @@ func NewBinlogTailer(
 		pipelineName:            pipelineName,
 		gravityServerID:         gravityServerID,
 		sourceDB:                sourceDB,
+		parser:                  parser.New(),
 		ctx:                     c,
 		cancel:                  cancel,
 		binlogSyncer:            utils.NewBinlogSyncer(gravityServerID, cfg.Source),
@@ -396,8 +400,7 @@ func (tailer *BinlogTailer) Start() error {
 				}
 
 				// disable ddl right now
-				continue
-				dbName := extractSchemaNameFromDDLQueryEvent(ev)
+				dbName, table, ast := extractSchemaNameFromDDLQueryEvent(tailer.parser, ev)
 
 				if dbName == "drc" || dbName == "mysql" {
 					continue
@@ -420,7 +423,7 @@ func (tailer *BinlogTailer) Start() error {
 				tailer.positionStore.FSync()
 
 				// emit ddl msg
-				ddlMsg := NewDDLMsg(tailer.AfterMsgCommit, dbName, ddlSQL, int64(e.Header.Timestamp), position_store.SerializeMySQLBinlogPosition(currentPos, currentGS))
+				ddlMsg := NewDDLMsg(tailer.AfterMsgCommit, dbName, table, ast, ddlSQL, int64(e.Header.Timestamp), position_store.SerializeMySQLBinlogPosition(currentPos, currentGS))
 				if err := tailer.emitter.Emit(ddlMsg); err != nil {
 					log.Fatalf("failed to emit ddl msg: %v", errors.ErrorStack(err))
 				}

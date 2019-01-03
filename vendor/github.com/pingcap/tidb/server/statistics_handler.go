@@ -17,12 +17,12 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/pingcap/tidb"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb/domain"
-	"github.com/pingcap/tidb/model"
+	"github.com/pingcap/tidb/session"
 )
 
-// StatsHandler is the handler for dump statistics.
+// StatsHandler is the handler for dumping statistics.
 type StatsHandler struct {
 	do *domain.Domain
 }
@@ -33,7 +33,7 @@ func (s *Server) newStatsHandler() *StatsHandler {
 		panic("Illegal driver")
 	}
 
-	do, err := tidb.GetDomain(store.store)
+	do, err := session.GetDomain(store.store)
 	if err != nil {
 		panic("Failed to get domain")
 	}
@@ -47,7 +47,6 @@ func (sh StatsHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	is := sh.do.InfoSchema()
 	h := sh.do.StatsHandle()
-
 	tbl, err := is.TableByName(model.NewCIStr(params[pDBName]), model.NewCIStr(params[pTableName]))
 	if err != nil {
 		writeError(w, err)
