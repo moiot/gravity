@@ -26,6 +26,15 @@ match-table = "test_table_*"
 
 For the above configuration, all the messages with `schema` set to `test` and `table` set to `test_table_*` are filtered.
 
+```toml
+[[filters]]
+type = "reject"
+match-schema = "test"
+match-dml-op = "delete"
+```
+
+For the above configuration, all the `delete` `DML` message with `schema` set to `test` are rejected.
+
 ## `delete-dml-column` configuration
 
 The `delete-dml-column` Filter deletes specific columns in the Input message.
