@@ -23,8 +23,7 @@ func TestManualSQLEngine(t *testing.T) {
 
 	mock.ExpectExec(fmt.Sprintf("UPDATE `%s`.`%s` SET name = ?", t.Name(), mysql_test.TestTableName)).WithArgs(newName).WillReturnResult(sqlmock.NewResult(1, 1))
 
-	SQLTemplate := "UPDATE `%s`.`%s` SET name = ?"
-	r.NoError(ValidateSQLTemplate(SQLTemplate))
+	SQLTemplate := "UPDATE `{{.TargetTable.Schema}}`.`{{.TargetTable.Name}}` SET name = ?"
 
 	engineConfig := MySQLExecutionEngineConfig{
 		SQLTemplate: SQLTemplate,
