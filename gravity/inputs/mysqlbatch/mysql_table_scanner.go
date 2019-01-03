@@ -1,24 +1,21 @@
 package mysqlbatch
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
-	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/mysql"
-
+	"reflect"
 	"strconv"
 	"sync"
-
-	"github.com/juju/errors"
-	log "github.com/sirupsen/logrus"
-
 	"time"
 
-	"context"
-
-	"reflect"
+	"github.com/juju/errors"
+	"github.com/pingcap/parser"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/metrics"
+	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/mysql"
 	"github.com/moiot/gravity/pkg/utils"
 	"github.com/moiot/gravity/position_store"
 	"github.com/moiot/gravity/schema_store"
@@ -37,6 +34,7 @@ type TableScanner struct {
 	ctx           context.Context
 	schemaStore   schema_store.SchemaStore
 	wg            sync.WaitGroup
+	parser        *parser.Parser
 }
 
 func (tableScanner *TableScanner) Start() error {
@@ -384,7 +382,7 @@ func (tableScanner *TableScanner) initTableDDL(table *schema_store.Table) error 
 		return errors.Trace(err)
 	}
 
-	msg := NewCreateTableMsg(table, create)
+	msg := NewCreateTableMsg(tableScanner.parser, table, create)
 
 	if err := tableScanner.emitter.Emit(msg); err != nil {
 		return errors.Trace(err)
@@ -450,6 +448,7 @@ func NewTableScanner(
 		schemaStore:   schemaStore,
 		cfg:           cfg,
 		ctx:           ctx,
+		parser:        parser.New(),
 	}
 	return &tableScanner
 }

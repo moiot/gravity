@@ -17,11 +17,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"unicode/utf8"
 
-	"github.com/juju/errors"
-	"github.com/pingcap/tidb/context"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/parser/charset"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb/kv"
-	"github.com/pingcap/tidb/model"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/table"
 	"github.com/pingcap/tidb/tablecodec"
@@ -29,7 +31,8 @@ import (
 	"github.com/pingcap/tidb/util/codec"
 )
 
-func encodeHandle(h int64) []byte {
+// EncodeHandle encodes handle in data.
+func EncodeHandle(h int64) []byte {
 	buf := &bytes.Buffer{}
 	err := binary.Write(buf, binary.BigEndian, h)
 	if err != nil {
@@ -38,7 +41,8 @@ func encodeHandle(h int64) []byte {
 	return buf.Bytes()
 }
 
-func decodeHandle(data []byte) (int64, error) {
+// DecodeHandle decodes handle in data.
+func DecodeHandle(data []byte) (int64, error) {
 	var h int64
 	buf := bytes.NewBuffer(data)
 	err := binary.Read(buf, binary.BigEndian, &h)
@@ -74,13 +78,12 @@ func (c *indexIter) Next() (val []types.Datum, h int64, err error) {
 	if err != nil {
 		return nil, 0, errors.Trace(err)
 	}
-	// if index is *not* unique, the handle is in keybuf
-	if !c.idx.idxInfo.Unique {
+	if len(vv) > len(c.idx.idxInfo.Columns) {
 		h = vv[len(vv)-1].GetInt64()
 		val = vv[0 : len(vv)-1]
 	} else {
-		// otherwise handle is value
-		h, err = decodeHandle(c.it.Value())
+		// If the index is unique and the value isn't nil, the handle is in value.
+		h, err = DecodeHandle(c.it.Value())
 		if err != nil {
 			return nil, 0, errors.Trace(err)
 		}
@@ -96,33 +99,18 @@ func (c *indexIter) Next() (val []types.Datum, h int64, err error) {
 
 // index is the data structure for index data in the KV store.
 type index struct {
-	tblInfo *model.TableInfo
 	idxInfo *model.IndexInfo
+	tblInfo *model.TableInfo
 	prefix  kv.Key
-
-	// ddlReorgBuffer is used reduce the number of new slice when multiple index keys are created.
-	// It is not thread-safe, is only used in ddl index reorganization stage, please don't use it in other case.
-	ddlReorgBuffer []byte
-}
-
-// NewIndexWithBuffer builds a new Index object whit the buffer.
-func NewIndexWithBuffer(tableInfo *model.TableInfo, indexInfo *model.IndexInfo) table.Index {
-	idxPrefix := tablecodec.EncodeTableIndexPrefix(tableInfo.ID, indexInfo.ID)
-	index := &index{
-		tblInfo:        tableInfo,
-		idxInfo:        indexInfo,
-		prefix:         idxPrefix,
-		ddlReorgBuffer: make([]byte, 0, len(idxPrefix)+len(indexInfo.Columns)*9+9),
-	}
-	return index
 }
 
 // NewIndex builds a new Index object.
-func NewIndex(tableInfo *model.TableInfo, indexInfo *model.IndexInfo) table.Index {
+func NewIndex(physicalID int64, tblInfo *model.TableInfo, indexInfo *model.IndexInfo) table.Index {
 	index := &index{
-		tblInfo: tableInfo,
 		idxInfo: indexInfo,
-		prefix:  tablecodec.EncodeTableIndexPrefix(tableInfo.ID, indexInfo.ID),
+		tblInfo: tblInfo,
+		// The prefix can't encode from tblInfo.ID, because table partition may change the id to partition id.
+		prefix: tablecodec.EncodeTableIndexPrefix(physicalID, indexInfo.ID),
 	}
 	return index
 }
@@ -137,11 +125,40 @@ func (c *index) getIndexKeyBuf(buf []byte, defaultCap int) []byte {
 		return buf[:0]
 	}
 
-	if c.ddlReorgBuffer != nil {
-		return c.ddlReorgBuffer[:0]
+	return make([]byte, 0, defaultCap)
+}
+
+// TruncateIndexValuesIfNeeded truncates the index values created using only the leading part of column values.
+func TruncateIndexValuesIfNeeded(tblInfo *model.TableInfo, idxInfo *model.IndexInfo, indexedValues []types.Datum) []types.Datum {
+	for i := 0; i < len(indexedValues); i++ {
+		v := &indexedValues[i]
+		if v.Kind() == types.KindString || v.Kind() == types.KindBytes {
+			ic := idxInfo.Columns[i]
+			colCharset := tblInfo.Columns[ic.Offset].Charset
+			colValue := v.GetBytes()
+			isUTF8Charset := colCharset == charset.CharsetUTF8 || colCharset == charset.CharsetUTF8MB4
+			origKind := v.Kind()
+			if isUTF8Charset {
+				if ic.Length != types.UnspecifiedLength && utf8.RuneCount(colValue) > ic.Length {
+					rs := bytes.Runes(colValue)
+					truncateStr := string(rs[:ic.Length])
+					// truncate value and limit its length
+					v.SetString(truncateStr)
+					if origKind == types.KindBytes {
+						v.SetBytes(v.GetBytes())
+					}
+				}
+			} else if ic.Length != types.UnspecifiedLength && len(colValue) > ic.Length {
+				// truncate value and limit its length
+				v.SetBytes(colValue[:ic.Length])
+				if origKind == types.KindString {
+					v.SetString(v.GetString())
+				}
+			}
+		}
 	}
 
-	return make([]byte, 0, defaultCap)
+	return indexedValues
 }
 
 // GenIndexKey generates storage key for index values. Returned distinct indicates whether the
@@ -161,18 +178,9 @@ func (c *index) GenIndexKey(sc *stmtctx.StatementContext, indexedValues []types.
 		}
 	}
 
-	// For string columns, indexes can be created that use only the leading part of column values,
+	// For string columns, indexes can be created using only the leading part of column values,
 	// using col_name(length) syntax to specify an index prefix length.
-	for i := 0; i < len(indexedValues); i++ {
-		v := &indexedValues[i]
-		if v.Kind() == types.KindString || v.Kind() == types.KindBytes {
-			ic := c.idxInfo.Columns[i]
-			if ic.Length != types.UnspecifiedLength && len(v.GetBytes()) > ic.Length {
-				// truncate value and limit its length
-				v.SetBytes(v.GetBytes()[:ic.Length])
-			}
-		}
-	}
+	indexedValues = TruncateIndexValuesIfNeeded(c.tblInfo, c.idxInfo, indexedValues)
 	key = c.getIndexKeyBuf(buf, len(c.prefix)+len(indexedValues)*9+9)
 	key = append(key, []byte(c.prefix)...)
 	key, err = codec.EncodeKey(sc, key, indexedValues...)
@@ -188,9 +196,10 @@ func (c *index) GenIndexKey(sc *stmtctx.StatementContext, indexedValues []types.
 // Create creates a new entry in the kvIndex data.
 // If the index is unique and there is an existing entry with the same key,
 // Create will return the existing entry's handle as the first return value, ErrKeyExists as the second return value.
-func (c *index) Create(ctx context.Context, rm kv.RetrieverMutator, indexedValues []types.Datum, h int64) (int64, error) {
+func (c *index) Create(ctx sessionctx.Context, rm kv.RetrieverMutator, indexedValues []types.Datum, h int64,
+	opts ...*table.CreateIdxOpt) (int64, error) {
 	writeBufs := ctx.GetSessionVars().GetWriteStmtBufs()
-	skipCheck := ctx.GetSessionVars().ImportingData || ctx.GetSessionVars().StmtCtx.BatchCheck
+	skipCheck := ctx.GetSessionVars().LightningMode || ctx.GetSessionVars().StmtCtx.BatchCheck
 	key, distinct, err := c.GenIndexKey(ctx.GetSessionVars().StmtCtx, indexedValues, h, writeBufs.IndexKeyBuf)
 	if err != nil {
 		return 0, errors.Trace(err)
@@ -209,11 +218,11 @@ func (c *index) Create(ctx context.Context, rm kv.RetrieverMutator, indexedValue
 	}
 
 	if skipCheck || kv.IsErrNotFound(err) {
-		err = rm.Set(key, encodeHandle(h))
+		err = rm.Set(key, EncodeHandle(h))
 		return 0, errors.Trace(err)
 	}
 
-	handle, err := decodeHandle(value)
+	handle, err := DecodeHandle(value)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
@@ -232,7 +241,7 @@ func (c *index) Delete(sc *stmtctx.StatementContext, m kv.Mutator, indexedValues
 
 // Drop removes the KV index from store.
 func (c *index) Drop(rm kv.RetrieverMutator) error {
-	it, err := rm.Seek(c.prefix)
+	it, err := rm.Iter(c.prefix, c.prefix.PrefixNext())
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -261,7 +270,9 @@ func (c *index) Seek(sc *stmtctx.StatementContext, r kv.Retriever, indexedValues
 	if err != nil {
 		return nil, false, errors.Trace(err)
 	}
-	it, err := r.Seek(key)
+
+	upperBound := c.prefix.PrefixNext()
+	it, err := r.Iter(key, upperBound)
 	if err != nil {
 		return nil, false, errors.Trace(err)
 	}
@@ -275,7 +286,8 @@ func (c *index) Seek(sc *stmtctx.StatementContext, r kv.Retriever, indexedValues
 
 // SeekFirst returns an iterator which points to the first entry of the KV index.
 func (c *index) SeekFirst(r kv.Retriever) (iter table.IndexIterator, err error) {
-	it, err := r.Seek(c.prefix)
+	upperBound := c.prefix.PrefixNext()
+	it, err := r.Iter(c.prefix, upperBound)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -298,7 +310,7 @@ func (c *index) Exist(sc *stmtctx.StatementContext, rm kv.RetrieverMutator, inde
 
 	// For distinct index, the value of key is handle.
 	if distinct {
-		handle, err := decodeHandle(value)
+		handle, err := DecodeHandle(value)
 		if err != nil {
 			return false, 0, errors.Trace(err)
 		}
@@ -321,7 +333,7 @@ func (c *index) FetchValues(r []types.Datum, vals []types.Datum) ([]types.Datum,
 	vals = vals[:needLength]
 	for i, ic := range c.idxInfo.Columns {
 		if ic.Offset < 0 || ic.Offset >= len(r) {
-			return nil, table.ErrIndexOutBound.Gen("Index column %s offset out of bound, offset: %d, row: %v",
+			return nil, table.ErrIndexOutBound.GenWithStack("Index column %s offset out of bound, offset: %d, row: %v",
 				ic.Name, ic.Offset, r)
 		}
 		vals[i] = r[ic.Offset]

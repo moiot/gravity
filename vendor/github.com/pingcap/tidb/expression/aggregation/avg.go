@@ -14,89 +14,85 @@
 package aggregation
 
 import (
-	"github.com/juju/errors"
-	"github.com/pingcap/tidb/mysql"
+	"github.com/cznic/mathutil"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
-	"github.com/pingcap/tidb/terror"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/chunk"
 )
 
 type avgFunction struct {
 	aggFunction
 }
 
-func (af *avgFunction) updateAvg(ctx *AggEvaluateContext, sc *stmtctx.StatementContext, row types.Row) error {
+func (af *avgFunction) updateAvg(sc *stmtctx.StatementContext, evalCtx *AggEvaluateContext, row chunk.Row) error {
 	a := af.Args[1]
 	value, err := a.Eval(row)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	if value.IsNull() {
 		return nil
 	}
-	if af.HasDistinct {
-		d, err1 := ctx.DistinctChecker.Check(sc, []types.Datum{value})
-		if err1 != nil {
-			return errors.Trace(err1)
-		}
-		if !d {
-			return nil
-		}
-	}
-	ctx.Value, err = calculateSum(sc, ctx.Value, value)
+	evalCtx.Value, err = calculateSum(sc, evalCtx.Value, value)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	count, err := af.Args[0].Eval(row)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
-	ctx.Count += count.GetInt64()
+	evalCtx.Count += count.GetInt64()
 	return nil
 }
 
-// Update implements Aggregation interface.
-func (af *avgFunction) Update(ctx *AggEvaluateContext, sc *stmtctx.StatementContext, row types.Row) error {
-	if af.Mode == FinalMode {
-		return af.updateAvg(ctx, sc, row)
+func (af *avgFunction) ResetContext(sc *stmtctx.StatementContext, evalCtx *AggEvaluateContext) {
+	if af.HasDistinct {
+		evalCtx.DistinctChecker = createDistinctChecker(sc)
 	}
-	return af.updateSum(ctx, sc, row)
+	evalCtx.Value.SetNull()
+	evalCtx.Count = 0
+}
+
+// Update implements Aggregation interface.
+func (af *avgFunction) Update(evalCtx *AggEvaluateContext, sc *stmtctx.StatementContext, row chunk.Row) (err error) {
+	switch af.Mode {
+	case Partial1Mode, CompleteMode:
+		err = af.updateSum(sc, evalCtx, row)
+	case Partial2Mode, FinalMode:
+		err = af.updateAvg(sc, evalCtx, row)
+	case DedupMode:
+		panic("DedupMode is not supported now.")
+	}
+	return err
 }
 
 // GetResult implements Aggregation interface.
-func (af *avgFunction) GetResult(ctx *AggEvaluateContext) (d types.Datum) {
-	var x *types.MyDecimal
-	switch ctx.Value.Kind() {
+func (af *avgFunction) GetResult(evalCtx *AggEvaluateContext) (d types.Datum) {
+	switch evalCtx.Value.Kind() {
 	case types.KindFloat64:
-		x = new(types.MyDecimal)
-		err := x.FromFloat64(ctx.Value.GetFloat64())
-		terror.Log(errors.Trace(err))
+		sum := evalCtx.Value.GetFloat64()
+		d.SetFloat64(sum / float64(evalCtx.Count))
+		return
 	case types.KindMysqlDecimal:
-		x = ctx.Value.GetMysqlDecimal()
-	default:
-		return
+		x := evalCtx.Value.GetMysqlDecimal()
+		y := types.NewDecFromInt(evalCtx.Count)
+		to := new(types.MyDecimal)
+		err := types.DecimalDiv(x, y, to, types.DivFracIncr)
+		terror.Log(err)
+		frac := af.RetTp.Decimal
+		if frac == -1 {
+			frac = mysql.MaxDecimalScale
+		}
+		err = to.Round(to, mathutil.Min(frac, mysql.MaxDecimalScale), types.ModeHalfEven)
+		terror.Log(err)
+		d.SetMysqlDecimal(to)
 	}
-	y := types.NewDecFromInt(ctx.Count)
-	to := new(types.MyDecimal)
-	err := types.DecimalDiv(x, y, to, types.DivFracIncr)
-	terror.Log(errors.Trace(err))
-	frac := af.RetTp.Decimal
-	if frac == -1 {
-		frac = mysql.MaxDecimalScale
-	}
-	err = to.Round(to, frac, types.ModeHalfEven)
-	terror.Log(errors.Trace(err))
-	if ctx.Value.Kind() == types.KindFloat64 {
-		f, err := to.ToFloat64()
-		terror.Log(errors.Trace(err))
-		d.SetFloat64(f)
-		return
-	}
-	d.SetMysqlDecimal(to)
 	return
 }
 
 // GetPartialResult implements Aggregation interface.
-func (af *avgFunction) GetPartialResult(ctx *AggEvaluateContext) []types.Datum {
-	return []types.Datum{types.NewIntDatum(ctx.Count), ctx.Value}
+func (af *avgFunction) GetPartialResult(evalCtx *AggEvaluateContext) []types.Datum {
+	return []types.Datum{types.NewIntDatum(evalCtx.Count), evalCtx.Value}
 }

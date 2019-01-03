@@ -16,37 +16,52 @@ package aggregation
 import (
 	"math"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/chunk"
 )
 
 type bitAndFunction struct {
 	aggFunction
 }
 
+func (bf *bitAndFunction) CreateContext(sc *stmtctx.StatementContext) *AggEvaluateContext {
+	evalCtx := bf.aggFunction.CreateContext(sc)
+	evalCtx.Value.SetUint64(math.MaxUint64)
+	return evalCtx
+}
+
+func (bf bitAndFunction) ResetContext(sc *stmtctx.StatementContext, evalCtx *AggEvaluateContext) {
+	evalCtx.Value.SetUint64(math.MaxUint64)
+}
+
 // Update implements Aggregation interface.
-func (bf *bitAndFunction) Update(ctx *AggEvaluateContext, sc *stmtctx.StatementContext, row types.Row) error {
+func (bf *bitAndFunction) Update(evalCtx *AggEvaluateContext, sc *stmtctx.StatementContext, row chunk.Row) error {
 	a := bf.Args[0]
 	value, err := a.Eval(row)
 	if err != nil {
-		return errors.Trace(err)
-	}
-	if ctx.Value.IsNull() {
-		ctx.Value.SetUint64(math.MaxUint64)
+		return err
 	}
 	if !value.IsNull() {
-		ctx.Value.SetUint64(ctx.Value.GetUint64() & value.GetUint64())
+		if value.Kind() == types.KindUint64 {
+			evalCtx.Value.SetUint64(evalCtx.Value.GetUint64() & value.GetUint64())
+		} else {
+			int64Value, err := value.ToInt64(sc)
+			if err != nil {
+				return err
+			}
+			evalCtx.Value.SetUint64(evalCtx.Value.GetUint64() & uint64(int64Value))
+		}
 	}
 	return nil
 }
 
 // GetResult implements Aggregation interface.
-func (bf *bitAndFunction) GetResult(ctx *AggEvaluateContext) types.Datum {
-	return ctx.Value
+func (bf *bitAndFunction) GetResult(evalCtx *AggEvaluateContext) types.Datum {
+	return evalCtx.Value
 }
 
 // GetPartialResult implements Aggregation interface.
-func (bf *bitAndFunction) GetPartialResult(ctx *AggEvaluateContext) []types.Datum {
-	return []types.Datum{bf.GetResult(ctx)}
+func (bf *bitAndFunction) GetPartialResult(evalCtx *AggEvaluateContext) []types.Datum {
+	return []types.Datum{bf.GetResult(evalCtx)}
 }

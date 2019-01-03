@@ -14,11 +14,12 @@
 package tikv
 
 import (
-	"github.com/juju/errors"
+	"context"
+
+	"github.com/pingcap/errors"
 	"github.com/pingcap/kvproto/pkg/metapb"
-	"github.com/pingcap/pd/pd-client"
+	"github.com/pingcap/pd/client"
 	"github.com/pingcap/tidb/util/codec"
-	"golang.org/x/net/context"
 )
 
 type codecPDClient struct {
@@ -56,14 +57,14 @@ func processRegionResult(region *metapb.Region, peer *metapb.Peer, err error) (*
 
 func decodeRegionMetaKey(r *metapb.Region) error {
 	if len(r.StartKey) != 0 {
-		_, decoded, err := codec.DecodeBytes(r.StartKey)
+		_, decoded, err := codec.DecodeBytes(r.StartKey, nil)
 		if err != nil {
 			return errors.Trace(err)
 		}
 		r.StartKey = decoded
 	}
 	if len(r.EndKey) != 0 {
-		_, decoded, err := codec.DecodeBytes(r.EndKey)
+		_, decoded, err := codec.DecodeBytes(r.EndKey, nil)
 		if err != nil {
 			return errors.Trace(err)
 		}

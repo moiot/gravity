@@ -16,11 +16,10 @@ package terror
 import (
 	"encoding/json"
 	"fmt"
-	"runtime"
 	"strconv"
 
-	"github.com/juju/errors"
-	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/parser/mysql"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -68,7 +67,6 @@ const (
 	ClassKV
 	ClassMeta
 	ClassOptimizer
-	ClassOptimizerPlan
 	ClassParser
 	ClassPerfSchema
 	ClassPrivilege
@@ -83,33 +81,34 @@ const (
 	ClassMockTikv
 	ClassJSON
 	ClassTiKV
+	ClassSession
 	// Add more as needed.
 )
 
 var errClz2Str = map[ErrClass]string{
-	ClassAutoid:        "autoid",
-	ClassDDL:           "ddl",
-	ClassDomain:        "domain",
-	ClassExecutor:      "executor",
-	ClassExpression:    "expression",
-	ClassAdmin:         "admin",
-	ClassMeta:          "meta",
-	ClassKV:            "kv",
-	ClassOptimizer:     "optimizer",
-	ClassOptimizerPlan: "plan",
-	ClassParser:        "parser",
-	ClassPerfSchema:    "perfschema",
-	ClassPrivilege:     "privilege",
-	ClassSchema:        "schema",
-	ClassServer:        "server",
-	ClassStructure:     "structure",
-	ClassVariable:      "variable",
-	ClassTable:         "table",
-	ClassTypes:         "types",
-	ClassGlobal:        "global",
-	ClassMockTikv:      "mocktikv",
-	ClassJSON:          "json",
-	ClassTiKV:          "tikv",
+	ClassAutoid:     "autoid",
+	ClassDDL:        "ddl",
+	ClassDomain:     "domain",
+	ClassExecutor:   "executor",
+	ClassExpression: "expression",
+	ClassAdmin:      "admin",
+	ClassMeta:       "meta",
+	ClassKV:         "kv",
+	ClassOptimizer:  "planner",
+	ClassParser:     "parser",
+	ClassPerfSchema: "perfschema",
+	ClassPrivilege:  "privilege",
+	ClassSchema:     "schema",
+	ClassServer:     "server",
+	ClassStructure:  "structure",
+	ClassVariable:   "variable",
+	ClassTable:      "table",
+	ClassTypes:      "types",
+	ClassGlobal:     "global",
+	ClassMockTikv:   "mocktikv",
+	ClassJSON:       "json",
+	ClassTiKV:       "tikv",
+	ClassSession:    "session",
 }
 
 // String implements fmt.Stringer interface.
@@ -217,26 +216,24 @@ func (e *Error) getMsg() string {
 	return e.message
 }
 
-// Gen generates a new *Error with the same class and code, and a new formatted message.
-func (e *Error) Gen(format string, args ...interface{}) *Error {
+// GenWithStack generates a new *Error with the same class and code, and a new formatted message.
+func (e *Error) GenWithStack(format string, args ...interface{}) error {
 	err := *e
 	err.message = format
 	err.args = args
-	_, err.file, err.line, _ = runtime.Caller(1)
-	return &err
+	return errors.AddStack(&err)
 }
 
-// GenByArgs generates a new *Error with the same class and code, and new arguments.
-func (e *Error) GenByArgs(args ...interface{}) *Error {
+// GenWithStackByArgs generates a new *Error with the same class and code, and new arguments.
+func (e *Error) GenWithStackByArgs(args ...interface{}) error {
 	err := *e
 	err.args = args
-	_, err.file, err.line, _ = runtime.Caller(1)
-	return &err
+	return errors.AddStack(&err)
 }
 
 // FastGen generates a new *Error with the same class and code, and a new formatted message.
 // This will not call runtime.Caller to get file and line.
-func (e *Error) FastGen(format string, args ...interface{}) *Error {
+func (e *Error) FastGen(format string, args ...interface{}) error {
 	err := *e
 	err.message = format
 	err.args = args
@@ -278,7 +275,7 @@ func (e *Error) getMySQLErrorCode() uint16 {
 	}
 	code, ok := codeMap[e.code]
 	if !ok {
-		log.Warnf("Unknown error class: %v code: %v", e.class, e.code)
+		log.Debugf("Unknown error class: %v code: %v", e.class, e.code)
 		return defaultMySQLErrorCode
 	}
 	return code
@@ -321,9 +318,12 @@ func ErrorNotEqual(err1, err2 error) bool {
 	return !ErrorEqual(err1, err2)
 }
 
-// MustNil fatals if err is not nil.
-func MustNil(err error) {
+// MustNil cleans up and fatals if err is not nil.
+func MustNil(err error, closeFuns ...func()) {
 	if err != nil {
+		for _, f := range closeFuns {
+			f()
+		}
 		log.Fatalf(errors.ErrorStack(err))
 	}
 }

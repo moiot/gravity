@@ -15,9 +15,12 @@ package printer
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 
-	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/config"
+	"github.com/pingcap/tidb/util/israce"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -27,6 +30,8 @@ var (
 	TiDBGitHash   = "None"
 	TiDBGitBranch = "None"
 	GoVersion     = "None"
+	// TiKVMinVersion is the minimum version of TiKV that can be compatible with the current TiDB.
+	TiKVMinVersion = "2.1.0-alpha.1-ff3dd160846b7d1aed9079c389fc188f7f5ea13e"
 )
 
 // PrintTiDBInfo prints the TiDB version information.
@@ -37,20 +42,34 @@ func PrintTiDBInfo() {
 	log.Infof("Git Branch: %s", TiDBGitBranch)
 	log.Infof("UTC Build Time:  %s", TiDBBuildTS)
 	log.Infof("GoVersion:  %s", GoVersion)
-}
-
-// PrintRawTiDBInfo prints the TiDB version information without log info.
-func PrintRawTiDBInfo() {
-	fmt.Println("Release Version:", mysql.TiDBReleaseVersion)
-	fmt.Println("Git Commit Hash:", TiDBGitHash)
-	fmt.Println("Git Commit Branch:", TiDBGitBranch)
-	fmt.Println("UTC Build Time: ", TiDBBuildTS)
-	fmt.Println("GoVersion: ", GoVersion)
+	log.Infof("Race Enabled: %v", israce.RaceEnabled)
+	log.Infof("Check Table Before Drop: %v", config.CheckTableBeforeDrop)
+	log.Infof("TiKV Min Version: %s", TiKVMinVersion)
+	configJSON, err := json.Marshal(config.GetGlobalConfig())
+	if err != nil {
+		panic(err)
+	}
+	log.Infof("Config: %s", configJSON)
 }
 
 // GetTiDBInfo returns the git hash and build time of this tidb-server binary.
 func GetTiDBInfo() string {
-	return fmt.Sprintf("Release Version: %s\nGit Commit Hash: %s\nGit Branch: %s\nUTC Build Time: %s", mysql.TiDBReleaseVersion, TiDBGitHash, TiDBGitBranch, TiDBBuildTS)
+	return fmt.Sprintf("Release Version: %s\n"+
+		"Git Commit Hash: %s\n"+
+		"Git Branch: %s\n"+
+		"UTC Build Time: %s\n"+
+		"GoVersion: %s\n"+
+		"Race Enabled: %v\n"+
+		"TiKV Min Version: %s\n"+
+		"Check Table Before Drop: %v",
+		mysql.TiDBReleaseVersion,
+		TiDBGitHash,
+		TiDBGitBranch,
+		TiDBBuildTS,
+		GoVersion,
+		israce.RaceEnabled,
+		TiKVMinVersion,
+		config.CheckTableBeforeDrop)
 }
 
 // checkValidity checks whether cols and every data have the same length.

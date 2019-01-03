@@ -17,11 +17,11 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/juju/errors"
-	"github.com/pingcap/tidb/context"
-	"github.com/pingcap/tidb/mysql"
-	"github.com/pingcap/tidb/parser/opcode"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/opcode"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tipb/go-tipb"
 )
 
@@ -59,10 +59,10 @@ type logicAndFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *logicAndFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *logicAndFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	err := c.verifyArgs(args)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETInt, types.ETInt)
 	sig := &builtinLogicAndSig{bf}
@@ -75,15 +75,20 @@ type builtinLogicAndSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinLogicAndSig) evalInt(row types.Row) (int64, bool, error) {
-	sc := b.ctx.GetSessionVars().StmtCtx
-	arg0, isNull0, err := b.args[0].EvalInt(row, sc)
+func (b *builtinLogicAndSig) Clone() builtinFunc {
+	newSig := &builtinLogicAndSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinLogicAndSig) evalInt(row chunk.Row) (int64, bool, error) {
+	arg0, isNull0, err := b.args[0].EvalInt(b.ctx, row)
 	if err != nil || (!isNull0 && arg0 == 0) {
-		return 0, err != nil, errors.Trace(err)
+		return 0, err != nil, err
 	}
-	arg1, isNull1, err := b.args[1].EvalInt(row, sc)
+	arg1, isNull1, err := b.args[1].EvalInt(b.ctx, row)
 	if err != nil || (!isNull1 && arg1 == 0) {
-		return 0, err != nil, errors.Trace(err)
+		return 0, err != nil, err
 	}
 	if isNull0 || isNull1 {
 		return 0, true, nil
@@ -95,10 +100,10 @@ type logicOrFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *logicOrFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *logicOrFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	err := c.verifyArgs(args)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETInt, types.ETInt)
 	bf.tp.Flen = 1
@@ -111,18 +116,23 @@ type builtinLogicOrSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinLogicOrSig) evalInt(row types.Row) (int64, bool, error) {
-	sc := b.ctx.GetSessionVars().StmtCtx
-	arg0, isNull0, err := b.args[0].EvalInt(row, sc)
+func (b *builtinLogicOrSig) Clone() builtinFunc {
+	newSig := &builtinLogicOrSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinLogicOrSig) evalInt(row chunk.Row) (int64, bool, error) {
+	arg0, isNull0, err := b.args[0].EvalInt(b.ctx, row)
 	if err != nil {
-		return 0, true, errors.Trace(err)
+		return 0, true, err
 	}
 	if !isNull0 && arg0 != 0 {
 		return 1, false, nil
 	}
-	arg1, isNull1, err := b.args[1].EvalInt(row, sc)
+	arg1, isNull1, err := b.args[1].EvalInt(b.ctx, row)
 	if err != nil {
-		return 0, true, errors.Trace(err)
+		return 0, true, err
 	}
 	if !isNull1 && arg1 != 0 {
 		return 1, false, nil
@@ -137,10 +147,10 @@ type logicXorFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *logicXorFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *logicXorFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	err := c.verifyArgs(args)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETInt, types.ETInt)
 	sig := &builtinLogicXorSig{bf}
@@ -153,15 +163,20 @@ type builtinLogicXorSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinLogicXorSig) evalInt(row types.Row) (int64, bool, error) {
-	sc := b.ctx.GetSessionVars().StmtCtx
-	arg0, isNull, err := b.args[0].EvalInt(row, sc)
+func (b *builtinLogicXorSig) Clone() builtinFunc {
+	newSig := &builtinLogicXorSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinLogicXorSig) evalInt(row chunk.Row) (int64, bool, error) {
+	arg0, isNull, err := b.args[0].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
-	arg1, isNull, err := b.args[1].EvalInt(row, sc)
+	arg1, isNull, err := b.args[1].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
 	if (arg0 != 0 && arg1 != 0) || (arg0 == 0 && arg1 == 0) {
 		return 0, false, nil
@@ -173,10 +188,10 @@ type bitAndFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *bitAndFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *bitAndFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	err := c.verifyArgs(args)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETInt, types.ETInt)
 	sig := &builtinBitAndSig{bf}
@@ -189,15 +204,20 @@ type builtinBitAndSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinBitAndSig) evalInt(row types.Row) (int64, bool, error) {
-	sc := b.ctx.GetSessionVars().StmtCtx
-	arg0, isNull, err := b.args[0].EvalInt(row, sc)
+func (b *builtinBitAndSig) Clone() builtinFunc {
+	newSig := &builtinBitAndSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinBitAndSig) evalInt(row chunk.Row) (int64, bool, error) {
+	arg0, isNull, err := b.args[0].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
-	arg1, isNull, err := b.args[1].EvalInt(row, sc)
+	arg1, isNull, err := b.args[1].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
 	return arg0 & arg1, false, nil
 }
@@ -206,10 +226,10 @@ type bitOrFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *bitOrFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *bitOrFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	err := c.verifyArgs(args)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETInt, types.ETInt)
 	sig := &builtinBitOrSig{bf}
@@ -222,15 +242,20 @@ type builtinBitOrSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinBitOrSig) evalInt(row types.Row) (int64, bool, error) {
-	sc := b.ctx.GetSessionVars().StmtCtx
-	arg0, isNull, err := b.args[0].EvalInt(row, sc)
+func (b *builtinBitOrSig) Clone() builtinFunc {
+	newSig := &builtinBitOrSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinBitOrSig) evalInt(row chunk.Row) (int64, bool, error) {
+	arg0, isNull, err := b.args[0].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
-	arg1, isNull, err := b.args[1].EvalInt(row, sc)
+	arg1, isNull, err := b.args[1].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
 	return arg0 | arg1, false, nil
 }
@@ -239,10 +264,10 @@ type bitXorFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *bitXorFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *bitXorFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	err := c.verifyArgs(args)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETInt, types.ETInt)
 	sig := &builtinBitXorSig{bf}
@@ -255,15 +280,20 @@ type builtinBitXorSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinBitXorSig) evalInt(row types.Row) (int64, bool, error) {
-	sc := b.ctx.GetSessionVars().StmtCtx
-	arg0, isNull, err := b.args[0].EvalInt(row, sc)
+func (b *builtinBitXorSig) Clone() builtinFunc {
+	newSig := &builtinBitXorSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinBitXorSig) evalInt(row chunk.Row) (int64, bool, error) {
+	arg0, isNull, err := b.args[0].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
-	arg1, isNull, err := b.args[1].EvalInt(row, sc)
+	arg1, isNull, err := b.args[1].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
 	return arg0 ^ arg1, false, nil
 }
@@ -272,10 +302,10 @@ type leftShiftFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *leftShiftFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *leftShiftFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	err := c.verifyArgs(args)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETInt, types.ETInt)
 	sig := &builtinLeftShiftSig{bf}
@@ -287,15 +317,20 @@ type builtinLeftShiftSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinLeftShiftSig) evalInt(row types.Row) (int64, bool, error) {
-	sc := b.ctx.GetSessionVars().StmtCtx
-	arg0, isNull, err := b.args[0].EvalInt(row, sc)
+func (b *builtinLeftShiftSig) Clone() builtinFunc {
+	newSig := &builtinLeftShiftSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinLeftShiftSig) evalInt(row chunk.Row) (int64, bool, error) {
+	arg0, isNull, err := b.args[0].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
-	arg1, isNull, err := b.args[1].EvalInt(row, sc)
+	arg1, isNull, err := b.args[1].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
 	return int64(uint64(arg0) << uint64(arg1)), false, nil
 }
@@ -304,10 +339,10 @@ type rightShiftFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *rightShiftFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *rightShiftFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	err := c.verifyArgs(args)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETInt, types.ETInt)
 	sig := &builtinRightShiftSig{bf}
@@ -319,15 +354,20 @@ type builtinRightShiftSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinRightShiftSig) evalInt(row types.Row) (int64, bool, error) {
-	sc := b.ctx.GetSessionVars().StmtCtx
-	arg0, isNull, err := b.args[0].EvalInt(row, sc)
+func (b *builtinRightShiftSig) Clone() builtinFunc {
+	newSig := &builtinRightShiftSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinRightShiftSig) evalInt(row chunk.Row) (int64, bool, error) {
+	arg0, isNull, err := b.args[0].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
-	arg1, isNull, err := b.args[1].EvalInt(row, sc)
+	arg1, isNull, err := b.args[1].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
 	return int64(uint64(arg0) >> uint64(arg1)), false, nil
 }
@@ -337,9 +377,9 @@ type isTrueOrFalseFunctionClass struct {
 	op opcode.Op
 }
 
-func (c *isTrueOrFalseFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *isTrueOrFalseFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	argTp := args[0].GetType().EvalType()
@@ -384,10 +424,16 @@ type builtinRealIsTrueSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinRealIsTrueSig) evalInt(row types.Row) (int64, bool, error) {
-	input, isNull, err := b.args[0].EvalReal(row, b.ctx.GetSessionVars().StmtCtx)
+func (b *builtinRealIsTrueSig) Clone() builtinFunc {
+	newSig := &builtinRealIsTrueSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinRealIsTrueSig) evalInt(row chunk.Row) (int64, bool, error) {
+	input, isNull, err := b.args[0].EvalReal(b.ctx, row)
 	if err != nil {
-		return 0, true, errors.Trace(err)
+		return 0, true, err
 	}
 	if isNull || input == 0 {
 		return 0, false, nil
@@ -399,10 +445,16 @@ type builtinDecimalIsTrueSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinDecimalIsTrueSig) evalInt(row types.Row) (int64, bool, error) {
-	input, isNull, err := b.args[0].EvalDecimal(row, b.ctx.GetSessionVars().StmtCtx)
+func (b *builtinDecimalIsTrueSig) Clone() builtinFunc {
+	newSig := &builtinDecimalIsTrueSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinDecimalIsTrueSig) evalInt(row chunk.Row) (int64, bool, error) {
+	input, isNull, err := b.args[0].EvalDecimal(b.ctx, row)
 	if err != nil {
-		return 0, true, errors.Trace(err)
+		return 0, true, err
 	}
 	if isNull || input.IsZero() {
 		return 0, false, nil
@@ -414,10 +466,16 @@ type builtinIntIsTrueSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinIntIsTrueSig) evalInt(row types.Row) (int64, bool, error) {
-	input, isNull, err := b.args[0].EvalInt(row, b.ctx.GetSessionVars().StmtCtx)
+func (b *builtinIntIsTrueSig) Clone() builtinFunc {
+	newSig := &builtinIntIsTrueSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinIntIsTrueSig) evalInt(row chunk.Row) (int64, bool, error) {
+	input, isNull, err := b.args[0].EvalInt(b.ctx, row)
 	if err != nil {
-		return 0, true, errors.Trace(err)
+		return 0, true, err
 	}
 	if isNull || input == 0 {
 		return 0, false, nil
@@ -429,10 +487,16 @@ type builtinRealIsFalseSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinRealIsFalseSig) evalInt(row types.Row) (int64, bool, error) {
-	input, isNull, err := b.args[0].EvalReal(row, b.ctx.GetSessionVars().StmtCtx)
+func (b *builtinRealIsFalseSig) Clone() builtinFunc {
+	newSig := &builtinRealIsFalseSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinRealIsFalseSig) evalInt(row chunk.Row) (int64, bool, error) {
+	input, isNull, err := b.args[0].EvalReal(b.ctx, row)
 	if err != nil {
-		return 0, true, errors.Trace(err)
+		return 0, true, err
 	}
 	if isNull || input != 0 {
 		return 0, false, nil
@@ -444,10 +508,16 @@ type builtinDecimalIsFalseSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinDecimalIsFalseSig) evalInt(row types.Row) (int64, bool, error) {
-	input, isNull, err := b.args[0].EvalDecimal(row, b.ctx.GetSessionVars().StmtCtx)
+func (b *builtinDecimalIsFalseSig) Clone() builtinFunc {
+	newSig := &builtinDecimalIsFalseSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinDecimalIsFalseSig) evalInt(row chunk.Row) (int64, bool, error) {
+	input, isNull, err := b.args[0].EvalDecimal(b.ctx, row)
 	if err != nil {
-		return 0, true, errors.Trace(err)
+		return 0, true, err
 	}
 	if isNull || !input.IsZero() {
 		return 0, false, nil
@@ -459,10 +529,16 @@ type builtinIntIsFalseSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinIntIsFalseSig) evalInt(row types.Row) (int64, bool, error) {
-	input, isNull, err := b.args[0].EvalInt(row, b.ctx.GetSessionVars().StmtCtx)
+func (b *builtinIntIsFalseSig) Clone() builtinFunc {
+	newSig := &builtinIntIsFalseSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinIntIsFalseSig) evalInt(row chunk.Row) (int64, bool, error) {
+	input, isNull, err := b.args[0].EvalInt(b.ctx, row)
 	if err != nil {
-		return 0, true, errors.Trace(err)
+		return 0, true, err
 	}
 	if isNull || input != 0 {
 		return 0, false, nil
@@ -474,9 +550,9 @@ type bitNegFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *bitNegFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *bitNegFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETInt)
 	bf.tp.Flag |= mysql.UnsignedFlag
@@ -489,11 +565,16 @@ type builtinBitNegSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinBitNegSig) evalInt(row types.Row) (int64, bool, error) {
-	sc := b.ctx.GetSessionVars().StmtCtx
-	arg, isNull, err := b.args[0].EvalInt(row, sc)
+func (b *builtinBitNegSig) Clone() builtinFunc {
+	newSig := &builtinBitNegSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinBitNegSig) evalInt(row chunk.Row) (int64, bool, error) {
+	arg, isNull, err := b.args[0].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
 	return ^arg, false, nil
 }
@@ -502,9 +583,9 @@ type unaryNotFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *unaryNotFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *unaryNotFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETInt, types.ETInt)
@@ -519,11 +600,16 @@ type builtinUnaryNotSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinUnaryNotSig) evalInt(row types.Row) (int64, bool, error) {
-	sc := b.ctx.GetSessionVars().StmtCtx
-	arg, isNull, err := b.args[0].EvalInt(row, sc)
+func (b *builtinUnaryNotSig) Clone() builtinFunc {
+	newSig := &builtinUnaryNotSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinUnaryNotSig) evalInt(row chunk.Row) (int64, bool, error) {
+	arg, isNull, err := b.args[0].EvalInt(b.ctx, row)
 	if isNull || err != nil {
-		return 0, isNull, errors.Trace(err)
+		return 0, isNull, err
 	}
 	if arg != 0 {
 		return 0, false, nil
@@ -556,7 +642,7 @@ func (c *unaryMinusFunctionClass) handleIntOverflow(arg *Constant) (overflow boo
 
 // typeInfer infers unaryMinus function return type. when the arg is an int constant and overflow,
 // typerInfer will infers the return type as types.ETDecimal, not types.ETInt.
-func (c *unaryMinusFunctionClass) typeInfer(argExpr Expression, ctx context.Context) (types.EvalType, bool) {
+func (c *unaryMinusFunctionClass) typeInfer(ctx sessionctx.Context, argExpr Expression) (types.EvalType, bool) {
 	tp := argExpr.GetType().EvalType()
 	if tp != types.ETInt && tp != types.ETDecimal {
 		tp = types.ETReal
@@ -565,8 +651,7 @@ func (c *unaryMinusFunctionClass) typeInfer(argExpr Expression, ctx context.Cont
 	sc := ctx.GetSessionVars().StmtCtx
 	overflow := false
 	// TODO: Handle float overflow.
-	if arg, ok := argExpr.(*Constant); sc.InSelectStmt && ok &&
-		tp == types.ETInt {
+	if arg, ok := argExpr.(*Constant); sc.InSelectStmt && ok && tp == types.ETInt {
 		overflow = c.handleIntOverflow(arg)
 		if overflow {
 			tp = types.ETDecimal
@@ -575,13 +660,13 @@ func (c *unaryMinusFunctionClass) typeInfer(argExpr Expression, ctx context.Cont
 	return tp, overflow
 }
 
-func (c *unaryMinusFunctionClass) getFunction(ctx context.Context, args []Expression) (sig builtinFunc, err error) {
+func (c *unaryMinusFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (sig builtinFunc, err error) {
 	if err = c.verifyArgs(args); err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	argExpr, argExprTp := args[0], args[0].GetType()
-	_, intOverflow := c.typeInfer(argExpr, ctx)
+	_, intOverflow := c.typeInfer(ctx, argExpr)
 
 	var bf baseBuiltinFunc
 	switch argExprTp.EvalType() {
@@ -618,29 +703,35 @@ func (c *unaryMinusFunctionClass) getFunction(ctx context.Context, args []Expres
 		}
 	}
 	bf.tp.Flen = argExprTp.Flen + 1
-	return sig, errors.Trace(err)
+	return sig, err
 }
 
 type builtinUnaryMinusIntSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinUnaryMinusIntSig) evalInt(row types.Row) (res int64, isNull bool, err error) {
+func (b *builtinUnaryMinusIntSig) Clone() builtinFunc {
+	newSig := &builtinUnaryMinusIntSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinUnaryMinusIntSig) evalInt(row chunk.Row) (res int64, isNull bool, err error) {
 	var val int64
-	val, isNull, err = b.args[0].EvalInt(row, b.getCtx().GetSessionVars().StmtCtx)
+	val, isNull, err = b.args[0].EvalInt(b.ctx, row)
 	if err != nil || isNull {
-		return val, isNull, errors.Trace(err)
+		return val, isNull, err
 	}
 
 	if mysql.HasUnsignedFlag(b.args[0].GetType().Flag) {
 		uval := uint64(val)
 		if uval > uint64(-math.MinInt64) {
-			return 0, false, types.ErrOverflow.GenByArgs("BIGINT", fmt.Sprintf("-%v", uval))
+			return 0, false, types.ErrOverflow.GenWithStackByArgs("BIGINT", fmt.Sprintf("-%v", uval))
 		} else if uval == uint64(-math.MinInt64) {
 			return math.MinInt64, false, nil
 		}
 	} else if val == math.MinInt64 {
-		return 0, false, types.ErrOverflow.GenByArgs("BIGINT", fmt.Sprintf("-%v", val))
+		return 0, false, types.ErrOverflow.GenWithStackByArgs("BIGINT", fmt.Sprintf("-%v", val))
 	}
 	return -val, false, nil
 }
@@ -651,37 +742,42 @@ type builtinUnaryMinusDecimalSig struct {
 	constantArgOverflow bool
 }
 
-func (b *builtinUnaryMinusDecimalSig) evalDecimal(row types.Row) (*types.MyDecimal, bool, error) {
-	sc := b.getCtx().GetSessionVars().StmtCtx
+func (b *builtinUnaryMinusDecimalSig) Clone() builtinFunc {
+	newSig := &builtinUnaryMinusDecimalSig{constantArgOverflow: b.constantArgOverflow}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
 
-	var dec *types.MyDecimal
-	dec, isNull, err := b.args[0].EvalDecimal(row, sc)
+func (b *builtinUnaryMinusDecimalSig) evalDecimal(row chunk.Row) (*types.MyDecimal, bool, error) {
+	dec, isNull, err := b.args[0].EvalDecimal(b.ctx, row)
 	if err != nil || isNull {
-		return dec, isNull, errors.Trace(err)
+		return dec, isNull, err
 	}
-
-	to := new(types.MyDecimal)
-	err = types.DecimalSub(new(types.MyDecimal), dec, to)
-	return to, err != nil, errors.Trace(err)
+	return types.DecimalNeg(dec), false, nil
 }
 
 type builtinUnaryMinusRealSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinUnaryMinusRealSig) evalReal(row types.Row) (float64, bool, error) {
-	sc := b.getCtx().GetSessionVars().StmtCtx
-	val, isNull, err := b.args[0].EvalReal(row, sc)
-	return -val, isNull, errors.Trace(err)
+func (b *builtinUnaryMinusRealSig) Clone() builtinFunc {
+	newSig := &builtinUnaryMinusRealSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinUnaryMinusRealSig) evalReal(row chunk.Row) (float64, bool, error) {
+	val, isNull, err := b.args[0].EvalReal(b.ctx, row)
+	return -val, isNull, err
 }
 
 type isNullFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *isNullFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *isNullFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	argTp := args[0].GetType().EvalType()
 	if argTp == types.ETTimestamp {
@@ -721,9 +817,15 @@ type builtinDecimalIsNullSig struct {
 	baseBuiltinFunc
 }
 
+func (b *builtinDecimalIsNullSig) Clone() builtinFunc {
+	newSig := &builtinDecimalIsNullSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
 func evalIsNull(isNull bool, err error) (int64, bool, error) {
 	if err != nil {
-		return 0, true, errors.Trace(err)
+		return 0, true, err
 	}
 	if isNull {
 		return 1, false, nil
@@ -731,8 +833,8 @@ func evalIsNull(isNull bool, err error) (int64, bool, error) {
 	return 0, false, nil
 }
 
-func (b *builtinDecimalIsNullSig) evalInt(row types.Row) (int64, bool, error) {
-	_, isNull, err := b.args[0].EvalDecimal(row, b.ctx.GetSessionVars().StmtCtx)
+func (b *builtinDecimalIsNullSig) evalInt(row chunk.Row) (int64, bool, error) {
+	_, isNull, err := b.args[0].EvalDecimal(b.ctx, row)
 	return evalIsNull(isNull, err)
 }
 
@@ -740,8 +842,14 @@ type builtinDurationIsNullSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinDurationIsNullSig) evalInt(row types.Row) (int64, bool, error) {
-	_, isNull, err := b.args[0].EvalDuration(row, b.ctx.GetSessionVars().StmtCtx)
+func (b *builtinDurationIsNullSig) Clone() builtinFunc {
+	newSig := &builtinDurationIsNullSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinDurationIsNullSig) evalInt(row chunk.Row) (int64, bool, error) {
+	_, isNull, err := b.args[0].EvalDuration(b.ctx, row)
 	return evalIsNull(isNull, err)
 }
 
@@ -749,8 +857,14 @@ type builtinIntIsNullSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinIntIsNullSig) evalInt(row types.Row) (int64, bool, error) {
-	_, isNull, err := b.args[0].EvalInt(row, b.ctx.GetSessionVars().StmtCtx)
+func (b *builtinIntIsNullSig) Clone() builtinFunc {
+	newSig := &builtinIntIsNullSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinIntIsNullSig) evalInt(row chunk.Row) (int64, bool, error) {
+	_, isNull, err := b.args[0].EvalInt(b.ctx, row)
 	return evalIsNull(isNull, err)
 }
 
@@ -758,8 +872,14 @@ type builtinRealIsNullSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinRealIsNullSig) evalInt(row types.Row) (int64, bool, error) {
-	_, isNull, err := b.args[0].EvalReal(row, b.ctx.GetSessionVars().StmtCtx)
+func (b *builtinRealIsNullSig) Clone() builtinFunc {
+	newSig := &builtinRealIsNullSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinRealIsNullSig) evalInt(row chunk.Row) (int64, bool, error) {
+	_, isNull, err := b.args[0].EvalReal(b.ctx, row)
 	return evalIsNull(isNull, err)
 }
 
@@ -767,8 +887,14 @@ type builtinStringIsNullSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinStringIsNullSig) evalInt(row types.Row) (int64, bool, error) {
-	_, isNull, err := b.args[0].EvalString(row, b.ctx.GetSessionVars().StmtCtx)
+func (b *builtinStringIsNullSig) Clone() builtinFunc {
+	newSig := &builtinStringIsNullSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinStringIsNullSig) evalInt(row chunk.Row) (int64, bool, error) {
+	_, isNull, err := b.args[0].EvalString(b.ctx, row)
 	return evalIsNull(isNull, err)
 }
 
@@ -776,7 +902,13 @@ type builtinTimeIsNullSig struct {
 	baseBuiltinFunc
 }
 
-func (b *builtinTimeIsNullSig) evalInt(row types.Row) (int64, bool, error) {
-	_, isNull, err := b.args[0].EvalTime(row, b.ctx.GetSessionVars().StmtCtx)
+func (b *builtinTimeIsNullSig) Clone() builtinFunc {
+	newSig := &builtinTimeIsNullSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinTimeIsNullSig) evalInt(row chunk.Row) (int64, bool, error) {
+	_, isNull, err := b.args[0].EvalTime(b.ctx, row)
 	return evalIsNull(isNull, err)
 }

@@ -8,18 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/juju/errors"
-
-	"github.com/moiot/gravity/gravity/emitter"
-	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/position_store"
-	"github.com/moiot/gravity/schema_store"
-
 	"github.com/go-sql-driver/mysql"
+	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/moiot/gravity/gravity/emitter"
+	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/mysql_test"
+	"github.com/moiot/gravity/position_store"
+	"github.com/moiot/gravity/schema_store"
 )
 
 func TestFindMaxMinValueInt(t *testing.T) {

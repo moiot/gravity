@@ -18,6 +18,14 @@
   version = "v1.19.0"
 
 [[projects]]
+  digest = "1:e92f5581902c345eb4ceffdcd4a854fb8f73cf436d47d837d1ec98ef1fe0a214"
+  name = "github.com/StackExchange/wmi"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "5d049714c4a64225c3c79a7cf7d02f7fb5b96338"
+  version = "1.0.0"
+
+[[projects]]
   digest = "1:f7c9da401cb69745997c5b27b596e65635703274c877b0f3e05eb68feef9a543"
   name = "github.com/aws/aws-sdk-go"
   packages = [
@@ -92,6 +100,14 @@
   version = "v3.3.1"
 
 [[projects]]
+  branch = "master"
+  digest = "1:4c93bb450aee389f1b143d473a96fc01fa1c8d87171c97b822acffab475b165d"
+  name = "github.com/cznic/mathutil"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "297441e035482346a960053c9ea29669b13e1025"
+
+[[projects]]
   digest = "1:52f195ad0e20a92d8604c1ba3cd246c61644c03eaa454b5acd41be89841e0d10"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
@@ -130,6 +146,17 @@
   pruneopts = "T"
   revision = "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9"
   version = "v1.4.7"
+
+[[projects]]
+  digest = "1:bf3e2f69dce5e2c2b869a1b44f7ad62f786a299aba3d9b7f182bb5d2bcabf43b"
+  name = "github.com/go-ole/go-ole"
+  packages = [
+    ".",
+    "oleutil",
+  ]
+  pruneopts = "T"
+  revision = "39dc8486bd0952279431257138bc428275b86797"
+  version = "v1.2.2"
 
 [[projects]]
   digest = "1:d6bd34d9f9b8cb40469c1e5cca1e5d866f139f1c762e954f95d07e9f936aa86d"
@@ -400,12 +427,20 @@
   revision = "fdccc3290b115557ceee44e21578b58005666fbf"
 
 [[projects]]
-  digest = "1:0595d1ec1131e51470c9d63eb3f44f4df989b5c03f0b2148a521401abf1c6f0b"
+  branch = "master"
+  digest = "1:6b42b67c9210b35d20ffc4b937f2aa9d66d1625503e68119ed0490af632aa9c5"
   name = "github.com/pingcap/tidb"
-  packages = ["util/hack"]
+  packages = [
+    "sessionctx/stmtctx",
+    "types",
+    "types/json",
+    "types/parser_driver",
+    "util/execdetails",
+    "util/hack",
+    "util/memory",
+  ]
   pruneopts = "T"
-  revision = "a2a48b30851fbe3d422417d8a28b2f92cfa6974e"
-  version = "v1.1.0-alpha.1"
+  revision = "32cfaf1dcc74fe627d67facebc92150b84b3deaf"
 
 [[projects]]
   branch = "master"
@@ -478,6 +513,14 @@
   revision = "e181e095bae94582363434144c61a9653aff6e50"
 
 [[projects]]
+  branch = "master"
+  digest = "1:0db53e5fe1c28511a5f4fd46c4be0b63d63f05e4f40c9f7371463b169f3d8b7e"
+  name = "github.com/remyoudompheng/bigfft"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "52369c62f4463a21c8ff8531194c5526322b8521"
+
+[[projects]]
   digest = "1:34a99dd0852c5c9c16e9b86884e9e0cb3e4a7a01df4dea7913f85ea7fb786bbe"
   name = "github.com/satori/go.uuid"
   packages = ["."]
@@ -492,6 +535,17 @@
   packages = ["."]
   pruneopts = "T"
   revision = "6a9381c5a83e926b9f1fd907395a581e69747e96"
+
+[[projects]]
+  digest = "1:a1470f6aaaaf46555f0b1a71d710954b6ff7a1d602cca7047b1201378b375848"
+  name = "github.com/shirou/gopsutil"
+  packages = [
+    "internal/common",
+    "mem",
+  ]
+  pruneopts = "T"
+  revision = "ccc1c1016bc5d10e803189ee43417c50cdde7f1b"
+  version = "v2.18.12"
 
 [[projects]]
   digest = "1:81e02c4edb639c80559c0650f9401d3e2dcc3256d1fa215382bb7c83c1db9126"
@@ -754,6 +808,7 @@
     "github.com/onsi/gomega/gstruct",
     "github.com/pingcap/parser",
     "github.com/pingcap/parser/ast",
+    "github.com/pingcap/tidb/types/parser_driver",
     "github.com/prometheus/client_golang/prometheus",
     "github.com/prometheus/client_golang/prometheus/promhttp",
     "github.com/satori/go.uuid",

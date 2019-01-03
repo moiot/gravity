@@ -14,8 +14,8 @@
 package statistics
 
 import (
-	"github.com/juju/errors"
-	"github.com/pingcap/tidb/context"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/types"
 )
@@ -37,7 +37,7 @@ func NewSortedBuilder(sc *stmtctx.StatementContext, numBuckets, id int64, tp *ty
 		sc:              sc,
 		numBuckets:      numBuckets,
 		valuesPerBucket: 1,
-		hist:            NewHistogram(id, 0, 0, 0, tp, int(numBuckets)),
+		hist:            NewHistogram(id, 0, 0, 0, tp, int(numBuckets), 0),
 	}
 }
 
@@ -94,10 +94,14 @@ func (b *SortedBuilder) Iterate(data types.Datum) error {
 }
 
 // BuildColumn builds histogram from samples for column.
-func BuildColumn(ctx context.Context, numBuckets, id int64, collector *SampleCollector, tp *types.FieldType) (*Histogram, error) {
+func BuildColumn(ctx sessionctx.Context, numBuckets, id int64, collector *SampleCollector, tp *types.FieldType) (*Histogram, error) {
 	count := collector.Count
-	if count == 0 {
-		return &Histogram{ID: id, NullCount: collector.NullCount}, nil
+	ndv := collector.FMSketch.NDV()
+	if ndv > count {
+		ndv = count
+	}
+	if count == 0 || len(collector.Samples) == 0 {
+		return NewHistogram(id, ndv, collector.NullCount, 0, tp, 0, collector.TotalSize), nil
 	}
 	sc := ctx.GetSessionVars().StmtCtx
 	samples := collector.Samples
@@ -105,15 +109,15 @@ func BuildColumn(ctx context.Context, numBuckets, id int64, collector *SampleCol
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	ndv := collector.FMSketch.NDV()
-	if ndv > count {
-		ndv = count
-	}
-	hg := NewHistogram(id, ndv, collector.NullCount, 0, tp, int(numBuckets))
-	valuesPerBucket := float64(count)/float64(numBuckets) + 1
+	hg := NewHistogram(id, ndv, collector.NullCount, 0, tp, int(numBuckets), collector.TotalSize)
 
+	sampleNum := int64(len(samples))
 	// As we use samples to build the histogram, the bucket number and repeat should multiply a factor.
 	sampleFactor := float64(count) / float64(len(samples))
+	// Since bucket count is increased by sampleFactor, so the actual max values per bucket is
+	// floor(valuesPerBucket/sampleFactor)*sampleFactor, which may less than valuesPerBucket,
+	// thus we need to add a sampleFactor to avoid building too many buckets.
+	valuesPerBucket := float64(count)/float64(numBuckets) + sampleFactor
 	ndvFactor := float64(count) / float64(hg.NDV)
 	if ndvFactor > sampleFactor {
 		ndvFactor = sampleFactor
@@ -121,7 +125,7 @@ func BuildColumn(ctx context.Context, numBuckets, id int64, collector *SampleCol
 	bucketIdx := 0
 	var lastCount int64
 	hg.AppendBucket(&samples[0], &samples[0], int64(sampleFactor), int64(ndvFactor))
-	for i := int64(1); i < int64(len(samples)); i++ {
+	for i := int64(1); i < sampleNum; i++ {
 		cmp, err := hg.GetUpper(bucketIdx).CompareDatum(sc, &samples[i])
 		if err != nil {
 			return nil, errors.Trace(err)
@@ -152,10 +156,11 @@ func BuildColumn(ctx context.Context, numBuckets, id int64, collector *SampleCol
 
 // AnalyzeResult is used to represent analyze result.
 type AnalyzeResult struct {
-	TableID int64
-	Hist    []*Histogram
-	Cms     []*CMSketch
-	Count   int64
-	IsIndex int
-	Err     error
+	// PhysicalTableID is the id of a partition or a table.
+	PhysicalTableID int64
+	Hist            []*Histogram
+	Cms             []*CMSketch
+	Count           int64
+	IsIndex         int
+	Err             error
 }
