@@ -59,7 +59,9 @@ func (f *dmlOpMatcherFactoryType) Configure(_ string, _ map[string]interface{}) 
 }
 
 func (f *dmlOpMatcherFactoryType) NewMatcher() core.IMatcher {
-	return &dmlOpMatcher{}
+	return &dmlOpMatcher{
+		make(map[string]bool),
+	}
 }
 
 func init() {
