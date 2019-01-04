@@ -2,12 +2,13 @@ package mysql
 
 import (
 	"database/sql"
+	"strings"
 
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/gravity/outputs/routers"
 	"github.com/moiot/gravity/gravity/registry"
@@ -131,7 +132,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 			switch node := msg.DdlMsg.AST.(type) {
 			case *ast.CreateTableStmt:
 				if !matched {
-					logrus.Info("ignore no router table ddl:", msg.DdlMsg.Statement)
+					log.Info("ignore no router table ddl:", msg.DdlMsg.Statement)
 					return nil
 				}
 
@@ -146,11 +147,51 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				stmt := mysql.RestoreCreateTblStmt(&shadow)
 				_, err := output.db.Exec(stmt)
 				if err != nil {
-					logrus.Fatal("error exec", stmt, ". err:", err)
+					log.Fatal("error exec ddl", stmt, ". err:", err)
 				}
 
+			case *ast.AlterTableStmt:
+				if !matched {
+					log.Info("ignore no router table ddl:", msg.DdlMsg.Statement)
+					return nil
+				}
+				shadow := *node
+				shadow.Table.Name = model.CIStr{
+					O: targetTable,
+				}
+				shadow.Table.Schema = model.CIStr{
+					O: targetSchema,
+				}
+				stmt := mysql.RestoreAlterTblStmt(&shadow)
+				_, err := output.db.Exec(stmt)
+				if err != nil {
+					log.Fatal("error exec ddl", stmt, ". err:", err)
+				}
+
+			case *ast.TruncateTableStmt:
+				if !matched {
+					log.Info("ignore no router table ddl:", msg.DdlMsg.Statement)
+					return nil
+				}
+				shadow := *node
+				shadow.Table.Name = model.CIStr{
+					O: targetTable,
+				}
+				shadow.Table.Schema = model.CIStr{
+					O: targetSchema,
+				}
+				writer := &strings.Builder{}
+				ctx := ast.NewRestoreCtx(ast.DefaultRestoreFlags, writer)
+				if err := shadow.Restore(ctx); err != nil {
+					log.Fatal("error restore", shadow.Text(), "err:", err)
+				}
+				stmt := writer.String()
+				_, err := output.db.Exec(stmt)
+				if err != nil {
+					log.Fatal("error exec ddl", stmt, ". err:", err)
+				}
 			default:
-				logrus.Info("[output-mysql] ignore ddl", msg.DdlMsg.Statement)
+				log.Info("[output-mysql] ignore ddl", msg.DdlMsg.Statement)
 			}
 
 			return nil
