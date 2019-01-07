@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/moiot/gravity/gravity/config"
+
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 
@@ -93,12 +95,12 @@ var setupSqls = []string{
 }
 
 var deadSignalSQL = fmt.Sprintf(`
-CREATE TABLE IF NOT EXISTS drc.%s(
+CREATE TABLE IF NOT EXISTS %s.%s(
 id INT NOT NULL,
 v BIGINT UNSIGNED NOT NULL DEFAULT 0,
 PRIMARY KEY (id)
 )ENGINE=InnoDB DEFAULT CHARSET=utf8
-`, deadSignalTable)
+`, config.GravityDBName, deadSignalTable)
 
 const srcDBConfStr = `
 host = "source-db"
@@ -227,11 +229,11 @@ func createConnection(confStr string) (*sql.DB, error) {
 }
 
 func IsDeadSignal(schema string, table string) bool {
-	return schema == "drc" && table == deadSignalTable
+	return schema == config.GravityDBName && table == deadSignalTable
 }
 
 func SendDeadSignal(db *sql.DB, gravityID uint32) error {
-	_, err := db.Exec(fmt.Sprintf("insert into %s.%s(id, v) values (%d, 1) on duplicate key update v = v+1", "drc", deadSignalTable, gravityID))
+	_, err := db.Exec(fmt.Sprintf("insert into %s.%s(id, v) values (%d, 1) on duplicate key update v = v+1", config.GravityDBName, deadSignalTable, gravityID))
 	return errors.Trace(err)
 }
 
@@ -389,7 +391,7 @@ func setupTestDB(db *sql.DB, dbName string) error {
 	}
 
 	// setup internal db and tableNames
-	if _, err := db.Exec(createDBStatement("drc")); err != nil {
+	if _, err := db.Exec(createDBStatement(config.GravityDBName)); err != nil {
 		return errors.Trace(err)
 	}
 

@@ -56,7 +56,7 @@ PRIMARY KEY (id)
 )ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 `
 
-func (g *Generator) SetupTestTables() []string {
+func (g *Generator) SetupTestTables(createTarget bool) []string {
 	g.rands = make([]*rand.Rand, g.Concurrency)
 	for i := 0; i < g.Concurrency; i++ {
 		g.rands[i] = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -73,9 +73,11 @@ func (g *Generator) SetupTestTables() []string {
 			panic(fmt.Sprintf("failed to create table %v, err: %v", tableName, err.Error()))
 		}
 
-		s2 := fmt.Sprintf(tableDef, g.TargetSchema, tableName)
-		if _, err := g.TargetDB.Exec(s2); err != nil {
-			panic(fmt.Sprintf("failed to create table %v, err: %v", tableName, err.Error()))
+		if createTarget {
+			s2 := fmt.Sprintf(tableDef, g.TargetSchema, tableName)
+			if _, err := g.TargetDB.Exec(s2); err != nil {
+				panic(fmt.Sprintf("failed to create table %v, err: %v", tableName, err.Error()))
+			}
 		}
 
 		g.tableDataGenerators[i] = NewMysqlTableDataGenerator(g.SourceDB, g.SourceSchema, tableName)

@@ -18,7 +18,9 @@ func TestRestoreCreateTblStmt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sql parser error: %v", err.Error())
 	}
-	ret := RestoreCreateTblStmt(stmt.(*ast.CreateTableStmt))
+	tableStmt := stmt.(*ast.CreateTableStmt)
+	tableStmt.IfNotExists = true
+	ret := RestoreCreateTblStmt(tableStmt)
 	require.Equal(t, "CREATE TABLE IF NOT EXISTS `t` (`id` int(11) unsigned NOT NULL AUTO_INCREMENT,`fl` float(5,1) NOT NULL,PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", ret)
 }
 
