@@ -258,7 +258,7 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 		}
 		scheduler.windowMutex.Unlock()
 		item := &slidingWindowItem{*msg}
-		scheduler.slidingWindows[key].AddWindowItem(item)
+		window.AddWindowItem(item)
 	}
 
 	return scheduler.dispatchMsg(msg, scheduler.cfg.MaxBatchPerWorker, scheduler.cfg.NrWorker)
