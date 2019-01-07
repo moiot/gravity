@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -381,6 +382,8 @@ func (tableScanner *TableScanner) initTableDDL(table *schema_store.Table) error 
 	if err != nil {
 		return errors.Trace(err)
 	}
+
+	create = strings.Replace(create, "\n", "", -1)
 
 	msg := NewCreateTableMsg(tableScanner.parser, table, create)
 

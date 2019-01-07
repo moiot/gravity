@@ -26,15 +26,14 @@ const (
 )
 
 type MySQLExecutionEngineConfig struct {
-	EngineType       string `mapstructure:"type" json:"type"`
-	EnableDDL        bool   `mapstructure:"enable-ddl" json:"enable-ddl"`
-	UseBidirection   bool   `mapstructure:"use-bidirection" json:"use-bidirection"`
-	UseShadingProxy  bool   `mapstructure:"use-shading-proxy"  json:"use-shading-proxy"`
-	DetectConflict   bool   `mapstructure:"detect-conflict"json:"detect-conflict"`
-	MaxConflictRetry int    `mapstructure:"max-conflict-retry"json:"max-conflict-retry"`
-	OverrideConflict bool   `mapstructure:"override-conflict"json:"override-conflict"`
-	SQLTemplate        string   `mapstructure:"sql-template" json:"sql-template"`
-	SQLArgExpr         []string `mapstructure:"sql-arg-expr" json:"sql-arg-expr"`
+	EngineType       string   `mapstructure:"type" json:"type"`
+	UseBidirection   bool     `mapstructure:"use-bidirection" json:"use-bidirection"`
+	UseShadingProxy  bool     `mapstructure:"use-shading-proxy"  json:"use-shading-proxy"`
+	DetectConflict   bool     `mapstructure:"detect-conflict"json:"detect-conflict"`
+	MaxConflictRetry int      `mapstructure:"max-conflict-retry"json:"max-conflict-retry"`
+	OverrideConflict bool     `mapstructure:"override-conflict"json:"override-conflict"`
+	SQLTemplate      string   `mapstructure:"sql-template" json:"sql-template"`
+	SQLArgExpr       []string `mapstructure:"sql-arg-expr" json:"sql-arg-expr"`
 }
 
 type SQlExecutionEngine interface {

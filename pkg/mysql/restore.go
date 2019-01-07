@@ -14,7 +14,7 @@ func RestoreCreateTblStmt(n *ast.CreateTableStmt) string {
 	writer := &strings.Builder{}
 	ctx := ast.NewRestoreCtx(ast.DefaultRestoreFlags, writer)
 	ctx.WriteKeyWord("CREATE TABLE ")
-	if !n.IfNotExists {
+	if n.IfNotExists {
 		ctx.WriteKeyWord("IF NOT EXISTS ")
 	}
 	_ = n.Table.Restore(ctx)

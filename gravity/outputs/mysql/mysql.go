@@ -23,6 +23,7 @@ import (
 type MySQLPluginConfig struct {
 	DBConfig     *utils.DBConfig                                 `mapstructure:"target"  json:"target"`
 	Routes       []map[string]interface{}                        `mapstructure:"routes"  json:"routes"`
+	EnableDDL    bool                                            `mapstructure:"enable-ddl" json:"enable-ddl"`
 	EngineConfig sql_execution_engine.MySQLExecutionEngineConfig `mapstructure:"sql-engine-config"  json:"sql-engine-config"`
 }
 
@@ -113,7 +114,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 
 	for _, msg := range msgs {
 		// ddl msg filter
-		if !output.cfg.EngineConfig.EnableDDL && msg.Type == core.MsgDDL {
+		if !output.cfg.EnableDDL && msg.Type == core.MsgDDL {
 			continue
 		}
 
@@ -148,7 +149,9 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				stmt := mysql.RestoreCreateTblStmt(&shadow)
 				_, err := output.db.Exec(stmt)
 				if err != nil {
-					log.Fatal("error exec ddl", stmt, ". err:", err)
+					log.Fatal("error exec ddl: ", stmt, ". err:", err)
+				} else {
+					log.Info("executed ddl: ", stmt)
 				}
 
 			case *ast.AlterTableStmt:
@@ -166,7 +169,9 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				stmt := mysql.RestoreAlterTblStmt(&shadow)
 				_, err := output.db.Exec(stmt)
 				if err != nil {
-					log.Fatal("error exec ddl", stmt, ". err:", err)
+					log.Fatal("error exec ddl: ", stmt, ". err:", err)
+				} else {
+					log.Info("executed ddl: ", stmt)
 				}
 
 			case *ast.TruncateTableStmt:
@@ -189,10 +194,12 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				stmt := writer.String()
 				_, err := output.db.Exec(stmt)
 				if err != nil {
-					log.Fatal("error exec ddl", stmt, ". err:", err)
+					log.Fatal("error exec ddl: ", stmt, ". err:", err)
+				} else {
+					log.Info("executed ddl: ", stmt)
 				}
 			default:
-				log.Info("[output-mysql] ignore ddl", msg.DdlMsg.Statement)
+				log.Info("[output-mysql] ignore ddl: ", msg.DdlMsg.Statement)
 			}
 
 			return nil

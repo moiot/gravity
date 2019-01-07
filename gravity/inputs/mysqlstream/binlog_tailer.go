@@ -399,10 +399,9 @@ func (tailer *BinlogTailer) Start() error {
 					log.Fatalf("[binlog_tailer] source schema store failed to invalidate cache, err: %v", errors.ErrorStack(err))
 				}
 
-				// disable ddl right now
 				dbName, table, ast := extractSchemaNameFromDDLQueryEvent(tailer.parser, ev)
 
-				if dbName == "drc" || dbName == "mysql" {
+				if dbName == config2.GravityDBName || dbName == "mysql" {
 					continue
 				}
 
@@ -508,7 +507,6 @@ func (tailer *BinlogTailer) AfterMsgCommit(msg *core.Msg) error {
 		tailer.positionStore.Put(ctx.position)
 	}
 
-	close(msg.Done)
 	return nil
 }
 
