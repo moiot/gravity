@@ -2,6 +2,7 @@ package sql_execution_engine
 
 import (
 	"fmt"
+	"github.com/moiot/gravity/schema_store"
 	"testing"
 
 	"gopkg.in/DATA-DOG/go-sqlmock.v1"
@@ -22,8 +23,10 @@ func TestManualSQLEngine(t *testing.T) {
 
 	mock.ExpectExec(fmt.Sprintf("UPDATE `%s`.`%s` SET name = ?", t.Name(), mysql_test.TestTableName)).WithArgs(newName).WillReturnResult(sqlmock.NewResult(1, 1))
 
+	SQLTemplate := "UPDATE `{{.TargetTable.Schema}}`.`{{.TargetTable.Name}}` SET name = ?"
+
 	engineConfig := MySQLExecutionEngineConfig{
-		SQLTemplate: fmt.Sprintf("UPDATE `%s`.`%s` SET name = ?", t.Name(), mysql_test.TestTableName),
+		SQLTemplate: SQLTemplate,
 		SQLArgExpr:  []string{"name"},
 	}
 	engine := NewManualSQLEngine(db, engineConfig)
@@ -37,5 +40,9 @@ func TestManualSQLEngine(t *testing.T) {
 		},
 	}
 
-	r.NoError(engine.Execute([]*core.Msg{&msg}, nil))
+	tableDef := schema_store.Table{
+		Schema: t.Name(),
+		Name: mysql_test.TestTableName,
+	}
+	r.NoError(engine.Execute([]*core.Msg{&msg}, &tableDef))
 }

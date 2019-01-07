@@ -64,6 +64,7 @@ func (output *MySQLOutput) Configure(pipelineName string, data map[string]interf
 		pluginConfig.EngineConfig.EngineType = engine
 	}
 
+
 	output.cfg = &pluginConfig
 
 	// init routes

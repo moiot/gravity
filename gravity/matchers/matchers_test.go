@@ -14,6 +14,7 @@ func TestMatchers(t *testing.T) {
 	data := map[string]interface{}{
 		SchemaMatcherName: "test_db",
 		TableMatcherName:  "test_table",
+		dmlOpMatcherName:  "delete",
 	}
 
 	matchGroup, err := NewMatchers(data)
@@ -21,7 +22,7 @@ func TestMatchers(t *testing.T) {
 		assert.FailNow(err.Error())
 	}
 
-	assert.Equal(2, len(matchGroup))
+	assert.Equal(3, len(matchGroup))
 
 	cases := []struct {
 		msg     core.Msg
@@ -50,6 +51,19 @@ func TestMatchers(t *testing.T) {
 			core.Msg{
 				Database: "test_db",
 				Table:    "test_table",
+				DmlMsg: &core.DMLMsg{
+					Operation: core.Insert,
+				},
+			},
+			false,
+		},
+		{
+			core.Msg{
+				Database: "test_db",
+				Table:    "test_table",
+				DmlMsg: &core.DMLMsg{
+					Operation: core.Delete,
+				},
 			},
 			true,
 		},
