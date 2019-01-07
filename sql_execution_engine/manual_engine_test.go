@@ -2,6 +2,7 @@ package sql_execution_engine
 
 import (
 	"fmt"
+	"github.com/moiot/gravity/gravity/registry"
 	"github.com/moiot/gravity/schema_store"
 	"testing"
 
@@ -21,15 +22,29 @@ func TestManualSQLEngine(t *testing.T) {
 
 	newName := "fake data"
 
+	mock.ExpectBegin()
 	mock.ExpectExec(fmt.Sprintf("UPDATE `%s`.`%s` SET name = ?", t.Name(), mysql_test.TestTableName)).WithArgs(newName).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
 
 	SQLTemplate := "UPDATE `{{.TargetTable.Schema}}`.`{{.TargetTable.Name}}` SET name = ?"
 
-	engineConfig := MySQLExecutionEngineConfig{
-		SQLTemplate: SQLTemplate,
-		SQLArgExpr:  []string{"name"},
-	}
-	engine := NewManualSQLEngine(db, engineConfig)
+	p, err := registry.GetPlugin(registry.SQLExecutionEnginePlugin, ManualEngine)
+	r.NoError(err)
+
+	err = p.Configure("test", map[string]interface{}{
+		"sql-template": SQLTemplate,
+		"sql-arg-expr": []string{"name"},
+
+	})
+	r.NoError(err)
+
+	i, ok := p.(EngineInitializer)
+	r.True(ok)
+	r.NoError(i.Init(db))
+
+	executor, ok := i.(EngineExecutor)
+	r.True(ok)
+
 
 	msg := core.Msg{
 		Type: core.MsgDML,
@@ -44,5 +59,5 @@ func TestManualSQLEngine(t *testing.T) {
 		Schema: t.Name(),
 		Name: mysql_test.TestTableName,
 	}
-	r.NoError(engine.Execute([]*core.Msg{&msg}, &tableDef))
+	r.NoError(executor.Execute([]*core.Msg{&msg}, &tableDef))
 }

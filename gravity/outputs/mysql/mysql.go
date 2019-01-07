@@ -21,17 +21,19 @@ import (
 type MySQLPluginConfig struct {
 	DBConfig     *utils.DBConfig                                 `mapstructure:"target"  json:"target"`
 	Routes       []map[string]interface{}                        `mapstructure:"routes"  json:"routes"`
-	EngineConfig sql_execution_engine.MySQLExecutionEngineConfig `mapstructure:"sql-engine-config"  json:"sql-engine-config"`
+	EnableDDL bool `mapstructure:"enable-ddl" json:"enable-ddl"`
+	EngineConfig  map[string]interface{} 	`mapstructure:"sql-engine-config"  json:"sql-engine-config"`
 }
 
 type MySQLOutput struct {
-	pipelineName       string
-	cfg                *MySQLPluginConfig
-	routes             []*routers.MySQLRoute
-	db                 *sql.DB
-	targetSchemaStore  schema_store.SchemaStore
-	sqlExecutionEngine sql_execution_engine.SQlExecutionEngine
-	tableConfigs       []config.TableConfig
+	pipelineName             string
+	cfg                      *MySQLPluginConfig
+	routes                   []*routers.MySQLRoute
+	db                       *sql.DB
+	targetSchemaStore        schema_store.SchemaStore
+	sqlExecutionEnginePlugin registry.Plugin
+	sqlExecutor              sql_execution_engine.EngineExecutor
+	tableConfigs             []config.TableConfig
 }
 
 func init() {
@@ -53,17 +55,26 @@ func (output *MySQLOutput) Configure(pipelineName string, data map[string]interf
 	}
 
 	engineConfig := pluginConfig.EngineConfig
-	if pluginConfig.EngineConfig.EngineType == "" {
-		engine, err := sql_execution_engine.SelectEngine(
-			engineConfig.DetectConflict,
-			engineConfig.UseBidirection,
-			engineConfig.UseShadingProxy)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		pluginConfig.EngineConfig.EngineType = engine
+	if len(engineConfig) != 1 {
+		return errors.Errorf("only one sql engine should be configured")
 	}
 
+	for engineName, configData := range engineConfig {
+		p, err := registry.GetPlugin(registry.SQLExecutionEnginePlugin, engineName)
+		if err != nil {
+			return errors.Errorf("failed to find plugin: %v", errors.ErrorStack(err))
+		}
+
+		configDataMap, ok := configData.(map[string]interface{})
+		if !ok {
+			return errors.Errorf("engine config is not a map")
+		}
+
+		if err := p.Configure(pipelineName, configDataMap); err != nil {
+			return errors.Trace(err)
+		}
+		output.sqlExecutionEnginePlugin = p
+	}
 
 	output.cfg = &pluginConfig
 
@@ -91,11 +102,22 @@ func (output *MySQLOutput) Start() error {
 	}
 	output.db = db
 
-	sqlEngine := sql_execution_engine.NewSQLExecutionEngine(
-		db,
-		output.cfg.EngineConfig,
-	)
-	output.sqlExecutionEngine = sqlEngine
+
+	engineInitializer, ok := output.sqlExecutionEnginePlugin.(sql_execution_engine.EngineInitializer)
+	if !ok {
+		return errors.Errorf("sql engine plugin is not a db conn setter")
+	}
+
+	if err := engineInitializer.Init(db); err != nil {
+		return errors.Trace(err)
+	}
+
+	sqlExecutor, ok := output.sqlExecutionEnginePlugin.(sql_execution_engine.EngineExecutor)
+	if !ok {
+		return errors.Errorf("sql engine plugin is not a executor")
+	}
+
+	output.sqlExecutor = sqlExecutor
 	return nil
 }
 
@@ -111,7 +133,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 
 	for _, msg := range msgs {
 		// ddl msg filter
-		if !output.cfg.EngineConfig.EnableDDL && msg.Type == core.MsgDDL {
+		if !output.cfg.EnableDDL && msg.Type == core.MsgDDL {
 			continue
 		}
 
@@ -156,7 +178,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 			return errors.Errorf("[output-mysql] schema: %v, table: %v, targetTable nil", batch[0].Database, batch[0].Table)
 		}
 
-		err := output.sqlExecutionEngine.Execute(batch, targetTableDef)
+		err := output.sqlExecutor.Execute(batch, targetTableDef)
 		if err != nil {
 			return errors.Trace(err)
 		}

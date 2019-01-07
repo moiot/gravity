@@ -2,6 +2,7 @@ package tidb_kafka
 
 import (
 	"database/sql"
+	"github.com/moiot/gravity/pkg/consts"
 	"strings"
 	"time"
 
@@ -22,7 +23,7 @@ var offsetStoreTable = "kafka_offsets"
 
 var createDBStatement = fmt.Sprintf(`
 	CREATE DATABASE IF NOT EXISTS %s
-`, config.GravityDBName)
+`, consts.GravityDBName)
 
 var createOffsetStoreTableStatement = fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %s.%s (
@@ -34,7 +35,7 @@ CREATE TABLE IF NOT EXISTS %s.%s (
 	metadata VARCHAR(50) DEFAULT NULL,
 	PRIMARY KEY(consumer_group, topic, kafka_partition)
 )
-`, config.GravityDBName, offsetStoreTable)
+`, consts.GravityDBName, offsetStoreTable)
 
 type KafkaOffsetStoreFactory struct {
 	config *config.SourceProbeCfg
@@ -51,9 +52,9 @@ func (f *KafkaOffsetStoreFactory) GenOffsetStore(c *sarama_cluster.Consumer) sar
 		log.Fatalf("failed to create db: %v", err)
 	}
 
-	_, err = db.Exec("use " + config.GravityDBName)
+	_, err = db.Exec("use " + consts.GravityDBName)
 	if err != nil {
-		log.Fatalf("failed to use %s: %v", config.GravityDBName, err)
+		log.Fatalf("failed to use %s: %v", consts.GravityDBName, err)
 	}
 
 	_, err = db.Exec(createOffsetStoreTableStatement)
@@ -76,13 +77,13 @@ type DBOffsetStore struct {
 
 func (s *DBOffsetStore) CommitOffset(req *offsets.OffsetCommitRequest) (*offsets.OffsetCommitResponse, error) {
 	log.Debugf("Commit Offset: %#v", req)
-	return offsets.SaveOffsetToDB(s.db, fmt.Sprintf("%s.%s", config.GravityDBName, offsetStoreTable), req)
+	return offsets.SaveOffsetToDB(s.db, fmt.Sprintf("%s.%s", consts.GravityDBName, offsetStoreTable), req)
 
 }
 
 func (s *DBOffsetStore) FetchOffset(req *offsets.OffsetFetchRequest) (*offsets.OffsetFetchResponse, error) {
 	qryTpl := "SELECT topic, kafka_partition, offset, metadata, ts from `%s`.`%s` where consumer_group=?"
-	stmt := fmt.Sprintf(qryTpl, config.GravityDBName, offsetStoreTable)
+	stmt := fmt.Sprintf(qryTpl, consts.GravityDBName, offsetStoreTable)
 
 	rows, err := s.db.Query(stmt, req.ConsumerGroup)
 	if err != nil {
@@ -110,7 +111,7 @@ func (s *DBOffsetStore) FetchOffset(req *offsets.OffsetFetchRequest) (*offsets.O
 }
 
 func (s *DBOffsetStore) Clear(group string, topic []string) {
-	stmt := fmt.Sprintf("DELETE FROM %s.%s WHERE consumer_group = ? and topic in ('%s')", config.GravityDBName, offsetStoreTable, strings.Join(topic, "', '"))
+	stmt := fmt.Sprintf("DELETE FROM %s.%s WHERE consumer_group = ? and topic in ('%s')", consts.GravityDBName, offsetStoreTable, strings.Join(topic, "', '"))
 	_, err := s.db.Exec(stmt, group)
 	if err != nil {
 		log.Fatalf("[DBOffsetStore.Clear] group = %s, sql = %s, err: %s", group, stmt, errors.Trace(err))

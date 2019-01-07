@@ -2,6 +2,9 @@ package sql_execution_engine
 
 import (
 	"database/sql"
+	"github.com/mitchellh/mapstructure"
+	"github.com/moiot/gravity/gravity/registry"
+	"github.com/moiot/gravity/pkg/utils"
 
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
@@ -13,14 +16,43 @@ import (
 	"github.com/moiot/gravity/schema_store"
 )
 
+type mysqlReplaceEngineConfig struct {
+	TagInternalTxn bool `mapstructure:"tag-internal-txn" json:"tag-internal-txn"`
+	SQLAnnotation string `mapstructure:"sql-annotation" json:"sql-annotation"`
+}
+
 type mysqlReplaceEngine struct {
-	maxBatchSize int
+	pipelineName string
+	cfg *mysqlReplaceEngineConfig
 	db           *sql.DB
 }
 
-func NewMySQLReplaceEngine(db *sql.DB) SQlExecutionEngine {
-	return &mysqlReplaceEngine{db: db}
+const MySQLReplaceEngine = "mysql-replace-engine"
+
+func init() {
+	registry.RegisterPlugin(registry.SQLExecutionEnginePlugin, MySQLReplaceEngine, &mysqlReplaceEngine{}, false)
 }
+
+func (engine *mysqlReplaceEngine) Configure(pipelineName string, data map[string]interface{}) error {
+	cfg := mysqlReplaceEngineConfig{}
+	if err := mapstructure.Decode(data, &cfg); err != nil {
+		return errors.Trace(err)
+	}
+
+	engine.cfg = &cfg
+	return nil
+}
+
+func (engine *mysqlReplaceEngine) Init(db *sql.DB) error {
+	engine.db = db
+
+	if engine.cfg.TagInternalTxn {
+		return errors.Trace(utils.InitInternalTxnTags(db))
+	}
+
+	return nil
+}
+
 
 func (engine *mysqlReplaceEngine) Execute(msgBatch []*core.Msg, targetTableDef *schema_store.Table) error {
 	currentBatchSize := len(msgBatch)
@@ -33,82 +65,55 @@ func (engine *mysqlReplaceEngine) Execute(msgBatch []*core.Msg, targetTableDef *
 		return errors.Errorf("[mysql_replace_engine] only support single delete")
 	}
 
-	if currentBatchSize > 1 && msgBatch[0].DdlMsg != nil {
-		return errors.Errorf("[mysql_replace_engine] only support single ddl")
-	}
-
-	if msgBatch[0].DmlMsg.Operation == core.Delete {
-		return engine.execSingleDelete(msgBatch[0], targetTableDef)
-	}
-
-	if msgBatch[0].DdlMsg != nil {
-		return engine.execSingleDDL(msgBatch[0])
-	}
-
-	return engine.execBatchUsingSingleReplace(msgBatch, targetTableDef)
-
-}
-
-func (engine *mysqlReplaceEngine) execSingleDDL(msg *core.Msg) error {
-	log.Infof("[mysql_replace_engine] exec ddl: %v", msg.DdlMsg.Statement)
-	sql := msg.DdlMsg.Statement
-	dbName := msg.Database
-	tx, err := engine.db.Begin()
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	if dbName != "" {
-		if _, err := tx.Exec(fmt.Sprintf("USE %s", dbName)); err != nil {
-			return errors.Trace(err)
-		}
-
-	}
-	_, err = tx.Exec(sql)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	return errors.Trace(tx.Commit())
-}
-
-func (engine *mysqlReplaceEngine) execSingleDelete(msg *core.Msg, tableDef *schema_store.Table) error {
-	sql, arg, err := GenerateSingleDeleteSQL(msg, tableDef)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	r, err := engine.db.Exec(sql, arg...)
-	if err == nil {
-		deleted, err := r.RowsAffected()
-		if err != nil {
-			log.Warn(err)
-		} else {
-			log.Infof("[mysqlReplaceEngine.execSingleDelete] %s. args: %v. rows affected: %d", sql, arg, deleted)
-		}
-	}
-	return errors.Trace(err)
-}
-
-func (engine *mysqlReplaceEngine) execBatchUsingSingleReplace(msgBatch []*core.Msg, tableDef *schema_store.Table) error {
 	var sql string
-	var arg []interface{}
+	var args []interface{}
 	var err error
 
-	if engine.maxBatchSize == 1 {
-		sql, arg, err = GenerateSingleReplaceSQL(msgBatch[0], tableDef)
+	if msgBatch[0].DmlMsg.Operation == core.Delete {
+		sql, args, err = GenerateSingleDeleteSQL(msgBatch[0], targetTableDef)
 		if err != nil {
-			data, pks := DebugDmlMsg(msgBatch)
-			return errors.Annotatef(err, "sql: %v, pb data: %v, pks: %v", sql, data, pks)
+			return errors.Trace(err)
 		}
 	} else {
-		sql, arg, err = GenerateReplaceSQLWithMultipleValues(msgBatch, tableDef)
+		sql, args, err = GenerateReplaceSQLWithMultipleValues(msgBatch, targetTableDef)
 		if err != nil {
 			data, pks := DebugDmlMsg(msgBatch)
 			return errors.Annotatef(err, "sql: %v, pb data: %v, pks: %v", sql, data, pks)
 		}
 	}
 
-	_, err = engine.db.Exec(sql, arg...)
-	return errors.Annotatef(err, "sql: %v, args: %v", sql, arg)
+	if engine.cfg.SQLAnnotation != "" {
+		sql = fmt.Sprintf("%s%s", engine.cfg.SQLAnnotation, sql)
+	}
+
+	txn, err := engine.db.Begin()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if engine.cfg.TagInternalTxn {
+		_, err := txn.Exec(utils.GenerateTxnTagSQL())
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	result, err := txn.Exec(sql, args...)
+	if err != nil {
+		txn.Rollback()
+		return errors.Annotatef(err, "sql: %v, args: %+v", sql, args)
+	}
+
+	// log all the delete information
+	if msgBatch[0].DmlMsg.Operation == core.Delete {
+		nrDeleted, err := result.RowsAffected()
+		if err != nil {
+			log.Warnf("[mysqlReplaceEngine]: %v", err.Error())
+		}
+
+		log.Infof("[mysqlReplaceEngine] singleDelete %s. args: %+v. rows affected: %d", sql, args, nrDeleted)
+	}
+
+	return errors.Trace(txn.Commit())
+
 }

@@ -34,7 +34,7 @@ const (
 	QueryUnknown
 )
 
-func NewConflictPreviewEngine(db *sql.DB, maxRetryCount int, sleepDuration time.Duration, enableDelete bool) SQlExecutionEngine {
+func NewConflictPreviewEngine(db *sql.DB, maxRetryCount int, sleepDuration time.Duration, enableDelete bool) EngineExecutor {
 	e := &conflictPreviewEngine{
 		db:            db,
 		maxRetry:      maxRetryCount,
@@ -68,6 +68,7 @@ func buildUniqueKeyConditions(uniqueKeyColumnMap map[string][]string, data map[s
 	}
 	return strings.Join(placeHolders, " or "), values
 }
+
 
 func (e *conflictPreviewEngine) Execute(msgBatch []*core.Msg, tableDef *schema_store.Table) error {
 	if len(msgBatch) > 1 {

@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+	"github.com/go-sql-driver/mysql"
+	"github.com/mitchellh/mapstructure"
+	"github.com/moiot/gravity/gravity/registry"
 	"os"
 	"strings"
 
@@ -17,18 +20,56 @@ import (
 	"github.com/moiot/gravity/schema_store"
 )
 
-const ConflictFileName = "conflict.log"
+const (
+	ConflictDetectEngine = "conflict-detect-engine"
 
-type conflictEngine struct {
-	db                 *sql.DB
-	override           bool
-	enableDelete       bool
-	conflictLog        *log.Logger
-	maxRetry           int
-	retrySleepDuration time.Duration
+	ConflictFileName = "conflict.log"
+)
+
+type conflictEngineConfig struct {
+	MaxConflictRetry int    `mapstructure:"max-conflict-retry" json:"max-conflict-retry"`
+	OverrideConflict bool   `mapstructure:"override-conflict" json:"override-conflict"`
+	EnableDelete bool `mapstructure:"enable-delete" json:"enable-delete"`
+	RetrySleepDurationString string `mapstructure:"retry-sleep-duration" json:"retry-sleep-duration"`
+	RetrySleepDuration time.Duration `mapstructure:"-" json:"-"`
 }
 
-func NewConflictEngine(db *sql.DB, override bool, maxRetry int, retrySleepDuration time.Duration, enableDelete bool) SQlExecutionEngine {
+type conflictEngine struct {
+	pipelineName string
+
+	cfg *conflictEngineConfig
+
+	db                 *sql.DB
+
+	conflictLog        *log.Logger
+}
+
+
+func init() {
+	registry.RegisterPlugin(registry.SQLExecutionEnginePlugin, ConflictDetectEngine, &conflictEngine{}, false)
+}
+
+func (e *conflictEngine) Configure(pipelineName string, data map[string]interface{}) error {
+	e.pipelineName = pipelineName
+
+	cfg := conflictEngineConfig{}
+	if err := mapstructure.Decode(data, &cfg); err != nil {
+		return errors.Trace(err)
+	}
+
+	if cfg.RetrySleepDurationString == "" {
+		cfg.RetrySleepDurationString = "1s"
+	}
+
+	d, err := time.ParseDuration(cfg.RetrySleepDurationString)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	cfg.RetrySleepDuration = d
+
+	e.cfg = &cfg
+
+	// setup conflict log
 	conflictLog := log.New()
 	file, err := os.OpenFile(ConflictFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err == nil {
@@ -36,16 +77,37 @@ func NewConflictEngine(db *sql.DB, override bool, maxRetry int, retrySleepDurati
 	} else {
 		log.Fatal("Failed to create conflict.log. ", err)
 	}
-	e := &conflictEngine{
-		db:                 db,
-		override:           override,
-		enableDelete:       enableDelete,
-		conflictLog:        conflictLog,
-		maxRetry:           maxRetry,
-		retrySleepDuration: retrySleepDuration,
-	}
-	return e
+	conflictLog.Out = file
+
+	e.conflictLog = conflictLog
+
+	return nil
 }
+
+func (e *conflictEngine) Init(db *sql.DB) error {
+	e.db = db
+	return nil
+}
+
+// func NewConflictEngine(db *sql.DB, override bool, maxRetry int, retrySleepDuration time.Duration, enableDelete bool) EngineExecutor {
+//
+// 	conflictLog := log.New()
+// 	file, err := os.OpenFile(ConflictFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+// 	if err == nil {
+// 		conflictLog.Out = file
+// 	} else {
+// 		log.Fatal("Failed to create conflict.log. ", err)
+// 	}
+// 	e := &conflictEngine{
+// 		db:                 db,
+// 		override:           override,
+// 		enableDelete:       enableDelete,
+// 		conflictLog:        conflictLog,
+// 		maxRetry:           maxRetry,
+// 		retrySleepDuration: retrySleepDuration,
+// 	}
+// 	return e
+// }
 
 func (e *conflictEngine) Execute(msgBatch []*core.Msg, tableDef *schema_store.Table) error {
 
@@ -72,7 +134,7 @@ func (e *conflictEngine) Execute(msgBatch []*core.Msg, tableDef *schema_store.Ta
 
 		valuesSql := "VALUES (" + strings.TrimSuffix(strings.Repeat("?,", len(values)), ",") + ")"
 		completeSql := insertSql + valuesSql
-		ret, err := e.execWithRetry(e.maxRetry, e.db, completeSql, values...)
+		ret, err := e.execWithRetry(e.cfg.MaxConflictRetry, e.db, completeSql, values...)
 		switch ret {
 		case execSuccess:
 			return nil
@@ -82,9 +144,9 @@ func (e *conflictEngine) Execute(msgBatch []*core.Msg, tableDef *schema_store.Ta
 
 		case execFailConflict:
 			e.logConflict(msg, tableDef)
-			if e.override {
+			if e.cfg.OverrideConflict {
 				completeSql = strings.Replace(insertSql, "INSERT", "REPLACE", 1) + valuesSql
-				_, err = e.execWithRetry(e.maxRetry, e.db, completeSql, values...)
+				_, err = e.execWithRetry(e.cfg.MaxConflictRetry, e.db, completeSql, values...)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -97,7 +159,7 @@ func (e *conflictEngine) Execute(msgBatch []*core.Msg, tableDef *schema_store.Ta
 		whereSql, oldValues := extractSqlParam(msg.DmlMsg.Old, true)
 
 		completeSql := fmt.Sprintf("UPDATE `%s`.`%s` SET %s WHERE %s", tableDef.Schema, tableDef.Name, strings.Join(setSql, ", "), strings.Join(whereSql, " and "))
-		ret, err := e.execWithRetry(e.maxRetry, e.db, completeSql, append(newValues, oldValues...)...)
+		ret, err := e.execWithRetry(e.cfg.MaxConflictRetry, e.db, completeSql, append(newValues, oldValues...)...)
 		switch ret {
 		case execSuccess:
 			return nil
@@ -107,7 +169,7 @@ func (e *conflictEngine) Execute(msgBatch []*core.Msg, tableDef *schema_store.Ta
 
 		case execFailConflict:
 			e.logConflict(msg, tableDef)
-			if e.override {
+			if e.cfg.OverrideConflict {
 				values := make([]interface{}, 0, len(tableDef.ColumnNames()))
 				for _, k := range tableDef.Columns {
 					cd := msg.DmlMsg.Data[k.Name]
@@ -117,7 +179,7 @@ func (e *conflictEngine) Execute(msgBatch []*core.Msg, tableDef *schema_store.Ta
 				completeSql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(%s) VALUES (%s)", tableDef.Schema, tableDef.Name,
 					strings.Join(tableDef.ColumnNames(), ","),
 					strings.TrimSuffix(strings.Repeat("?,", len(values)), ","))
-				_, err = e.execWithRetry(e.maxRetry, e.db, completeSql, values...)
+				_, err = e.execWithRetry(e.cfg.MaxConflictRetry, e.db, completeSql, values...)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -125,7 +187,7 @@ func (e *conflictEngine) Execute(msgBatch []*core.Msg, tableDef *schema_store.Ta
 		}
 
 	case core.Delete:
-		if !e.enableDelete {
+		if !e.cfg.EnableDelete {
 			log.Debugf("conflictEngine: skip DELETE type. msg: %v", msg)
 			return nil
 		}
@@ -133,7 +195,7 @@ func (e *conflictEngine) Execute(msgBatch []*core.Msg, tableDef *schema_store.Ta
 		if err != nil {
 			return errors.Trace(err)
 		}
-		ret, err := e.execWithRetry(e.maxRetry, e.db, sql, arg...)
+		ret, err := e.execWithRetry(e.cfg.MaxConflictRetry, e.db, sql, arg...)
 		switch ret {
 		case execSuccess:
 			return nil
@@ -234,4 +296,35 @@ func (e conflictEngine) execWithRetry(times int, db *sql.DB, stmt string, args .
 	}
 	log.Errorf("[exec][sql][rerun] %s - %v[error]%v", stmt, args, err)
 	return execFailOther, errors.Trace(err)
+}
+
+
+type execResult int
+
+const (
+	execSuccess execResult = iota
+	execFailConflict
+	execFailOther
+)
+
+func exec(db *sql.DB, stmt string, args ...interface{}) (execResult, error) {
+	ret, err := db.Exec(stmt, args...)
+	if err != nil {
+		me, ok := err.(*mysql.MySQLError)
+		if ok && me.Number == 1062 { //refer to https://dev.mysql.com/doc/refman/5.7/en/error-messages-server.html
+			return execFailConflict, nil
+		}
+		return execFailOther, err
+	}
+
+	affected, err := ret.RowsAffected()
+	if err != nil {
+		return execFailOther, err
+	}
+
+	if affected == 0 {
+		return execFailConflict, nil
+	}
+
+	return execSuccess, nil
 }

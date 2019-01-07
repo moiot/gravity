@@ -1,9 +1,9 @@
 package position_store
 
 import (
+	"github.com/moiot/gravity/pkg/consts"
 	"time"
 
-	"github.com/moiot/gravity/gravity/config"
 	iPositionStore "github.com/moiot/gravity/gravity/inputs/position_store"
 	"github.com/moiot/gravity/gravity/inputs/stages"
 
@@ -104,5 +104,5 @@ func NewMySQLBinlogDBPositionStore(pipelineName string, dbConfig *utils.DBConfig
 }
 
 func IsPositionStoreEvent(schema string, tableName string) bool {
-	return schema == config.GravityDBName && (tableName == positionTableName)
+	return schema == consts.GravityDBName && (tableName == positionTableName)
 }
