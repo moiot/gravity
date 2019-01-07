@@ -167,13 +167,13 @@ func (g *Generator) TestChecksum() error {
 func (g *Generator) execArbitraryTxn(ctx context.Context, idx int, r *rand.Rand) {
 	var ddls = []string{
 		fmt.Sprintf("CREATE TABLE `%s`.`_aa_%d` (  `ID` int(11) NOT NULL AUTO_INCREMENT,  `Name` char(35) NOT NULL DEFAULT '', PRIMARY KEY (`ID`)) ENGINE=InnoDB DEFAULT CHARSET=utf8;", g.SourceSchema, idx),
-		fmt.Sprintf("alter table `%s`.`_aa_%d` add column `foo` int default 0", g.SourceSchema, idx),
+		fmt.Sprintf("alter table `%s`.`%s0` add column `foo_%d` int default 0", g.SourceSchema, tablePrefix, idx),
 		fmt.Sprintf("create user foo_%d", idx),
 	}
 
 	var revert = []string{
 		fmt.Sprintf("drop table `%s`.`_aa_%d`", g.SourceSchema, idx),
-		fmt.Sprintf("alter table `%s`.`_aa_%d` drop column `foo`", g.SourceSchema, idx),
+		fmt.Sprintf("alter table `%s`.`%s0` drop column `foo_%d`", g.SourceSchema, tablePrefix, idx),
 		fmt.Sprintf("drop user foo_%d", idx),
 	}
 
