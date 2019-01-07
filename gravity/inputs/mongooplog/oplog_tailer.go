@@ -158,6 +158,7 @@ func (tailer *OplogTailer) Run() {
 				Table:     op.GetCollection(),
 				Timestamp: time.Unix(int64(op.Timestamp)>>32, 0),
 				Oplog:     op,
+				Done:      make(chan struct{}),
 			}
 
 			if op.IsCommand() {
