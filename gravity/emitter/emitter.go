@@ -62,16 +62,17 @@ func (e *defaultEmitter) Emit(msg *core.Msg) error {
 	}
 
 	// generate sequence number and submit it to scheduler
-	e.mutex.Lock()
 	inputStreamKey := *(msg.InputStreamKey)
-	if _, ok := e.sequenceGenerators[inputStreamKey]; !ok {
-		e.sequenceGenerators[inputStreamKey] = NewSequenceGenerator()
+	e.mutex.Lock()
+	gen, ok := e.sequenceGenerators[inputStreamKey]
+	if !ok {
+		gen = NewSequenceGenerator()
+		e.sequenceGenerators[inputStreamKey] = gen
 	}
 	e.mutex.Unlock()
 
-	sn := e.sequenceGenerators[inputStreamKey].Next()
+	sn := gen.Next()
 	msg.InputSequence = &sn
-
 	msg.MsgSubmitTime = time.Now()
 	if err := e.msgSubmitter.SubmitMsg(msg); err != nil {
 		return errors.Trace(err)
