@@ -92,6 +92,7 @@ func TestMySQLToMySQLStream(t *testing.T) {
 						"target-schema": targetDBName,
 					},
 				},
+				"enable-ddl": true,
 			},
 		},
 	}
