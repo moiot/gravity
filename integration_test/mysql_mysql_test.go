@@ -85,14 +85,13 @@ func TestMySQLToMySQLStream(t *testing.T) {
 					"password": targetDBConfig.Password,
 					"port":     targetDBConfig.Port,
 				},
-
+				"enable-ddl": true,
 				"routes": []map[string]interface{}{
 					{
 						"match-schema":  sourceDBName,
 						"target-schema": targetDBName,
 					},
 				},
-				"enable-ddl": true,
 			},
 		},
 	}
