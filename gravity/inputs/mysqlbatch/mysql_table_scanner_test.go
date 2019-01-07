@@ -153,6 +153,7 @@ func (submitter *fakeMsgSubmitter) SubmitMsg(msg *core.Msg) error {
 	if msg.Type == core.MsgDML {
 		submitter.msgs = append(submitter.msgs, msg)
 	}
+	close(msg.Done)
 	return nil
 }
 

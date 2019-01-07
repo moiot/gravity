@@ -194,11 +194,11 @@ func (g *Generator) execArbitraryTxn(ctx context.Context, idx int, r *rand.Rand)
 			if len(executedDDL) < len(ddls) && r.Float32() < 0.05 {
 				for i := range ddls {
 					if !executedDDL[i] {
-						executedDDL[i] = true
 						_, err := g.SourceDB.Exec(ddls[i])
 						if err != nil {
 							log.Panic("error exec ", ddls[i], ". err: ", err)
 						}
+						executedDDL[i] = true
 					}
 				}
 			}

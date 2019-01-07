@@ -5,7 +5,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
-	assert "github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/moiot/gravity/gravity/config"
 )

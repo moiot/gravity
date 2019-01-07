@@ -33,6 +33,7 @@ func newMsg(sequence int64, inputStreamKey string, tableName string, pkData stri
 		InputStreamKey:  &inputStreamKey,
 		OutputStreamKey: &pkData,
 		InputContext:    eventID,
+		Done:            make(chan struct{}),
 	}
 }
 

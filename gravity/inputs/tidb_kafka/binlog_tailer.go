@@ -137,6 +137,7 @@ func (t *BinlogTailer) createMsgs(
 				Database:  schemaName,
 				Table:     tableName,
 				Timestamp: time.Unix(int64(ParseTimeStamp(uint64(binlog.CommitTs))), 0),
+				Done:      make(chan struct{}),
 			}
 
 			if binlog_checker.IsBinlogCheckerMsg(schemaName, tableName) {
