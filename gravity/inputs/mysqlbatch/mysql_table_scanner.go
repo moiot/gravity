@@ -184,7 +184,7 @@ func DetectScanColumn(sourceDB *sql.DB, dbName string, tableName string, maxFull
 		return "*", nil
 	}
 
-	return "", errors.Errorf("no scan column can be found automatically")
+	return "", errors.Errorf("no scan column can be found automatically for %s.%s", dbName, tableName)
 }
 
 func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColumn string) (interface{}, interface{}) {
