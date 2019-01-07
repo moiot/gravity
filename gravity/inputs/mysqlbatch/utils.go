@@ -27,7 +27,7 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 		log.Infof("[scanner_server] GetSchema duration: %v", time.Since(startTime).Seconds())
 
 		queryStartTime := time.Now()
-		statement := fmt.Sprintf("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ?")
+		statement := fmt.Sprintf("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'")
 		rows, err := db.Query(statement, schemaName)
 		if err != nil {
 			log.Fatalf("failed to get table names, err %v", err)
