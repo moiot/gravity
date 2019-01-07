@@ -2,8 +2,8 @@ package mysql
 
 import (
 	"database/sql"
-	"strings"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pingcap/parser/ast"
@@ -133,7 +133,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 			switch node := msg.DdlMsg.AST.(type) {
 			case *ast.CreateTableStmt:
 				if !matched {
-					log.Info("ignore no router table ddl:", msg.DdlMsg.Statement)
+					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
 					return nil
 				}
 
@@ -148,14 +148,13 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				stmt := mysql.RestoreCreateTblStmt(&shadow)
 				_, err := output.db.Exec(stmt)
 				if err != nil {
-					log.Fatal("error exec ddl: ", stmt, ". err:", err)
-				} else {
-					log.Info("executed ddl: ", stmt)
+					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
 				}
+				log.Info("[output-mysql] executed ddl: ", stmt)
 
 			case *ast.AlterTableStmt:
 				if !matched {
-					log.Info("ignore no router table ddl:", msg.DdlMsg.Statement)
+					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
 					return nil
 				}
 				shadow := *node
@@ -168,35 +167,16 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				stmt := mysql.RestoreAlterTblStmt(&shadow)
 				_, err := output.db.Exec(stmt)
 				if err != nil {
-					log.Fatal("error exec ddl: ", stmt, ". err:", err)
+					if e := err.(*mysqldriver.MySQLError); e.Number == 1060 {
+						log.Errorf("[output-mysql] ignore duplicate column. ddl: %s. err: %s", stmt, e)
+					} else {
+						log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
+					}
 				} else {
-					log.Info("executed ddl: ", stmt)
+					log.Info("[output-mysql] executed ddl: ", stmt)
+					output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
 				}
 
-			case *ast.TruncateTableStmt:
-				if !matched {
-					log.Info("ignore no router table ddl:", msg.DdlMsg.Statement)
-					return nil
-				}
-				shadow := *node
-				shadow.Table.Name = model.CIStr{
-					O: targetTable,
-				}
-				shadow.Table.Schema = model.CIStr{
-					O: targetSchema,
-				}
-				writer := &strings.Builder{}
-				ctx := ast.NewRestoreCtx(ast.DefaultRestoreFlags, writer)
-				if err := shadow.Restore(ctx); err != nil {
-					log.Fatal("error restore", shadow.Text(), "err:", err)
-				}
-				stmt := writer.String()
-				_, err := output.db.Exec(stmt)
-				if err != nil {
-					log.Fatal("error exec ddl: ", stmt, ". err:", err)
-				} else {
-					log.Info("executed ddl: ", stmt)
-				}
 			default:
 				log.Info("[output-mysql] ignore ddl: ", msg.DdlMsg.Statement)
 			}
@@ -231,18 +211,16 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 	batches := splitMsgBatchWithDelete(targetMsgs)
 
 	for _, batch := range batches {
-		if batch[0].Type == core.MsgDML && targetTableDef == nil {
-			return errors.Errorf("[output-mysql] schema: %v, table: %v, targetTable nil", batch[0].Database, batch[0].Table)
+		if batch[0].Type == core.MsgDDL {
+			return errors.Errorf("[output-mysql] shouldn't see ddl in sql engine")
+		}
+		if targetTableDef == nil {
+			return errors.Errorf("[output-mysql] schema %v.%v not found", batch[0].Database, batch[0].Table)
 		}
 
 		err := output.sqlExecutionEngine.Execute(batch, targetTableDef)
 		if err != nil {
 			return errors.Trace(err)
-		}
-		if batch[0].DdlMsg != nil {
-			if err := output.targetSchemaStore.InvalidateCache(); err != nil {
-				return errors.Trace(err)
-			}
 		}
 	}
 

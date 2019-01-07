@@ -321,7 +321,7 @@ func NewDDLMsg(
 	callback core.AfterMsgCommitFunc,
 	dbName string,
 	table string,
-	ast ast.DDLNode,
+	ast ast.StmtNode,
 	ddlSQL string,
 	ts int64,
 	position utils.MySQLBinlogPosition) *core.Msg {

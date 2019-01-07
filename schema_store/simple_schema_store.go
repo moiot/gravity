@@ -46,14 +46,20 @@ func (store *SimpleSchemaStore) GetSchema(dbName string) (Schema, error) {
 	return schema, nil
 }
 
-func (store *SimpleSchemaStore) InvalidateCache() error {
+func (store *SimpleSchemaStore) InvalidateSchemaCache(schema string) {
+	store.Lock()
+	defer store.Unlock()
+
+	delete(store.schemas, schema)
+}
+
+func (store *SimpleSchemaStore) InvalidateCache() {
 	// Invalidate Schema cache
 	store.Lock()
 	defer store.Unlock()
 
 	// make a new map here
 	store.schemas = make(map[string]Schema)
-	return nil
 }
 
 func (store *SimpleSchemaStore) Close() {

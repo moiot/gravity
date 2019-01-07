@@ -18,7 +18,7 @@ func IsEventBelongsToMyself(event *replication.RowsEvent, gravityID uint32) bool
 	panic("type conversion failed for internal table")
 }
 
-func extractSchemaNameFromDDLQueryEvent(p *parser.Parser, ev *replication.QueryEvent) (db, table string, node ast.DDLNode) {
+func extractSchemaNameFromDDLQueryEvent(p *parser.Parser, ev *replication.QueryEvent) (db, table string, node ast.StmtNode) {
 	stmt, err := p.ParseOneStmt(string(ev.Query), "", "")
 	if err != nil {
 		log.Fatalf("sql parser error: %v", err.Error())
@@ -41,5 +41,5 @@ func extractSchemaNameFromDDLQueryEvent(p *parser.Parser, ev *replication.QueryE
 	case *ast.TruncateTableStmt:
 		return v.Table.Schema.String(), v.Table.Name.String(), v
 	}
-	return string(ev.Schema), "", stmt.(ast.DDLNode)
+	return string(ev.Schema), "", stmt
 }
