@@ -3,39 +3,40 @@ package sql_execution_engine
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+	"text/template"
+
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
 	"github.com/moiot/gravity/gravity/registry"
 	"github.com/moiot/gravity/pkg/utils"
 	log "github.com/sirupsen/logrus"
-	"strings"
-	"text/template"
 
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/schema_store"
 )
 
-const ManualEngine             = "manual"
+const ManualEngine = "manual-engine"
 
 type sqlTemplateContext struct {
 	TargetTable *schema_store.Table
-	Msg *core.Msg
+	Msg         *core.Msg
 }
 
 type manualSQLEngineConfig struct {
-	TagInternalTxn bool `mapstructure:"tag-internal-txn" json:"tag-internal-txn"`
-	SQLAnnotation string `mapstructure:"sql-annotation" json:"sql-annotation"`
+	TagInternalTxn bool   `mapstructure:"tag-internal-txn" json:"tag-internal-txn"`
+	SQLAnnotation  string `mapstructure:"sql-annotation" json:"sql-annotation"`
 
-	SQLTemplate        string   `mapstructure:"sql-template" json:"sql-template"`
-	SQLArgExpr         []string `mapstructure:"sql-arg-expr" json:"sql-arg-expr"`
+	SQLTemplate string   `mapstructure:"sql-template" json:"sql-template"`
+	SQLArgExpr  []string `mapstructure:"sql-arg-expr" json:"sql-arg-expr"`
 }
 
 type manualSQLEngine struct {
 	pipelineName string
-	cfg *manualSQLEngineConfig
+	cfg          *manualSQLEngineConfig
 
-	sqlTemplate       *template.Template
-	db                *sql.DB
+	sqlTemplate *template.Template
+	db          *sql.DB
 }
 
 func init() {
@@ -93,7 +94,7 @@ func (engine *manualSQLEngine) Execute(msgBatch []*core.Msg, tableDef *schema_st
 
 	templateContext := sqlTemplateContext{
 		TargetTable: tableDef,
-		Msg: msg,
+		Msg:         msg,
 	}
 
 	stringBuilder := strings.Builder{}
@@ -102,7 +103,6 @@ func (engine *manualSQLEngine) Execute(msgBatch []*core.Msg, tableDef *schema_st
 	}
 
 	query := stringBuilder.String()
-
 
 	if engine.cfg.SQLAnnotation != "" {
 		query = fmt.Sprintf("%s%s", engine.cfg.SQLAnnotation, query)
