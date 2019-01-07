@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/moiot/gravity/pkg/utils/retry"
@@ -56,6 +58,8 @@ PRIMARY KEY (id)
 )ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 `
 
+const tablePrefix = "test_"
+
 func (g *Generator) SetupTestTables(createTarget bool) []string {
 	g.rands = make([]*rand.Rand, g.Concurrency)
 	for i := 0; i < g.Concurrency; i++ {
@@ -65,7 +69,7 @@ func (g *Generator) SetupTestTables(createTarget bool) []string {
 	g.tableNames = make([]string, g.NrTables, g.NrTables)
 	g.tableDataGenerators = make([]MysqlTableDataGenerator, g.NrTables, g.NrTables)
 	for i := 0; i < g.NrTables; i++ {
-		tableName := fmt.Sprintf("test_%d", i)
+		tableName := tablePrefix + strconv.Itoa(i)
 		g.tableNames[i] = tableName
 
 		s1 := fmt.Sprintf(tableDef, g.SourceSchema, tableName)
@@ -132,7 +136,7 @@ func (g *Generator) ParallelUpdate(ctx context.Context) *sync.WaitGroup {
 	for i := 0; i < g.Concurrency; i++ {
 		go func(idx int) {
 			defer wg.Done()
-			g.execArbitraryTxn(ctx, g.rands[idx])
+			g.execArbitraryTxn(ctx, idx, g.rands[idx])
 		}(i)
 	}
 	return wg
@@ -160,13 +164,45 @@ func (g *Generator) TestChecksum() error {
 	return nil
 }
 
-func (g *Generator) execArbitraryTxn(ctx context.Context, r *rand.Rand) {
+func (g *Generator) execArbitraryTxn(ctx context.Context, idx int, r *rand.Rand) {
+	var ddls = []string{
+		fmt.Sprintf("CREATE TABLE `%s`.`_aa_%d` (  `ID` int(11) NOT NULL AUTO_INCREMENT,  `Name` char(35) NOT NULL DEFAULT '', PRIMARY KEY (`ID`)) ENGINE=InnoDB DEFAULT CHARSET=utf8;", g.SourceSchema, idx),
+		fmt.Sprintf("alter table `%s`.`_aa_%d` add column `foo` int default 0", g.SourceSchema, idx),
+		fmt.Sprintf("create user foo_%d", idx),
+	}
+
+	var revert = []string{
+		fmt.Sprintf("drop table `%s`.`_aa_%d`", g.SourceSchema, idx),
+		fmt.Sprintf("alter table `%s`.`_aa_%d` drop column `foo`", g.SourceSchema, idx),
+		fmt.Sprintf("drop user foo_%d", idx),
+	}
+
+	executedDDL := make(map[int]bool)
+
 	for {
 		select {
 		case <-ctx.Done():
+			for k := range executedDDL {
+				_, err := g.SourceDB.Exec(revert[k])
+				if err != nil {
+					log.Errorf("error exec: %s. err: %s", revert[k], err)
+				}
+			}
 			return
 
 		default:
+			if len(executedDDL) < len(ddls) && r.Float32() < 0.05 {
+				for i := range ddls {
+					if !executedDDL[i] {
+						executedDDL[i] = true
+						_, err := g.SourceDB.Exec(ddls[i])
+						if err != nil {
+							log.Panic("error exec ", ddls[i], ". err: ", err)
+						}
+					}
+				}
+			}
+
 			transactionLength := 10
 			if g.TransactionLength > 0 {
 				transactionLength = g.TransactionLength

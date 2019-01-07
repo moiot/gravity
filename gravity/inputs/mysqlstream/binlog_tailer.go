@@ -394,16 +394,13 @@ func (tailer *BinlogTailer) Start() error {
 					continue
 				}
 
-				err = tailer.sourceSchemaStore.InvalidateCache()
-				if err != nil {
-					log.Fatalf("[binlog_tailer] source schema store failed to invalidate cache, err: %v", errors.ErrorStack(err))
-				}
-
 				dbName, table, ast := extractSchemaNameFromDDLQueryEvent(tailer.parser, ev)
 
 				if dbName == config2.GravityDBName || dbName == "mysql" {
 					continue
 				}
+
+				tailer.sourceSchemaStore.InvalidateSchemaCache(dbName)
 
 				log.Infof("QueryEvent: database: %s, sql: %s", dbName, ddlSQL)
 

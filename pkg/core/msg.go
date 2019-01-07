@@ -82,7 +82,7 @@ func (msg Msg) GetPkSign() string {
 
 type DDLMsg struct {
 	Statement string
-	AST       ast.DDLNode
+	AST       ast.StmtNode
 }
 
 type DMLMsg struct {

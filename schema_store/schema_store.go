@@ -129,7 +129,8 @@ func Deserialize(raw interface{}, column Column) interface{} {
 
 type SchemaStore interface {
 	GetSchema(database string) (Schema, error)
-	InvalidateCache() error
+	InvalidateSchemaCache(schema string)
+	InvalidateCache()
 	IsInCache(dbName string) bool
 	Close()
 }
