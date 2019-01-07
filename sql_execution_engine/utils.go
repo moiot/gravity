@@ -3,11 +3,14 @@ package sql_execution_engine
 import (
 	"database/sql"
 	"fmt"
-	"github.com/juju/errors"
-	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/schema_store"
 	"strings"
 	"time"
+
+	"github.com/juju/errors"
+	"github.com/moiot/gravity/gravity/registry"
+	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/schema_store"
+	"github.com/sirupsen/logrus"
 )
 
 func GenerateSingleDeleteSQL(msg *core.Msg, tableDef *schema_store.Table) (string, []interface{}, error) {
@@ -32,7 +35,6 @@ func GenerateSingleDeleteSQL(msg *core.Msg, tableDef *schema_store.Table) (strin
 	stmt := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s", tableDef.Schema, tableDef.Name, strings.Join(whereSql, " AND "))
 	return stmt, args, nil
 }
-
 
 func GenerateReplaceSQLWithMultipleValues(msgBatch []*core.Msg, tableDef *schema_store.Table) (string, []interface{}, error) {
 	columnNames := make([]string, len(tableDef.Columns))
@@ -139,8 +141,35 @@ func adjustArgs(arg interface{}, column *schema_store.Column) interface{} {
 	return arg
 }
 
-
 func execSql(db *sql.DB, stmt string) error {
 	_, err := db.Exec(stmt)
 	return errors.Trace(err)
+}
+
+func NewEngineExecutor(pipelineName string, engineName string, db *sql.DB, data map[string]interface{}) EngineExecutor {
+	p, err := registry.GetPlugin(registry.SQLExecutionEnginePlugin, engineName)
+	if err != nil {
+		panic("failed to get replace engine")
+	}
+
+	err = p.Configure(pipelineName, data)
+	if err != nil {
+		logrus.Fatalf("[mysqlReplaceEngine] failed to config")
+	}
+
+	i, ok := p.(EngineInitializer)
+	if !ok {
+		logrus.Fatalf("[mysqlReplaceEngine] not a EngineInitializer")
+	}
+
+	if err := i.Init(db); err != nil {
+		logrus.Fatalf("[mysqlReplaceEngine] init failed: %v", errors.ErrorStack(err))
+	}
+
+	executor, ok := p.(EngineExecutor)
+	if !ok {
+		logrus.Fatalf("[mysqlReplaceEngine] not a EngineExecutor")
+	}
+
+	return executor
 }

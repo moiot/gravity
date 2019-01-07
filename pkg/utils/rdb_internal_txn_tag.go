@@ -3,8 +3,9 @@ package utils
 import (
 	"database/sql"
 	"fmt"
-	"github.com/moiot/gravity/pkg/consts"
 	"math/rand"
+
+	"github.com/moiot/gravity/pkg/consts"
 
 	"github.com/juju/errors"
 )
@@ -16,7 +17,7 @@ const (
 	dbNameV1    = "drc"
 	tableNameV1 = "_drc_bidirection"
 
-	dbNameV2 = consts.GravityDBName
+	dbNameV2    = consts.GravityDBName
 	tableNameV2 = "_gravity_txn_tags"
 )
 
@@ -27,13 +28,15 @@ var tableDDLV2 = fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s.%s (
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;`, dbNameV2, tableNameV2)
 
+// Only for test purpose
+var TxnTagSQLFormat = fmt.Sprintf("insert into `%s`.`%s`", dbNameV2, tableNameV2)
 
 func IsInternalTraffic(db string, tbl string) bool {
 	return (db == dbNameV1 && tbl == tableNameV1) || (db == dbNameV2 && tbl == tableNameV2)
 }
 
 func InitInternalTxnTags(db *sql.DB) error {
-	_, err := db.Exec("CREATE DATABASE IF NOT EXISTS " + dbNameV2)
+	_, err := db.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", dbNameV2))
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -47,5 +50,5 @@ func InitInternalTxnTags(db *sql.DB) error {
 
 func GenerateTxnTagSQL() string {
 	id := rand.Int31n(999) + 1
-	return fmt.Sprintf("insert into %s.%s (id) values (%d) on duplicate key update v = v + 1;", dbNameV2, tableNameV2, id)
+	return fmt.Sprintf("insert into `%s`.`%s` (id) values (%d) on duplicate key update v = v + 1;", dbNameV2, tableNameV2, id)
 }

@@ -3,10 +3,33 @@ package mysql
 import (
 	"testing"
 
+	"github.com/moiot/gravity/gravity/registry"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/moiot/gravity/pkg/core"
 )
+
+func TestConfigure(t *testing.T) {
+	r := require.New(t)
+
+	p, err := registry.GetPlugin(registry.OutputPlugin, OutputMySQL)
+	r.NoError(err)
+
+	r.NoError(p.Configure("test", map[string]interface{}{
+		"target": map[string]interface{}{
+			"host":     "localhost",
+			"username": "root",
+		},
+	}))
+
+	o, ok := p.(*MySQLOutput)
+	r.True(ok)
+
+	r.NotNil(o.sqlExecutionEnginePlugin)
+	r.Nil(o.sqlExecutor)
+}
 
 func TestSplitBatch(t *testing.T) {
 	assert := assert.New(t)

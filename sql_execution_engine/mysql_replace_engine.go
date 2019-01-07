@@ -2,6 +2,7 @@ package sql_execution_engine
 
 import (
 	"database/sql"
+
 	"github.com/mitchellh/mapstructure"
 	"github.com/moiot/gravity/gravity/registry"
 	"github.com/moiot/gravity/pkg/utils"
@@ -17,17 +18,24 @@ import (
 )
 
 type mysqlReplaceEngineConfig struct {
-	TagInternalTxn bool `mapstructure:"tag-internal-txn" json:"tag-internal-txn"`
-	SQLAnnotation string `mapstructure:"sql-annotation" json:"sql-annotation"`
+	TagInternalTxn bool   `mapstructure:"tag-internal-txn" json:"tag-internal-txn"`
+	SQLAnnotation  string `mapstructure:"sql-annotation" json:"sql-annotation"`
 }
 
 type mysqlReplaceEngine struct {
 	pipelineName string
-	cfg *mysqlReplaceEngineConfig
+	cfg          *mysqlReplaceEngineConfig
 	db           *sql.DB
 }
 
 const MySQLReplaceEngine = "mysql-replace-engine"
+
+var DefaultMySQLReplaceEngineConfig = map[string]interface{}{
+	MySQLReplaceEngine: map[string]interface{}{
+		"tag-internal-txn": false,
+		"sql-annotation":   "",
+	},
+}
 
 func init() {
 	registry.RegisterPlugin(registry.SQLExecutionEnginePlugin, MySQLReplaceEngine, &mysqlReplaceEngine{}, false)
@@ -52,7 +60,6 @@ func (engine *mysqlReplaceEngine) Init(db *sql.DB) error {
 
 	return nil
 }
-
 
 func (engine *mysqlReplaceEngine) Execute(msgBatch []*core.Msg, targetTableDef *schema_store.Table) error {
 	currentBatchSize := len(msgBatch)
@@ -115,5 +122,4 @@ func (engine *mysqlReplaceEngine) Execute(msgBatch []*core.Msg, targetTableDef *
 	}
 
 	return errors.Trace(txn.Commit())
-
 }

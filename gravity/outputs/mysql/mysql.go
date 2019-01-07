@@ -18,11 +18,15 @@ import (
 	"github.com/moiot/gravity/sql_execution_engine"
 )
 
+const (
+	OutputMySQL = "mysql"
+)
+
 type MySQLPluginConfig struct {
-	DBConfig     *utils.DBConfig                                 `mapstructure:"target"  json:"target"`
-	Routes       []map[string]interface{}                        `mapstructure:"routes"  json:"routes"`
-	EnableDDL bool `mapstructure:"enable-ddl" json:"enable-ddl"`
-	EngineConfig  map[string]interface{} 	`mapstructure:"sql-engine-config"  json:"sql-engine-config"`
+	DBConfig     *utils.DBConfig          `mapstructure:"target"  json:"target"`
+	Routes       []map[string]interface{} `mapstructure:"routes"  json:"routes"`
+	EnableDDL    bool                     `mapstructure:"enable-ddl" json:"enable-ddl"`
+	EngineConfig map[string]interface{}   `mapstructure:"sql-engine-config"  json:"sql-engine-config"`
 }
 
 type MySQLOutput struct {
@@ -37,7 +41,7 @@ type MySQLOutput struct {
 }
 
 func init() {
-	registry.RegisterPlugin(registry.OutputPlugin, "mysql", &MySQLOutput{}, false)
+	registry.RegisterPlugin(registry.OutputPlugin, OutputMySQL, &MySQLOutput{}, false)
 }
 
 func (output *MySQLOutput) Configure(pipelineName string, data map[string]interface{}) error {
@@ -55,7 +59,12 @@ func (output *MySQLOutput) Configure(pipelineName string, data map[string]interf
 	}
 
 	engineConfig := pluginConfig.EngineConfig
-	if len(engineConfig) != 1 {
+
+	if len(engineConfig) == 0 {
+		engineConfig = sql_execution_engine.DefaultMySQLReplaceEngineConfig
+	}
+
+	if len(engineConfig) > 1 {
 		return errors.Errorf("only one sql engine should be configured")
 	}
 
@@ -101,7 +110,6 @@ func (output *MySQLOutput) Start() error {
 		return errors.Trace(err)
 	}
 	output.db = db
-
 
 	engineInitializer, ok := output.sqlExecutionEnginePlugin.(sql_execution_engine.EngineInitializer)
 	if !ok {
