@@ -108,6 +108,26 @@ func GetSingleSqlPlaceHolderAndArgWithEncodedData(msg *core.Msg, tableDef *schem
 	return singleSqlPlaceHolder, args, nil
 }
 
+func GenerateInsertIgnoreSQL(msgBatch []*core.Msg, tableDef *schema_store.Table) (string, []interface{}, error) {
+	columnNames := make([]string, len(tableDef.Columns))
+	for _, column := range tableDef.Columns {
+		columnName := column.Name
+		columnIdx := column.Idx
+		columnNames[columnIdx] = fmt.Sprintf("`%s`", columnName)
+	}
+
+	sqlPrefix := fmt.Sprintf("INSERT IGNORE INTO `%s`.`%s` (%s) VALUES", tableDef.Schema, tableDef.Name, strings.Join(columnNames, ","))
+	// Generate place holders and args
+	batchPlaceHolders, args, err := PlaceHoldersAndArgsFromEncodedData(msgBatch, tableDef)
+	if err != nil {
+		return "", nil, errors.Trace(err)
+	}
+
+	finalPlaceHolders := strings.Join(batchPlaceHolders, ",")
+	s := []string{sqlPrefix, finalPlaceHolders}
+	return strings.Join(s, " "), args, nil
+}
+
 func ValidateSchema(msg *core.Msg, tableDef *schema_store.Table) error {
 	columnLenInMsg := len(msg.DmlMsg.Data)
 	columnLenInTarget := len(tableDef.Columns)
