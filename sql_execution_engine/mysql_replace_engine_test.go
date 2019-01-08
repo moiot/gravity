@@ -1,7 +1,11 @@
 package sql_execution_engine
 
 import (
+	"fmt"
+	"strings"
 	"testing"
+
+	"github.com/moiot/gravity/pkg/mysql_test"
 
 	"github.com/moiot/gravity/gravity/registry"
 	"github.com/moiot/gravity/pkg/core"
@@ -29,8 +33,9 @@ func TestMySQLReplaceEngineConfigure(t *testing.T) {
 
 func TestMySQLReplaceEngineExecute(t *testing.T) {
 	r := require.New(t)
+	testSchemaName := strings.ToLower(t.Name())
 	tbl := &schema_store.Table{
-		Schema: "test",
+		Schema: testSchemaName,
 		Name:   "t",
 		Columns: []schema_store.Column{
 			{Name: "id", Idx: 0},
@@ -53,7 +58,7 @@ func TestMySQLReplaceEngineExecute(t *testing.T) {
 
 		executor := NewEngineExecutor("test", MySQLReplaceEngine, mockDB, nil)
 
-		mock.ExpectExec("REPLACE INTO `test`.`t` \\(`id`,`v`\\)").WithArgs(1, 1).WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec(fmt.Sprintf("REPLACE INTO `%s`.`t` \\(`id`,`v`\\)", testSchemaName)).WithArgs(1, 1).WillReturnResult(sqlmock.NewResult(1, 1))
 		r.NoError(executor.Execute(msgBatch, tbl))
 	})
 
@@ -66,7 +71,7 @@ func TestMySQLReplaceEngineExecute(t *testing.T) {
 			"sql-annotation": "gravity_annotation",
 		})
 
-		mock.ExpectExec("\\/\\*gravity_annotation\\*\\/REPLACE INTO `test`.`t` \\(`id`,`v`\\)").WithArgs(1, 1).WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec(fmt.Sprintf("\\/\\*gravity_annotation\\*\\/REPLACE INTO `%s`.`t` \\(`id`,`v`\\)", testSchemaName)).WithArgs(1, 1).WillReturnResult(sqlmock.NewResult(1, 1))
 		r.NoError(executor.Execute(msgBatch, tbl))
 	})
 
@@ -80,8 +85,25 @@ func TestMySQLReplaceEngineExecute(t *testing.T) {
 		executor := NewEngineExecutor("test", MySQLReplaceEngine, mockDB, map[string]interface{}{"tag-internal-txn": true})
 		mock.ExpectBegin()
 		mock.ExpectExec(utils.TxnTagSQLFormat).WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectExec("REPLACE INTO `test`.`t` \\(`id`,`v`\\)").WithArgs(1, 1).WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec(fmt.Sprintf("REPLACE INTO `%s`.`t` \\(`id`,`v`\\)", testSchemaName)).WithArgs(1, 1).WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
+		r.NoError(executor.Execute(msgBatch, tbl))
+	})
+
+	t.Run("with real mysql and txn tag", func(tt *testing.T) {
+		db := mysql_test.MustSetupTargetDB(testSchemaName)
+		ddl := fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %s.%s (
+id int(11) unsigned NOT NULL,
+v varchar(256) DEFAULT NULL,
+PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+`, testSchemaName, "t")
+
+		_, err := db.Exec(ddl)
+		r.NoError(err)
+
+		executor := NewEngineExecutor("test", MySQLReplaceEngine, db, map[string]interface{}{"tag-internal-txn": true})
 		r.NoError(executor.Execute(msgBatch, tbl))
 	})
 }
