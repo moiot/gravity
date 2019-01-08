@@ -2,24 +2,73 @@ package sql_execution_engine
 
 import (
 	"database/sql"
-	"github.com/juju/errors"
-	log "github.com/sirupsen/logrus"
 	"strings"
 	"text/template"
+
+	"github.com/juju/errors"
+	"github.com/mitchellh/mapstructure"
+	"github.com/moiot/gravity/gravity/registry"
+	"github.com/moiot/gravity/pkg/utils"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/schema_store"
 )
 
+const ManualEngine = "manual-engine"
+
 type sqlTemplateContext struct {
 	TargetTable *schema_store.Table
-	Msg *core.Msg
+	Msg         *core.Msg
+}
+
+type manualSQLEngineConfig struct {
+	TagInternalTxn bool   `mapstructure:"tag-internal-txn" json:"tag-internal-txn"`
+	SQLAnnotation  string `mapstructure:"sql-annotation" json:"sql-annotation"`
+
+	SQLTemplate string   `mapstructure:"sql-template" json:"sql-template"`
+	SQLArgExpr  []string `mapstructure:"sql-arg-expr" json:"sql-arg-expr"`
 }
 
 type manualSQLEngine struct {
-	sqlTemplate       *template.Template
-	sqlArgsExpression []string
-	db                *sql.DB
+	pipelineName string
+	cfg          *manualSQLEngineConfig
+
+	sqlTemplate *template.Template
+	db          *sql.DB
+}
+
+func init() {
+	registry.RegisterPlugin(registry.SQLExecutionEnginePlugin, ManualEngine, &manualSQLEngine{}, false)
+}
+
+func (engine *manualSQLEngine) Configure(pipelineName string, data map[string]interface{}) error {
+	engine.pipelineName = pipelineName
+
+	cfg := manualSQLEngineConfig{}
+	if err := mapstructure.Decode(data, &cfg); err != nil {
+		return errors.Trace(err)
+	}
+
+	engine.cfg = &cfg
+
+	t, err := template.New("sqlTemplate").Parse(cfg.SQLTemplate)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	engine.sqlTemplate = t
+
+	return nil
+}
+
+func (engine *manualSQLEngine) Init(db *sql.DB) error {
+	engine.db = db
+
+	if engine.cfg.TagInternalTxn {
+		return utils.InitInternalTxnTags(db)
+	}
+	return nil
 }
 
 func (engine *manualSQLEngine) Execute(msgBatch []*core.Msg, tableDef *schema_store.Table) error {
@@ -37,14 +86,14 @@ func (engine *manualSQLEngine) Execute(msgBatch []*core.Msg, tableDef *schema_st
 		return errors.Errorf("[manualSQLEngine] only support dml")
 	}
 
-	sqlArgs := make([]interface{}, len(engine.sqlArgsExpression))
-	for i, field := range engine.sqlArgsExpression {
+	sqlArgs := make([]interface{}, len(engine.cfg.SQLArgExpr))
+	for i, field := range engine.cfg.SQLArgExpr {
 		sqlArgs[i] = msg.DmlMsg.Data[field]
 	}
 
 	templateContext := sqlTemplateContext{
 		TargetTable: tableDef,
-		Msg: msg,
+		Msg:         msg,
 	}
 
 	stringBuilder := strings.Builder{}
@@ -53,25 +102,42 @@ func (engine *manualSQLEngine) Execute(msgBatch []*core.Msg, tableDef *schema_st
 	}
 
 	query := stringBuilder.String()
-	_, err := engine.db.Exec(query, sqlArgs...)
+
+	if engine.cfg.SQLAnnotation != "" {
+		query = SQLWithAnnotation(query, engine.cfg.SQLAnnotation)
+	}
+
+	//
+	// Do not open a txn explicitly when TagInternalExn is false
+	//
+	if !engine.cfg.TagInternalTxn {
+		_, err := engine.db.Exec(query, sqlArgs...)
+		return errors.Trace(err)
+	}
+
+	//
+	// TagInternalTxn is ON
+	//
+	txn, err := engine.db.Begin()
 	if err != nil {
-		log.Errorf("[manualSQLEngine] error sql: %s, sqlArgs: %v, err: %v", query, sqlArgs, err.Error())
+		return errors.Trace(err)
+	}
+
+	_, err = txn.Exec(utils.GenerateTxnTagSQL(engine.pipelineName))
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	_, err = txn.Exec(query, sqlArgs...)
+	if err != nil {
+		txn.Rollback()
+		return errors.Annotatef(err, "[manualSQLEngine] exec error sql: %v, args: %+v", query, sqlArgs)
+	}
+
+	err = txn.Commit()
+	if err != nil {
+		log.Errorf("[manualSQLEngine] commit error sql: %s, sqlArgs: %v, err: %v", query, sqlArgs, err.Error())
 		return errors.Trace(err)
 	}
 	return nil
-}
-
-
-func NewManualSQLEngine(db *sql.DB, config MySQLExecutionEngineConfig) SQlExecutionEngine {
-	t, err := template.New("sqlTemplate").Parse(config.SQLTemplate)
-	if err != nil {
-		log.Fatalf("[manualSQLEngine] failed to parse template: %v", config.SQLTemplate)
-	}
-
-	engine := manualSQLEngine{
-		db:                db,
-		sqlTemplate:       t,
-		sqlArgsExpression: config.SQLArgExpr,
-	}
-	return &engine
 }

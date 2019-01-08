@@ -307,8 +307,3 @@ func testConflictUnknown(statement string, engine conflictPreviewEngine, table *
 	err := engine.Execute([]*core.Msg{msg}, table)
 	Expect(err).Should(HaveOccurred())
 }
-
-func execSql(db *sql.DB, stmt string) {
-	_, err := db.Exec(stmt)
-	Expect(err).ShouldNot(HaveOccurred())
-}

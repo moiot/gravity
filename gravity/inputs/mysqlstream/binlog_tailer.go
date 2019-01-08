@@ -4,13 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/moiot/gravity/pkg/consts"
 	"strings"
 	"time"
 
 	"github.com/pingcap/parser"
 
 	"github.com/moiot/gravity/gravity/binlog_checker"
-	config2 "github.com/moiot/gravity/gravity/config"
 	"github.com/moiot/gravity/pkg/core"
 
 	"github.com/juju/errors"
@@ -550,7 +550,7 @@ func (tailer *BinlogTailer) FlushMsgTxnBuffer() {
 	// ignore internal drc txn data
 	isBiDirectionalTxn := false
 	for _, msg := range tailer.msgTxnBuffer {
-		if utils.IsBidirectional(msg.Database, msg.Table) {
+		if utils.IsInternalTraffic(msg.Database, msg.Table) {
 			isBiDirectionalTxn = true
 			log.Debugf("[binlog_tailer] bidirectional transaction will be ignored")
 			break
@@ -568,7 +568,7 @@ func (tailer *BinlogTailer) FlushMsgTxnBuffer() {
 	}
 
 	for i, m := range tailer.msgTxnBuffer {
-		if binlog_checker.IsBinlogCheckerMsg(m.Database, m.Table) || m.Database == config2.GravityDBName {
+		if binlog_checker.IsBinlogCheckerMsg(m.Database, m.Table) || m.Database == consts.GravityDBName {
 			m.Type = core.MsgCtl
 		}
 		ctx := m.InputContext.(inputContext)

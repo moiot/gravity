@@ -3,6 +3,7 @@ package binlog_checker
 import (
 	"database/sql"
 	"fmt"
+	"github.com/moiot/gravity/pkg/consts"
 	"time"
 
 	"github.com/moiot/gravity/pkg/utils"
@@ -15,8 +16,6 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	log "github.com/sirupsen/logrus"
 
-	gravityConfig "github.com/moiot/gravity/gravity/config"
-
 	"github.com/moiot/gravity/metrics"
 	"github.com/moiot/gravity/pkg/config"
 	pb "github.com/moiot/gravity/pkg/protocol/tidb"
@@ -25,7 +24,7 @@ import (
 
 var binlogCheckerTableNameV2 = "gravity_heartbeat_v2"
 
-var binlogCheckerFullTableNameV2 = fmt.Sprintf("`%s`.`%s`", gravityConfig.GravityDBName, binlogCheckerTableNameV2)
+var binlogCheckerFullTableNameV2 = fmt.Sprintf("`%s`.`%s`", consts.GravityDBName, binlogCheckerTableNameV2)
 
 var createV2TableStatement = fmt.Sprintf(`
 	CREATE TABLE IF NOT EXISTS %s(
@@ -143,7 +142,7 @@ func (checker *binlogChecker) run() {
 }
 
 func IsBinlogCheckerMsg(db string, table string) bool {
-	return db == gravityConfig.GravityDBName && (table == binlogCheckerTableNameV2)
+	return db == consts.GravityDBName && (table == binlogCheckerTableNameV2)
 }
 
 func (checker *binlogChecker) IsEventBelongsToMySelf(row Row) bool {
@@ -282,7 +281,7 @@ func (checker *binlogChecker) Stop() {
 }
 
 func (checker *binlogChecker) initRepo() error {
-	if _, err := checker.sourceDB.Exec(fmt.Sprintf("%sCREATE DATABASE IF NOT EXISTS %s", checker.annotation, gravityConfig.GravityDBName)); err != nil {
+	if _, err := checker.sourceDB.Exec(fmt.Sprintf("%sCREATE DATABASE IF NOT EXISTS %s", checker.annotation, consts.GravityDBName)); err != nil {
 		return errors.Trace(err)
 	}
 

@@ -17,6 +17,7 @@ const (
 	FilterPlugin    PluginType = "filters"
 	MatcherPlugin   PluginType = "matcher"
 	SchedulerPlugin PluginType = "scheduler"
+	SQLExecutionEnginePlugin PluginType = "sqlExecutionEngine"
 )
 
 type Plugin interface {

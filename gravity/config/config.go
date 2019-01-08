@@ -16,8 +16,6 @@ import (
 	"github.com/moiot/gravity/pkg/utils"
 )
 
-const GravityDBName = "_gravity"
-
 var DefaultBinlogSyncerTimeout = "10s"
 
 // Config is the configuration.
@@ -146,6 +144,7 @@ type TargetMySQLWorkerConfig struct {
 	SQLExecutionEngine string   `toml:"sql-execution-engine" json:"sql-execution-engine"`
 	Plugins            []string `toml:"plugins" json:"plugins"`
 }
+
 
 // NewConfig creates a new config.
 func NewConfig() *Config {
