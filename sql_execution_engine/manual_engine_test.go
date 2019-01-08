@@ -40,9 +40,7 @@ func TestManualSQLEngine(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		r.NoError(err)
 
-		mock.ExpectBegin()
 		mock.ExpectExec(fmt.Sprintf("UPDATE `%s`.`%s` SET name = ?", t.Name(), mysql_test.TestTableName)).WithArgs(newName).WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectCommit()
 
 		executor := NewEngineExecutor("test", ManualEngine, db, map[string]interface{}{
 			"sql-template": SQLTemplate,
@@ -55,12 +53,10 @@ func TestManualSQLEngine(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		r.NoError(err)
 
-		mock.ExpectBegin()
 		mock.ExpectExec(fmt.Sprintf("\\/\\*hello\\*\\/UPDATE `%s`.`%s` SET name = ?", t.Name(), mysql_test.TestTableName)).WithArgs(newName).WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectCommit()
 
 		executor := NewEngineExecutor("test", ManualEngine, db, map[string]interface{}{
-			"sql-annotation": "/*hello*/",
+			"sql-annotation": "hello",
 			"sql-template":   SQLTemplate,
 			"sql-arg-expr":   []string{"name"},
 		})

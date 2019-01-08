@@ -12,8 +12,6 @@ import (
 
 	"github.com/moiot/gravity/pkg/core"
 
-	"fmt"
-
 	"github.com/moiot/gravity/schema_store"
 )
 
@@ -72,54 +70,77 @@ func (engine *mysqlReplaceEngine) Execute(msgBatch []*core.Msg, targetTableDef *
 		return errors.Errorf("[mysql_replace_engine] only support single delete")
 	}
 
-	var sql string
+	var query string
 	var args []interface{}
 	var err error
 
 	if msgBatch[0].DmlMsg.Operation == core.Delete {
-		sql, args, err = GenerateSingleDeleteSQL(msgBatch[0], targetTableDef)
+		query, args, err = GenerateSingleDeleteSQL(msgBatch[0], targetTableDef)
 		if err != nil {
 			return errors.Trace(err)
 		}
 	} else {
-		sql, args, err = GenerateReplaceSQLWithMultipleValues(msgBatch, targetTableDef)
+		query, args, err = GenerateReplaceSQLWithMultipleValues(msgBatch, targetTableDef)
 		if err != nil {
 			data, pks := DebugDmlMsg(msgBatch)
-			return errors.Annotatef(err, "sql: %v, pb data: %v, pks: %v", sql, data, pks)
+			return errors.Annotatef(err, "query: %v, pb data: %v, pks: %v", query, data, pks)
 		}
 	}
 
 	if engine.cfg.SQLAnnotation != "" {
-		sql = fmt.Sprintf("%s%s", engine.cfg.SQLAnnotation, sql)
+		query = SQLWithAnnotation(query, engine.cfg.SQLAnnotation)
 	}
 
+	//
+	// Do not open a txn explicitly when TagInternalExn is false
+	//
+	if !engine.cfg.TagInternalTxn {
+		result, err := engine.db.Exec(query, args...)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		logDelete(query, args, result)
+		return nil
+	}
+
+	//
+	// TagInternalTxn is ON
+	//
 	txn, err := engine.db.Begin()
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	if engine.cfg.TagInternalTxn {
-		_, err := txn.Exec(utils.GenerateTxnTagSQL())
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-
-	result, err := txn.Exec(sql, args...)
+	result, err := txn.Exec(utils.GenerateTxnTagSQL(engine.pipelineName))
 	if err != nil {
-		txn.Rollback()
-		return errors.Annotatef(err, "sql: %v, args: %+v", sql, args)
+		return errors.Trace(err)
 	}
 
 	// log all the delete information
 	if msgBatch[0].DmlMsg.Operation == core.Delete {
-		nrDeleted, err := result.RowsAffected()
-		if err != nil {
-			log.Warnf("[mysqlReplaceEngine]: %v", err.Error())
-		}
+		logDelete(query, args, result)
+	}
 
-		log.Infof("[mysqlReplaceEngine] singleDelete %s. args: %+v. rows affected: %d", sql, args, nrDeleted)
+	result, err = txn.Exec(query, args...)
+	if err != nil {
+		txn.Rollback()
+		return errors.Annotatef(err, "query: %v, args: %+v", query, args)
+	}
+
+	// log all the delete information
+	if msgBatch[0].DmlMsg.Operation == core.Delete {
+		logDelete(query, args, result)
 	}
 
 	return errors.Trace(txn.Commit())
+}
+
+func logDelete(query string, args []interface{}, result sql.Result) {
+	nrDeleted, err := result.RowsAffected()
+	if err != nil {
+		log.Warnf("[mysqlReplaceEngine]: %v", err.Error())
+	}
+
+	log.Infof("[mysqlReplaceEngine] singleDelete %s. args: %+v. rows affected: %d", query, args, nrDeleted)
 }

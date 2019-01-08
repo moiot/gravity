@@ -2,7 +2,6 @@ package sql_execution_engine
 
 import (
 	"database/sql"
-	"fmt"
 	"strings"
 	"text/template"
 
@@ -105,19 +104,28 @@ func (engine *manualSQLEngine) Execute(msgBatch []*core.Msg, tableDef *schema_st
 	query := stringBuilder.String()
 
 	if engine.cfg.SQLAnnotation != "" {
-		query = fmt.Sprintf("%s%s", engine.cfg.SQLAnnotation, query)
+		query = SQLWithAnnotation(query, engine.cfg.SQLAnnotation)
 	}
 
+	//
+	// Do not open a txn explicitly when TagInternalExn is false
+	//
+	if !engine.cfg.TagInternalTxn {
+		_, err := engine.db.Exec(query, sqlArgs...)
+		return errors.Trace(err)
+	}
+
+	//
+	// TagInternalTxn is ON
+	//
 	txn, err := engine.db.Begin()
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	if engine.cfg.TagInternalTxn {
-		_, err := txn.Exec(utils.GenerateTxnTagSQL())
-		if err != nil {
-			return errors.Trace(err)
-		}
+	_, err = txn.Exec(utils.GenerateTxnTagSQL(engine.pipelineName))
+	if err != nil {
+		return errors.Trace(err)
 	}
 
 	_, err = txn.Exec(query, sqlArgs...)

@@ -131,6 +131,10 @@ func DebugDmlMsg(msgBatch []*core.Msg) (interface{}, interface{}) {
 	return debugData, debugPks
 }
 
+func SQLWithAnnotation(sql string, annotationContent string) string {
+	return fmt.Sprintf("/*%s*/%s", annotationContent, sql)
+}
+
 func adjustArgs(arg interface{}, column *schema_store.Column) interface{} {
 	if arg == nil {
 		return arg

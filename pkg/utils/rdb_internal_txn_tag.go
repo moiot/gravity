@@ -24,6 +24,7 @@ const (
 var tableDDLV2 = fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s.%s (
   id INT(11) UNSIGNED NOT NULL,
   ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  pipeline_name VARCHAR(255) NOT NULL,
   v BIGINT UNSIGNED NOT NULL DEFAULT 0,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;`, dbNameV2, tableNameV2)
@@ -48,7 +49,7 @@ func InitInternalTxnTags(db *sql.DB) error {
 	return nil
 }
 
-func GenerateTxnTagSQL() string {
+func GenerateTxnTagSQL(pipelineName string) string {
 	id := rand.Int31n(999) + 1
-	return fmt.Sprintf("insert into `%s`.`%s` (id) values (%d) on duplicate key update v = v + 1;", dbNameV2, tableNameV2, id)
+	return fmt.Sprintf("insert into `%s`.`%s` (id, pipeline_name) values (%d,%s) on duplicate key update v = v + 1;", dbNameV2, tableNameV2, id, pipelineName)
 }

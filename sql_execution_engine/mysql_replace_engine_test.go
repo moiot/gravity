@@ -53,9 +53,7 @@ func TestMySQLReplaceEngineExecute(t *testing.T) {
 
 		executor := NewEngineExecutor("test", MySQLReplaceEngine, mockDB, nil)
 
-		mock.ExpectBegin()
 		mock.ExpectExec("REPLACE INTO `test`.`t` \\(`id`,`v`\\)").WithArgs(1, 1).WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectCommit()
 		r.NoError(executor.Execute(msgBatch, tbl))
 	})
 
@@ -64,11 +62,11 @@ func TestMySQLReplaceEngineExecute(t *testing.T) {
 		r.NoError(err)
 		r.NotNil(mockDB)
 
-		executor := NewEngineExecutor("test", MySQLReplaceEngine, mockDB, map[string]interface{}{"sql-annotation": "/*gravity_annotation*/"})
+		executor := NewEngineExecutor("test", MySQLReplaceEngine, mockDB, map[string]interface{}{
+			"sql-annotation": "gravity_annotation",
+		})
 
-		mock.ExpectBegin()
 		mock.ExpectExec("\\/\\*gravity_annotation\\*\\/REPLACE INTO `test`.`t` \\(`id`,`v`\\)").WithArgs(1, 1).WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectCommit()
 		r.NoError(executor.Execute(msgBatch, tbl))
 	})
 
