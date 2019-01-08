@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moiot/gravity/pkg/consts"
+
 	"github.com/moiot/gravity/pkg/core"
 
 	"github.com/moiot/gravity/gravity/inputs/stages"
@@ -24,7 +26,7 @@ import (
 
 func init() {
 	db := mysql_test.MustCreateSourceDBConn()
-	_, err := db.Exec("drop database if exists " + gravityConfig.GravityDBName)
+	_, err := db.Exec("drop database if exists " + consts.GravityDBName)
 	if err != nil {
 		panic(err)
 	}

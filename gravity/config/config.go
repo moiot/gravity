@@ -145,7 +145,6 @@ type TargetMySQLWorkerConfig struct {
 	Plugins            []string `toml:"plugins" json:"plugins"`
 }
 
-
 // NewConfig creates a new config.
 func NewConfig() *Config {
 	cfg := &Config{}

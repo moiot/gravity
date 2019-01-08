@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/moiot/gravity/pkg/consts"
 	"strings"
 	"time"
+
+	"github.com/moiot/gravity/pkg/consts"
 
 	"github.com/pingcap/parser"
 
@@ -396,7 +397,7 @@ func (tailer *BinlogTailer) Start() error {
 
 				dbName, table, ast := extractSchemaNameFromDDLQueryEvent(tailer.parser, ev)
 
-				if dbName == config2.GravityDBName || dbName == "mysql" {
+				if dbName == consts.GravityDBName || dbName == "mysql" || dbName == "drc" {
 					continue
 				}
 

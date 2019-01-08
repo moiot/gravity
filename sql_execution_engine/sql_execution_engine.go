@@ -2,11 +2,11 @@ package sql_execution_engine
 
 import (
 	"database/sql"
+
 	"github.com/moiot/gravity/pkg/core"
 
 	"github.com/moiot/gravity/schema_store"
 )
-
 
 type EngineExecutor interface {
 	Execute(msgBatch []*core.Msg, tableDef *schema_store.Table) error
@@ -54,8 +54,3 @@ type EngineInitializer interface {
 //
 // 	return engine
 // }
-
-
-
-
-
