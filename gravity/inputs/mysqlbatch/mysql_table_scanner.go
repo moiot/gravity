@@ -1,25 +1,22 @@
 package mysqlbatch
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
-
-	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/mysql"
-
+	"reflect"
 	"strconv"
+	"strings"
 	"sync"
-
-	"github.com/juju/errors"
-	log "github.com/sirupsen/logrus"
-
 	"time"
 
-	"context"
-
-	"reflect"
+	"github.com/juju/errors"
+	"github.com/pingcap/parser"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/metrics"
+	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/mysql"
 	"github.com/moiot/gravity/pkg/utils"
 	"github.com/moiot/gravity/position_store"
 	"github.com/moiot/gravity/schema_store"
@@ -38,6 +35,7 @@ type TableScanner struct {
 	ctx           context.Context
 	schemaStore   schema_store.SchemaStore
 	wg            sync.WaitGroup
+	parser        *parser.Parser
 }
 
 func (tableScanner *TableScanner) Start() error {
@@ -54,7 +52,12 @@ func (tableScanner *TableScanner) Start() error {
 					return
 				}
 
-				err := tableScanner.InitTablePosition(work.TableDef, work.TableConfig)
+				err := tableScanner.initTableDDL(work.TableDef)
+				if err != nil {
+					log.Fatalf("[TableScanner] initTableDDL for %s.%s, err: %s", work.TableDef.Schema, work.TableDef.Name, err)
+				}
+
+				err = tableScanner.InitTablePosition(work.TableDef, work.TableConfig)
 				if err == ErrTableEmpty {
 					log.Infof("[TableScanner] Target table is empty. schema: %v, table: %v",
 						work.TableDef.Schema, work.TableDef.Name)
@@ -182,7 +185,7 @@ func DetectScanColumn(sourceDB *sql.DB, dbName string, tableName string, maxFull
 		return "*", nil
 	}
 
-	return "", errors.Errorf("no scan column can be found automatically")
+	return "", errors.Errorf("no scan column can be found automatically for %s.%s", dbName, tableName)
 }
 
 func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColumn string) (interface{}, interface{}) {
@@ -372,6 +375,27 @@ func (tableScanner *TableScanner) AfterMsgCommit(msg *core.Msg) error {
 	return nil
 }
 
+func (tableScanner *TableScanner) initTableDDL(table *schema_store.Table) error {
+	row := tableScanner.db.QueryRow(fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", table.Schema, table.Name))
+	var t, create string
+	err := row.Scan(&t, &create)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	create = strings.Replace(create, "\n", "", -1)
+
+	msg := NewCreateTableMsg(tableScanner.parser, table, create)
+
+	if err := tableScanner.emitter.Emit(msg); err != nil {
+		return errors.Trace(err)
+	}
+
+	<-msg.Done
+
+	return nil
+}
+
 func GetTableColumnTypes(db *sql.DB, schema string, table string) ([]*sql.ColumnType, error) {
 	statement := fmt.Sprintf("SELECT * FROM `%s`.`%s` LIMIT 1", schema, table)
 	rows, err := db.Query(statement)
@@ -427,6 +451,7 @@ func NewTableScanner(
 		schemaStore:   schemaStore,
 		cfg:           cfg,
 		ctx:           ctx,
+		parser:        parser.New(),
 	}
 	return &tableScanner
 }

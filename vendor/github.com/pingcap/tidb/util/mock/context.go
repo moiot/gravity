@@ -15,60 +15,84 @@
 package mock
 
 import (
+	"context"
 	"fmt"
 	"sync"
+	"time"
 
-	"github.com/juju/errors"
-	"github.com/pingcap/tidb/context"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/kv"
+	"github.com/pingcap/tidb/owner"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/variable"
+	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util"
 	"github.com/pingcap/tidb/util/kvcache"
-	goctx "golang.org/x/net/context"
+	"github.com/pingcap/tidb/util/sqlexec"
+	binlog "github.com/pingcap/tipb/go-binlog"
 )
 
-var _ context.Context = (*Context)(nil)
+var _ sessionctx.Context = (*Context)(nil)
+var _ sqlexec.SQLExecutor = (*Context)(nil)
 
-// Context represents mocked context.Context.
+// Context represents mocked sessionctx.Context.
 type Context struct {
 	values      map[fmt.Stringer]interface{}
-	txn         kv.Transaction // mock global variable
-	Store       kv.Storage     // mock global variable
+	txn         wrapTxn    // mock global variable
+	Store       kv.Storage // mock global variable
 	sessionVars *variable.SessionVars
 	mux         sync.Mutex // fix data race in ddl test.
-	ctx         goctx.Context
-	cancel      goctx.CancelFunc
+	ctx         context.Context
+	cancel      context.CancelFunc
 	sm          util.SessionManager
 	pcache      *kvcache.SimpleLRUCache
 }
 
-// SetValue implements context.Context SetValue interface.
+type wrapTxn struct {
+	kv.Transaction
+}
+
+func (txn *wrapTxn) Valid() bool {
+	return txn.Transaction != nil && txn.Transaction.Valid()
+}
+
+// Execute implements sqlexec.SQLExecutor Execute interface.
+func (c *Context) Execute(ctx context.Context, sql string) ([]sqlexec.RecordSet, error) {
+	return nil, errors.Errorf("Not Support.")
+}
+
+// DDLOwnerChecker returns owner.DDLOwnerChecker.
+func (c *Context) DDLOwnerChecker() owner.DDLOwnerChecker {
+	return nil
+}
+
+// SetValue implements sessionctx.Context SetValue interface.
 func (c *Context) SetValue(key fmt.Stringer, value interface{}) {
 	c.values[key] = value
 }
 
-// Value implements context.Context Value interface.
+// Value implements sessionctx.Context Value interface.
 func (c *Context) Value(key fmt.Stringer) interface{} {
 	value := c.values[key]
 	return value
 }
 
-// ClearValue implements context.Context ClearValue interface.
+// ClearValue implements sessionctx.Context ClearValue interface.
 func (c *Context) ClearValue(key fmt.Stringer) {
 	delete(c.values, key)
 }
 
-// GetSessionVars implements the context.Context GetSessionVars interface.
+// GetSessionVars implements the sessionctx.Context GetSessionVars interface.
 func (c *Context) GetSessionVars() *variable.SessionVars {
 	return c.sessionVars
 }
 
-// Txn implements context.Context Txn interface.
-func (c *Context) Txn() kv.Transaction {
-	return c.txn
+// Txn implements sessionctx.Context Txn interface.
+func (c *Context) Txn(bool) (kv.Transaction, error) {
+	return &c.txn, nil
 }
 
-// GetClient implements context.Context GetClient interface.
+// GetClient implements sessionctx.Context GetClient interface.
 func (c *Context) GetClient() kv.Client {
 	if c.Store == nil {
 		return nil
@@ -77,35 +101,35 @@ func (c *Context) GetClient() kv.Client {
 }
 
 // GetGlobalSysVar implements GlobalVarAccessor GetGlobalSysVar interface.
-func (c *Context) GetGlobalSysVar(ctx context.Context, name string) (string, error) {
+func (c *Context) GetGlobalSysVar(ctx sessionctx.Context, name string) (string, error) {
 	v := variable.GetSysVar(name)
 	if v == nil {
-		return "", variable.UnknownSystemVar.GenByArgs(name)
+		return "", variable.UnknownSystemVar.GenWithStackByArgs(name)
 	}
 	return v.Value, nil
 }
 
 // SetGlobalSysVar implements GlobalVarAccessor SetGlobalSysVar interface.
-func (c *Context) SetGlobalSysVar(ctx context.Context, name string, value string) error {
+func (c *Context) SetGlobalSysVar(ctx sessionctx.Context, name string, value string) error {
 	v := variable.GetSysVar(name)
 	if v == nil {
-		return variable.UnknownSystemVar.GenByArgs(name)
+		return variable.UnknownSystemVar.GenWithStackByArgs(name)
 	}
 	v.Value = value
 	return nil
 }
 
-// PreparedPlanCache implements the context.Context interface.
+// PreparedPlanCache implements the sessionctx.Context interface.
 func (c *Context) PreparedPlanCache() *kvcache.SimpleLRUCache {
 	return c.pcache
 }
 
-// NewTxn implements the context.Context interface.
-func (c *Context) NewTxn() error {
+// NewTxn implements the sessionctx.Context interface.
+func (c *Context) NewTxn(context.Context) error {
 	if c.Store == nil {
 		return errors.New("store is not set")
 	}
-	if c.txn != nil && c.txn.Valid() {
+	if c.txn.Valid() {
 		err := c.txn.Commit(c.ctx)
 		if err != nil {
 			return errors.Trace(err)
@@ -116,38 +140,23 @@ func (c *Context) NewTxn() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	c.txn = txn
+	c.txn.Transaction = txn
 	return nil
 }
 
-// RefreshTxnCtx implements the context.Context interface.
-func (c *Context) RefreshTxnCtx(goCtx goctx.Context) error {
-	return errors.Trace(c.NewTxn())
+// RefreshTxnCtx implements the sessionctx.Context interface.
+func (c *Context) RefreshTxnCtx(ctx context.Context) error {
+	return errors.Trace(c.NewTxn(ctx))
 }
 
-// ActivePendingTxn implements the context.Context interface.
-func (c *Context) ActivePendingTxn() error {
-	if c.txn != nil {
-		return nil
-	}
-	if c.Store != nil {
-		txn, err := c.Store.Begin()
-		if err != nil {
-			return errors.Trace(err)
-		}
-		c.txn = txn
-	}
-	return nil
-}
-
-// InitTxnWithStartTS implements the context.Context interface with startTS.
+// InitTxnWithStartTS implements the sessionctx.Context interface with startTS.
 func (c *Context) InitTxnWithStartTS(startTS uint64) error {
-	if c.txn != nil {
+	if c.txn.Valid() {
 		return nil
 	}
 	if c.Store != nil {
 		membufCap := kv.DefaultTxnMembufCap
-		if c.sessionVars.ImportingData {
+		if c.sessionVars.LightningMode {
 			membufCap = kv.ImportingTxnMembufCap
 		}
 		txn, err := c.Store.BeginWithStartTS(startTS)
@@ -155,7 +164,7 @@ func (c *Context) InitTxnWithStartTS(startTS uint64) error {
 			return errors.Trace(err)
 		}
 		txn.SetCap(membufCap)
-		c.txn = txn
+		c.txn.Transaction = txn
 	}
 	return nil
 }
@@ -165,7 +174,7 @@ func (c *Context) GetStore() kv.Storage {
 	return c.Store
 }
 
-// GetSessionManager implements the context.Context interface.
+// GetSessionManager implements the sessionctx.Context interface.
 func (c *Context) GetSessionManager() util.SessionManager {
 	return c.sm
 }
@@ -180,23 +189,47 @@ func (c *Context) Cancel() {
 	c.cancel()
 }
 
-// GoCtx returns standard context.Context that bind with current transaction.
-func (c *Context) GoCtx() goctx.Context {
+// GoCtx returns standard sessionctx.Context that bind with current transaction.
+func (c *Context) GoCtx() context.Context {
 	return c.ctx
 }
 
 // StoreQueryFeedback stores the query feedback.
 func (c *Context) StoreQueryFeedback(_ interface{}) {}
 
-// NewContext creates a new mocked context.Context.
+// StmtCommit implements the sessionctx.Context interface.
+func (c *Context) StmtCommit() error {
+	return nil
+}
+
+// StmtRollback implements the sessionctx.Context interface.
+func (c *Context) StmtRollback() {
+}
+
+// StmtGetMutation implements the sessionctx.Context interface.
+func (c *Context) StmtGetMutation(tableID int64) *binlog.TableMutation {
+	return nil
+}
+
+// StmtAddDirtyTableOP implements the sessionctx.Context interface.
+func (c *Context) StmtAddDirtyTableOP(op int, tid int64, handle int64, row []types.Datum) {
+}
+
+// NewContext creates a new mocked sessionctx.Context.
 func NewContext() *Context {
-	goCtx, cancel := goctx.WithCancel(goctx.Background())
-	ctx := &Context{
+	ctx, cancel := context.WithCancel(context.Background())
+	sctx := &Context{
 		values:      make(map[fmt.Stringer]interface{}),
 		sessionVars: variable.NewSessionVars(),
-		ctx:         goCtx,
+		ctx:         ctx,
 		cancel:      cancel,
 	}
-	ctx.sessionVars.MaxChunkSize = 2
-	return ctx
+	sctx.sessionVars.MaxChunkSize = 2
+	sctx.sessionVars.StmtCtx.TimeZone = time.UTC
+	sctx.sessionVars.GlobalVarsAccessor = variable.NewMockGlobalAccessor()
+	return sctx
 }
+
+// HookKeyForTest is as alias, used by context.WithValue.
+// golint forbits using string type as key in context.WithValue.
+type HookKeyForTest string

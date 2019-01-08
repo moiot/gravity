@@ -4,9 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/moiot/gravity/pkg/consts"
 	"strings"
 	"time"
+
+	"github.com/moiot/gravity/pkg/consts"
+
+	"github.com/pingcap/parser"
 
 	"github.com/moiot/gravity/gravity/binlog_checker"
 	"github.com/moiot/gravity/pkg/core"
@@ -78,6 +81,7 @@ type BinlogTailer struct {
 	gravityServerID uint32
 	sourceDB        *sql.DB
 	binlogSyncer    *replication.BinlogSyncer
+	parser          *parser.Parser
 
 	msgTxnBuffer []*core.Msg
 
@@ -120,6 +124,7 @@ func NewBinlogTailer(
 		pipelineName:            pipelineName,
 		gravityServerID:         gravityServerID,
 		sourceDB:                sourceDB,
+		parser:                  parser.New(),
 		ctx:                     c,
 		cancel:                  cancel,
 		binlogSyncer:            utils.NewBinlogSyncer(gravityServerID, cfg.Source),
@@ -390,18 +395,13 @@ func (tailer *BinlogTailer) Start() error {
 					continue
 				}
 
-				err = tailer.sourceSchemaStore.InvalidateCache()
-				if err != nil {
-					log.Fatalf("[binlog_tailer] source schema store failed to invalidate cache, err: %v", errors.ErrorStack(err))
-				}
+				dbName, table, ast := extractSchemaNameFromDDLQueryEvent(tailer.parser, ev)
 
-				// disable ddl right now
-				continue
-				dbName := extractSchemaNameFromDDLQueryEvent(ev)
-
-				if dbName == "drc" || dbName == "mysql" {
+				if dbName == consts.GravityDBName || dbName == "mysql" || dbName == "drc" {
 					continue
 				}
+
+				tailer.sourceSchemaStore.InvalidateSchemaCache(dbName)
 
 				log.Infof("QueryEvent: database: %s, sql: %s", dbName, ddlSQL)
 
@@ -420,7 +420,7 @@ func (tailer *BinlogTailer) Start() error {
 				tailer.positionStore.FSync()
 
 				// emit ddl msg
-				ddlMsg := NewDDLMsg(tailer.AfterMsgCommit, dbName, ddlSQL, int64(e.Header.Timestamp), position_store.SerializeMySQLBinlogPosition(currentPos, currentGS))
+				ddlMsg := NewDDLMsg(tailer.AfterMsgCommit, dbName, table, ast, ddlSQL, int64(e.Header.Timestamp), position_store.SerializeMySQLBinlogPosition(currentPos, currentGS))
 				if err := tailer.emitter.Emit(ddlMsg); err != nil {
 					log.Fatalf("failed to emit ddl msg: %v", errors.ErrorStack(err))
 				}
@@ -505,7 +505,6 @@ func (tailer *BinlogTailer) AfterMsgCommit(msg *core.Msg) error {
 		tailer.positionStore.Put(ctx.position)
 	}
 
-	close(msg.Done)
 	return nil
 }
 

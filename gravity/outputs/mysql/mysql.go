@@ -3,17 +3,19 @@ package mysql
 import (
 	"database/sql"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
+	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/model"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/gravity/outputs/routers"
 	"github.com/moiot/gravity/gravity/registry"
-	"github.com/moiot/gravity/pkg/utils"
-
-	"github.com/juju/errors"
-
-	"github.com/moiot/gravity/pkg/core"
-
 	"github.com/moiot/gravity/pkg/config"
+	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/mysql"
+	"github.com/moiot/gravity/pkg/utils"
 	"github.com/moiot/gravity/schema_store"
 	"github.com/moiot/gravity/sql_execution_engine"
 )
@@ -156,44 +158,99 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 			}
 		}
 
-		// none of the routes matched, skip this msg
-		if !matched {
-			continue
-		}
+		switch msg.Type {
+		case core.MsgDDL:
+			switch node := msg.DdlMsg.AST.(type) {
+			case *ast.CreateTableStmt:
+				if !matched {
+					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
+					return nil
+				}
 
-		if targetTableDef == nil {
-			schema, err := output.targetSchemaStore.GetSchema(targetSchema)
-			if err != nil {
+				shadow := *node
+				shadow.Table.Name = model.CIStr{
+					O: targetTable,
+				}
+				shadow.Table.Schema = model.CIStr{
+					O: targetSchema,
+				}
+				shadow.IfNotExists = true
+				stmt := mysql.RestoreCreateTblStmt(&shadow)
+				_, err := output.db.Exec(stmt)
+				if err != nil {
+					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
+				}
+				log.Info("[output-mysql] executed ddl: ", stmt)
+
+			case *ast.AlterTableStmt:
+				if !matched {
+					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
+					return nil
+				}
+				shadow := *node
+				shadow.Table.Name = model.CIStr{
+					O: targetTable,
+				}
+				shadow.Table.Schema = model.CIStr{
+					O: targetSchema,
+				}
+				stmt := mysql.RestoreAlterTblStmt(&shadow)
+				_, err := output.db.Exec(stmt)
+				if err != nil {
+					if e := err.(*mysqldriver.MySQLError); e.Number == 1060 {
+						log.Errorf("[output-mysql] ignore duplicate column. ddl: %s. err: %s", stmt, e)
+					} else {
+						log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
+					}
+				} else {
+					log.Info("[output-mysql] executed ddl: ", stmt)
+					output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
+				}
+
+			default:
+				log.Info("[output-mysql] ignore ddl: ", msg.DdlMsg.Statement)
+			}
+
+			return nil
+
+		case core.MsgDML:
+			// none of the routes matched, skip this msg
+			if !matched {
+				continue
+			}
+
+			if targetTableDef == nil {
+				schema, err := output.targetSchemaStore.GetSchema(targetSchema)
+				if err != nil {
+					return errors.Trace(err)
+				}
+
+				targetTableDef = schema[targetTable]
+			}
+
+			// go through a serial of filters inside this output plugin
+			// right now, we only support AddMissingColumn
+			if _, err := AddMissingColumn(msg, targetTableDef); err != nil {
 				return errors.Trace(err)
 			}
 
-			targetTableDef = schema[targetTable]
+			targetMsgs = append(targetMsgs, msg)
 		}
-
-		// go through a serial of filters inside this output plugin
-		// right now, we only support AddMissingColumn
-		if _, err := AddMissingColumn(msg, targetTableDef); err != nil {
-			return errors.Trace(err)
-		}
-
-		targetMsgs = append(targetMsgs, msg)
 	}
 
 	batches := splitMsgBatchWithDelete(targetMsgs)
 
 	for _, batch := range batches {
-		if batch[0].Type == core.MsgDML && targetTableDef == nil {
-			return errors.Errorf("[output-mysql] schema: %v, table: %v, targetTable nil", batch[0].Database, batch[0].Table)
+		if batch[0].Type == core.MsgDDL {
+			return errors.Errorf("[output-mysql] shouldn't see ddl in sql engine")
+		}
+		if targetTableDef == nil {
+			return errors.Errorf("[output-mysql] schema %v.%v not found", batch[0].Database, batch[0].Table)
 		}
 
 		err := output.sqlExecutor.Execute(batch, targetTableDef)
 		if err != nil {
 			return errors.Trace(err)
-		}
-		if batch[0].DdlMsg != nil {
-			if err := output.targetSchemaStore.InvalidateCache(); err != nil {
-				return errors.Trace(err)
-			}
 		}
 	}
 

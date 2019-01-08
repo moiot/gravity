@@ -4,6 +4,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/parser/ast"
+
 	"github.com/moiot/gravity/pkg/mysql"
 	"github.com/moiot/gravity/pkg/utils"
 
@@ -318,6 +320,8 @@ func NewDeleteMsgs(
 func NewDDLMsg(
 	callback core.AfterMsgCommitFunc,
 	dbName string,
+	table string,
+	ast ast.StmtNode,
 	ddlSQL string,
 	ts int64,
 	position utils.MySQLBinlogPosition) *core.Msg {
@@ -326,7 +330,8 @@ func NewDDLMsg(
 		Type:                core.MsgDDL,
 		Timestamp:           time.Unix(ts, 0),
 		Database:            dbName,
-		DdlMsg:              &core.DDLMsg{Statement: ddlSQL},
+		Table:               table,
+		DdlMsg:              &core.DDLMsg{Statement: ddlSQL, AST: ast},
 		Done:                make(chan struct{}),
 		InputContext:        inputContext{op: ddl, position: position},
 		InputStreamKey:      utils.NewStringPtr(inputStreamKey),

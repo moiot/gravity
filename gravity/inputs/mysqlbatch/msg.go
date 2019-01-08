@@ -1,18 +1,20 @@
 package mysqlbatch
 
 import (
-	"github.com/moiot/gravity/position_store"
+	"database/sql"
 	"time"
 
+	"github.com/pingcap/errors"
+	"github.com/pingcap/parser/ast"
+
+	"github.com/pingcap/parser"
+	_ "github.com/pingcap/tidb/types/parser_driver"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/moiot/gravity/pkg/utils"
-
 	"github.com/moiot/gravity/pkg/core"
-
-	"database/sql"
-
 	"github.com/moiot/gravity/pkg/mysql"
+	"github.com/moiot/gravity/pkg/utils"
+	"github.com/moiot/gravity/position_store"
 	"github.com/moiot/gravity/schema_store"
 )
 
@@ -60,6 +62,32 @@ func NewMsg(
 	msg.Done = make(chan struct{})
 	msg.AfterCommitCallback = callbackFunc
 	msg.InputContext = position
+	msg.Metrics = core.Metrics{
+		MsgCreateTime: time.Now(),
+	}
+	return &msg
+}
+
+func NewCreateTableMsg(parser *parser.Parser, table *schema_store.Table, createTblStmt string) *core.Msg {
+	stmt, err := parser.ParseOneStmt(createTblStmt, "", "")
+	if err != nil {
+		log.Fatal(errors.Trace(err))
+	}
+	msg := core.Msg{
+		Host:      "",
+		Database:  table.Schema,
+		Table:     table.Name,
+		Timestamp: time.Now(),
+		DdlMsg: &core.DDLMsg{
+			Statement: createTblStmt,
+			AST:       stmt.(ast.DDLNode),
+		},
+	}
+
+	msg.Type = core.MsgDDL
+	msg.InputStreamKey = utils.NewStringPtr(utils.TableIdentity(table.Schema, table.Name))
+	msg.OutputStreamKey = utils.NewStringPtr("")
+	msg.Done = make(chan struct{})
 	msg.Metrics = core.Metrics{
 		MsgCreateTime: time.Now(),
 	}

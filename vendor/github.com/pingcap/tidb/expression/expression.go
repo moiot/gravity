@@ -17,19 +17,26 @@ import (
 	goJSON "encoding/json"
 	"fmt"
 
-	"github.com/juju/errors"
-	"github.com/pingcap/tidb/ast"
-	"github.com/pingcap/tidb/context"
-	"github.com/pingcap/tidb/model"
-	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/terror"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
-	"github.com/pingcap/tidb/terror"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/types/json"
+	"github.com/pingcap/tidb/util/chunk"
+)
+
+// These are byte flags used for `HashCode()`.
+const (
+	constantFlag       byte = 0
+	columnFlag         byte = 1
+	scalarFunctionFlag byte = 3
 )
 
 // EvalAstExpr evaluates ast expression directly.
-var EvalAstExpr func(expr ast.ExprNode, ctx context.Context) (types.Datum, error)
+var EvalAstExpr func(ctx sessionctx.Context, expr ast.ExprNode) (types.Datum, error)
 
 // Expression represents all scalar expression in SQL.
 type Expression interface {
@@ -37,28 +44,28 @@ type Expression interface {
 	goJSON.Marshaler
 
 	// Eval evaluates an expression through a row.
-	Eval(row types.Row) (types.Datum, error)
+	Eval(row chunk.Row) (types.Datum, error)
 
 	// EvalInt returns the int64 representation of expression.
-	EvalInt(row types.Row, sc *stmtctx.StatementContext) (val int64, isNull bool, err error)
+	EvalInt(ctx sessionctx.Context, row chunk.Row) (val int64, isNull bool, err error)
 
 	// EvalReal returns the float64 representation of expression.
-	EvalReal(row types.Row, sc *stmtctx.StatementContext) (val float64, isNull bool, err error)
+	EvalReal(ctx sessionctx.Context, row chunk.Row) (val float64, isNull bool, err error)
 
 	// EvalString returns the string representation of expression.
-	EvalString(row types.Row, sc *stmtctx.StatementContext) (val string, isNull bool, err error)
+	EvalString(ctx sessionctx.Context, row chunk.Row) (val string, isNull bool, err error)
 
 	// EvalDecimal returns the decimal representation of expression.
-	EvalDecimal(row types.Row, sc *stmtctx.StatementContext) (val *types.MyDecimal, isNull bool, err error)
+	EvalDecimal(ctx sessionctx.Context, row chunk.Row) (val *types.MyDecimal, isNull bool, err error)
 
 	// EvalTime returns the DATE/DATETIME/TIMESTAMP representation of expression.
-	EvalTime(row types.Row, sc *stmtctx.StatementContext) (val types.Time, isNull bool, err error)
+	EvalTime(ctx sessionctx.Context, row chunk.Row) (val types.Time, isNull bool, err error)
 
 	// EvalDuration returns the duration representation of expression.
-	EvalDuration(row types.Row, sc *stmtctx.StatementContext) (val types.Duration, isNull bool, err error)
+	EvalDuration(ctx sessionctx.Context, row chunk.Row) (val types.Duration, isNull bool, err error)
 
 	// EvalJSON returns the JSON representation of expression.
-	EvalJSON(row types.Row, sc *stmtctx.StatementContext) (val json.BinaryJSON, isNull bool, err error)
+	EvalJSON(ctx sessionctx.Context, row chunk.Row) (val json.BinaryJSON, isNull bool, err error)
 
 	// GetType gets the type that the expression returns.
 	GetType() *types.FieldType
@@ -67,7 +74,7 @@ type Expression interface {
 	Clone() Expression
 
 	// Equal checks whether two expressions are equal.
-	Equal(e Expression, ctx context.Context) bool
+	Equal(ctx sessionctx.Context, e Expression) bool
 
 	// IsCorrelated checks if this expression has correlated key.
 	IsCorrelated() bool
@@ -75,11 +82,21 @@ type Expression interface {
 	// Decorrelate try to decorrelate the expression by schema.
 	Decorrelate(schema *Schema) Expression
 
-	// ResolveIndices resolves indices by the given schema.
-	ResolveIndices(schema *Schema)
+	// ResolveIndices resolves indices by the given schema. It will copy the original expression and return the copied one.
+	ResolveIndices(schema *Schema) Expression
+
+	// resolveIndices is called inside the `ResolveIndices` It will perform on the expression itself.
+	resolveIndices(schema *Schema)
 
 	// ExplainInfo returns operator information to be explained.
 	ExplainInfo() string
+
+	// HashCode creates the hashcode for expression which can be used to identify itself from other expression.
+	// It generated as the following:
+	// Constant: ConstantFlag+encoded value
+	// Column: ColumnFlag+encoded value
+	// ScalarFunction: SFFlag+encoded function name + encoded arg_1 + encoded arg_2 + ...
+	HashCode(sc *stmtctx.StatementContext) []byte
 }
 
 // CNFExprs stands for a CNF expression.
@@ -95,11 +112,11 @@ func (e CNFExprs) Clone() CNFExprs {
 }
 
 // EvalBool evaluates expression list to a boolean value.
-func EvalBool(exprList CNFExprs, row types.Row, ctx context.Context) (bool, error) {
+func EvalBool(ctx sessionctx.Context, exprList CNFExprs, row chunk.Row) (bool, error) {
 	for _, expr := range exprList {
 		data, err := expr.Eval(row)
 		if err != nil {
-			return false, errors.Trace(err)
+			return false, err
 		}
 		if data.IsNull() {
 			return false, nil
@@ -107,7 +124,7 @@ func EvalBool(exprList CNFExprs, row types.Row, ctx context.Context) (bool, erro
 
 		i, err := data.ToBool(ctx.GetSessionVars().StmtCtx)
 		if err != nil {
-			return false, errors.Trace(err)
+			return false, err
 		}
 		if i == 0 {
 			return false, nil
@@ -117,7 +134,7 @@ func EvalBool(exprList CNFExprs, row types.Row, ctx context.Context) (bool, erro
 }
 
 // composeConditionWithBinaryOp composes condition with binary operator into a balance deep tree, which benefits a lot for pb decoder/encoder.
-func composeConditionWithBinaryOp(ctx context.Context, conditions []Expression, funcName string) Expression {
+func composeConditionWithBinaryOp(ctx sessionctx.Context, conditions []Expression, funcName string) Expression {
 	length := len(conditions)
 	if length == 0 {
 		return nil
@@ -133,12 +150,12 @@ func composeConditionWithBinaryOp(ctx context.Context, conditions []Expression, 
 }
 
 // ComposeCNFCondition composes CNF items into a balance deep CNF tree, which benefits a lot for pb decoder/encoder.
-func ComposeCNFCondition(ctx context.Context, conditions ...Expression) Expression {
+func ComposeCNFCondition(ctx sessionctx.Context, conditions ...Expression) Expression {
 	return composeConditionWithBinaryOp(ctx, conditions, ast.LogicAnd)
 }
 
 // ComposeDNFCondition composes DNF items into a balance deep DNF tree.
-func ComposeDNFCondition(ctx context.Context, conditions ...Expression) Expression {
+func ComposeDNFCondition(ctx sessionctx.Context, conditions ...Expression) Expression {
 	return composeConditionWithBinaryOp(ctx, conditions, ast.LogicOr)
 }
 
@@ -212,7 +229,7 @@ func SplitDNFItems(onExpr Expression) []Expression {
 
 // EvaluateExprWithNull sets columns in schema as null and calculate the final result of the scalar function.
 // If the Expression is a non-constant value, it means the result is unknown.
-func EvaluateExprWithNull(ctx context.Context, schema *Schema, expr Expression) Expression {
+func EvaluateExprWithNull(ctx sessionctx.Context, schema *Schema, expr Expression) Expression {
 	switch x := expr.(type) {
 	case *ScalarFunction:
 		args := make([]Expression, len(x.GetArgs()))
@@ -230,17 +247,17 @@ func EvaluateExprWithNull(ctx context.Context, schema *Schema, expr Expression) 
 			return FoldConstant(x)
 		}
 	}
-	return expr.Clone()
+	return expr
 }
 
 // TableInfo2Schema converts table info to schema with empty DBName.
-func TableInfo2Schema(tbl *model.TableInfo) *Schema {
-	return TableInfo2SchemaWithDBName(model.CIStr{}, tbl)
+func TableInfo2Schema(ctx sessionctx.Context, tbl *model.TableInfo) *Schema {
+	return TableInfo2SchemaWithDBName(ctx, model.CIStr{}, tbl)
 }
 
 // TableInfo2SchemaWithDBName converts table info to schema.
-func TableInfo2SchemaWithDBName(dbName model.CIStr, tbl *model.TableInfo) *Schema {
-	cols := ColumnInfos2ColumnsWithDBName(dbName, tbl.Name, tbl.Columns)
+func TableInfo2SchemaWithDBName(ctx sessionctx.Context, dbName model.CIStr, tbl *model.TableInfo) *Schema {
+	cols := ColumnInfos2ColumnsWithDBName(ctx, dbName, tbl.Name, tbl.Columns)
 	keys := make([]KeyInfo, 0, len(tbl.Indices)+1)
 	for _, idx := range tbl.Indices {
 		if !idx.Unique || idx.State != model.StatePublic {
@@ -283,15 +300,19 @@ func TableInfo2SchemaWithDBName(dbName model.CIStr, tbl *model.TableInfo) *Schem
 }
 
 // ColumnInfos2ColumnsWithDBName converts a slice of ColumnInfo to a slice of Column.
-func ColumnInfos2ColumnsWithDBName(dbName, tblName model.CIStr, colInfos []*model.ColumnInfo) []*Column {
+func ColumnInfos2ColumnsWithDBName(ctx sessionctx.Context, dbName, tblName model.CIStr, colInfos []*model.ColumnInfo) []*Column {
 	columns := make([]*Column, 0, len(colInfos))
-	for i, col := range colInfos {
+	for _, col := range colInfos {
+		if col.State != model.StatePublic {
+			continue
+		}
 		newCol := &Column{
 			ColName:  col.Name,
 			TblName:  tblName,
 			DBName:   dbName,
 			RetType:  &col.FieldType,
-			Position: i,
+			ID:       col.ID,
+			UniqueID: ctx.GetSessionVars().AllocPlanColumnID(),
 			Index:    col.Offset,
 		}
 		columns = append(columns, newCol)
@@ -300,10 +321,10 @@ func ColumnInfos2ColumnsWithDBName(dbName, tblName model.CIStr, colInfos []*mode
 }
 
 // NewValuesFunc creates a new values function.
-func NewValuesFunc(offset int, retTp *types.FieldType, ctx context.Context) *ScalarFunction {
+func NewValuesFunc(ctx sessionctx.Context, offset int, retTp *types.FieldType) *ScalarFunction {
 	fc := &valuesFunctionClass{baseFunctionClass{ast.Values, 0, 0}, offset, retTp}
 	bt, err := fc.getFunction(ctx, nil)
-	terror.Log(errors.Trace(err))
+	terror.Log(err)
 	return &ScalarFunction{
 		FuncName: model.NewCIStr(ast.Values),
 		RetType:  retTp,

@@ -1,9 +1,10 @@
 package batch_table_scheduler
 
 import (
-	"github.com/moiot/gravity/pkg/utils/retry"
 	"sync"
 	"time"
+
+	"github.com/moiot/gravity/pkg/utils/retry"
 
 	"github.com/moiot/gravity/gravity/schedulers/metrics"
 
@@ -24,17 +25,18 @@ import (
 )
 
 const (
-	DefaultNrRetries = 3
+	DefaultNrRetries        = 3
 	DefaultRetrySleepString = "1s"
-	DefaultRetrySleep = time.Second
+	DefaultRetrySleep       = time.Second
 )
+
 var DefaultConfig = map[string]interface{}{
 	"nr-worker":           1,
 	"batch-size":          1,
 	"queue-size":          1024,
 	"sliding-window-size": 1024 * 10,
-	"nr-retries": DefaultNrRetries,
-	"retry-sleep": DefaultRetrySleepString,
+	"nr-retries":          DefaultNrRetries,
+	"retry-sleep":         DefaultRetrySleepString,
 }
 
 // batch_scheduler package implements scheduler that dispatch job to workers that
@@ -53,13 +55,13 @@ var DefaultConfig = map[string]interface{}{
 const BatchTableSchedulerName = "batch-table-scheduler"
 
 type BatchSchedulerConfig struct {
-	NrWorker          int `mapstructure:"nr-worker"json:"nr-worker"`
-	MaxBatchPerWorker int `mapstructure:"batch-size"json:"batch-size"`
-	QueueSize         int `mapstructure:"queue-size"json:"queue-size"`
-	SlidingWindowSize int `mapstructure:"sliding-window-size"json:"sliding-window-size"`
-	NrRetries int `mapstructure:"nr-retries" json:"nr-retries"`
-	RetrySleepString string `mapstructure:"retry-sleep" json:"retry-sleep"'`
-	RetrySleep time.Duration `mapstructure:"-" json:"-"'`
+	NrWorker          int           `mapstructure:"nr-worker"json:"nr-worker"`
+	MaxBatchPerWorker int           `mapstructure:"batch-size"json:"batch-size"`
+	QueueSize         int           `mapstructure:"queue-size"json:"queue-size"`
+	SlidingWindowSize int           `mapstructure:"sliding-window-size"json:"sliding-window-size"`
+	NrRetries         int           `mapstructure:"nr-retries" json:"nr-retries"`
+	RetrySleepString  string        `mapstructure:"retry-sleep" json:"retry-sleep"`
+	RetrySleep        time.Duration `mapstructure:"-" json:"-"`
 }
 
 type slidingWindowItem struct {
@@ -76,6 +78,7 @@ func (item *slidingWindowItem) BeforeWindowMoveForward() {
 			log.Fatalf("callback failed: %v", errors.ErrorStack(err))
 		}
 	}
+	close(item.Done)
 }
 
 func (item *slidingWindowItem) EventTime() time.Time {
@@ -132,7 +135,6 @@ func (scheduler *batchScheduler) Configure(pipelineName string, configData map[s
 	} else {
 		schedulerConfig.RetrySleep = DefaultRetrySleep
 	}
-
 
 	scheduler.cfg = &schedulerConfig
 
@@ -256,7 +258,7 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 		}
 		scheduler.windowMutex.Unlock()
 		item := &slidingWindowItem{*msg}
-		scheduler.slidingWindows[key].AddWindowItem(item)
+		window.AddWindowItem(item)
 	}
 
 	return scheduler.dispatchMsg(msg, scheduler.cfg.MaxBatchPerWorker, scheduler.cfg.NrWorker)
@@ -348,9 +350,7 @@ func (scheduler *batchScheduler) dispatchMsg(msg *core.Msg, maxBatchPerWorker in
 		var batch []*core.Msg
 		for msg := range c {
 			batch = append(batch, msg)
-
 			if scheduler.needFlush(c, batch, maxBatchPerWorker) {
-
 				// if we found any job in the working set, we need to wait.
 				// note that we need to do this in batch, otherwise there might be deadlock,
 				// since jobs are put into worker by batch

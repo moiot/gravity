@@ -182,6 +182,12 @@ func (output *AsyncKafka) Start(msgAcker core.MsgAcker) error {
 
 func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 	for _, msg := range msgs {
+		if msg.Type == core.MsgDDL {
+			if err := output.msgAcker.AckMsg(msg); err != nil {
+				return errors.Trace(err)
+			}
+			continue
+		}
 		matched := false
 		var topic string
 		for _, route := range output.routes {

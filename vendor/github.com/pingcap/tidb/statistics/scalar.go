@@ -16,9 +16,8 @@ package statistics
 import (
 	"encoding/binary"
 	"math"
-	"time"
 
-	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/types"
 )
@@ -67,13 +66,9 @@ func convertDatumToScalar(value *types.Datum, commonPfxLen int) float64 {
 				Fsp:  types.DefaultFsp,
 			}
 		case mysql.TypeTimestamp:
-			minTime = types.Time{
-				Time: types.MinTimestamp,
-				Type: mysql.TypeTimestamp,
-				Fsp:  types.DefaultFsp,
-			}
+			minTime = types.MinTimestamp
 		}
-		sc := &stmtctx.StatementContext{TimeZone: time.UTC}
+		sc := &stmtctx.StatementContext{TimeZone: types.BoundTimezone}
 		return float64(valueTime.Sub(sc, &minTime).Duration)
 	case types.KindString, types.KindBytes:
 		bytes := value.GetBytes()
@@ -131,7 +126,7 @@ func (hg *Histogram) calcFraction(index int, value *types.Datum) float64 {
 	case types.KindUint64:
 		return calcFraction(float64(lower.GetUint64(0)), float64(upper.GetUint64(0)), float64(value.GetUint64()))
 	case types.KindMysqlDuration:
-		return calcFraction(float64(lower.GetDuration(0).Duration), float64(upper.GetDuration(0).Duration), float64(value.GetMysqlDuration().Duration))
+		return calcFraction(float64(lower.GetDuration(0, 0).Duration), float64(upper.GetDuration(0, 0).Duration), float64(value.GetMysqlDuration().Duration))
 	case types.KindMysqlDecimal, types.KindMysqlTime:
 		return calcFraction(hg.scalars[index].lower, hg.scalars[index].upper, convertDatumToScalar(value, 0))
 	case types.KindBytes, types.KindString:
@@ -158,4 +153,25 @@ func convertBytesToScalar(value []byte) float64 {
 	var buf [8]byte
 	copy(buf[:], value)
 	return float64(binary.BigEndian.Uint64(buf[:]))
+}
+
+func calcFraction4Datums(lower, upper, value *types.Datum) float64 {
+	switch value.Kind() {
+	case types.KindFloat32:
+		return calcFraction(float64(lower.GetFloat32()), float64(upper.GetFloat32()), float64(value.GetFloat32()))
+	case types.KindFloat64:
+		return calcFraction(lower.GetFloat64(), upper.GetFloat64(), value.GetFloat64())
+	case types.KindInt64:
+		return calcFraction(float64(lower.GetInt64()), float64(upper.GetInt64()), float64(value.GetInt64()))
+	case types.KindUint64:
+		return calcFraction(float64(lower.GetUint64()), float64(upper.GetUint64()), float64(value.GetUint64()))
+	case types.KindMysqlDuration:
+		return calcFraction(float64(lower.GetMysqlDuration().Duration), float64(upper.GetMysqlDuration().Duration), float64(value.GetMysqlDuration().Duration))
+	case types.KindMysqlDecimal, types.KindMysqlTime:
+		return calcFraction(convertDatumToScalar(lower, 0), convertDatumToScalar(upper, 0), convertDatumToScalar(value, 0))
+	case types.KindBytes, types.KindString:
+		commonPfxLen := commonPrefixLength(lower.GetBytes(), upper.GetBytes())
+		return calcFraction(convertDatumToScalar(lower, commonPfxLen), convertDatumToScalar(upper, commonPfxLen), convertDatumToScalar(value, commonPfxLen))
+	}
+	return 0.5
 }

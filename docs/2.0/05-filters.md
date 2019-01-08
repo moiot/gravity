@@ -22,6 +22,15 @@ match-table = "test_table_*"
 
 上面的例子里，所有 `schema` 为 `test`，`table` 名字为 `test_table_*` 开头的消息都会被过滤掉。
 
+```toml
+[[filters]]
+type = "reject"
+match-schema = "test"
+match-dml-op = "delete"
+```
+
+上面的例子里，所有 `schema` 为 `test` 的 `delete` 类型 `DML` 都会被过滤掉。
+
 ### delete-dml-column
 ```toml
 [[filters]]

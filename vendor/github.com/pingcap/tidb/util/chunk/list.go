@@ -14,17 +14,22 @@
 package chunk
 
 import (
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/memory"
 )
 
 // List holds a slice of chunks, use to append rows with max chunk size properly handled.
 type List struct {
-	fieldTypes   []*types.FieldType
-	maxChunkSize int
-	length       int
-	chunks       []*Chunk
-	freelist     []*Chunk
+	fieldTypes    []*types.FieldType
+	initChunkSize int
+	maxChunkSize  int
+	length        int
+	chunks        []*Chunk
+	freelist      []*Chunk
+
+	memTracker  *memory.Tracker // track memory usage.
+	consumedIdx int             // chunk index in "chunks", has been consumed.
 }
 
 // RowPtr is used to get a row from a list.
@@ -34,13 +39,21 @@ type RowPtr struct {
 	RowIdx uint32
 }
 
-// NewList creates a new List with field types and max chunk size.
-func NewList(fieldTypes []*types.FieldType, maxChunkSize int) *List {
+// NewList creates a new List with field types, init chunk size and max chunk size.
+func NewList(fieldTypes []*types.FieldType, initChunkSize, maxChunkSize int) *List {
 	l := &List{
-		fieldTypes:   fieldTypes,
-		maxChunkSize: maxChunkSize,
+		fieldTypes:    fieldTypes,
+		initChunkSize: initChunkSize,
+		maxChunkSize:  maxChunkSize,
+		memTracker:    memory.NewTracker("chunk.List", -1),
+		consumedIdx:   -1,
 	}
 	return l
+}
+
+// GetMemTracker returns the memory tracker of this List.
+func (l *List) GetMemTracker() *memory.Tracker {
+	return l.memTracker
 }
 
 // Len returns the length of the List.
@@ -61,9 +74,13 @@ func (l *List) GetChunk(chkIdx int) *Chunk {
 // AppendRow appends a row to the List, the row is copied to the List.
 func (l *List) AppendRow(row Row) RowPtr {
 	chkIdx := len(l.chunks) - 1
-	if chkIdx == -1 || l.chunks[chkIdx].NumRows() >= l.maxChunkSize {
+	if chkIdx == -1 || l.chunks[chkIdx].NumRows() >= l.chunks[chkIdx].Capacity() || chkIdx == l.consumedIdx {
 		newChk := l.allocChunk()
 		l.chunks = append(l.chunks, newChk)
+		if chkIdx != l.consumedIdx {
+			l.memTracker.Consume(l.chunks[chkIdx].MemoryUsage())
+			l.consumedIdx = chkIdx
+		}
 		chkIdx++
 	}
 	chk := l.chunks[chkIdx]
@@ -76,9 +93,16 @@ func (l *List) AppendRow(row Row) RowPtr {
 // Add adds a chunk to the List, the chunk may be modified later by the list.
 // Caller must make sure the input chk is not empty and not used any more and has the same field types.
 func (l *List) Add(chk *Chunk) {
+	// FixMe: we should avoid add a Chunk that chk.NumRows() > list.maxChunkSize.
 	if chk.NumRows() == 0 {
-		panic(" add empty chunk")
+		panic("chunk appended to List should have at least 1 row")
 	}
+	if chkIdx := len(l.chunks) - 1; l.consumedIdx != chkIdx {
+		l.memTracker.Consume(l.chunks[chkIdx].MemoryUsage())
+		l.consumedIdx = chkIdx
+	}
+	l.memTracker.Consume(chk.MemoryUsage())
+	l.consumedIdx++
 	l.chunks = append(l.chunks, chk)
 	l.length += chk.NumRows()
 	return
@@ -88,11 +112,15 @@ func (l *List) allocChunk() (chk *Chunk) {
 	if len(l.freelist) > 0 {
 		lastIdx := len(l.freelist) - 1
 		chk = l.freelist[lastIdx]
-		chk.Reset()
 		l.freelist = l.freelist[:lastIdx]
+		l.memTracker.Consume(-chk.MemoryUsage())
+		chk.Reset()
 		return
 	}
-	return NewChunk(l.fieldTypes)
+	if len(l.chunks) > 0 {
+		return Renew(l.chunks[len(l.chunks)-1], l.maxChunkSize)
+	}
+	return New(l.fieldTypes, l.initChunkSize, l.maxChunkSize)
 }
 
 // GetRow gets a Row from the list by RowPtr.
@@ -103,9 +131,43 @@ func (l *List) GetRow(ptr RowPtr) Row {
 
 // Reset resets the List.
 func (l *List) Reset() {
+	if lastIdx := len(l.chunks) - 1; lastIdx != l.consumedIdx {
+		l.memTracker.Consume(l.chunks[lastIdx].MemoryUsage())
+	}
 	l.freelist = append(l.freelist, l.chunks...)
 	l.chunks = l.chunks[:0]
 	l.length = 0
+	l.consumedIdx = -1
+}
+
+// PreAlloc4Row pre-allocates the storage memory for a Row.
+// NOTE:
+// 1. The List must be empty or holds no useful data.
+// 2. The schema of the Row must be the same with the List.
+// 3. This API is paired with the `Insert()` function, which inserts all the
+//    rows data into the List after the pre-allocation.
+func (l *List) PreAlloc4Row(row Row) (ptr RowPtr) {
+	chkIdx := len(l.chunks) - 1
+	if chkIdx == -1 || l.chunks[chkIdx].NumRows() >= l.chunks[chkIdx].Capacity() {
+		newChk := l.allocChunk()
+		l.chunks = append(l.chunks, newChk)
+		if chkIdx != l.consumedIdx {
+			l.memTracker.Consume(l.chunks[chkIdx].MemoryUsage())
+			l.consumedIdx = chkIdx
+		}
+		chkIdx++
+	}
+	chk := l.chunks[chkIdx]
+	rowIdx := chk.PreAlloc(row)
+	l.length++
+	return RowPtr{ChkIdx: uint32(chkIdx), RowIdx: uint32(rowIdx)}
+}
+
+// Insert inserts `row` on the position specified by `ptr`.
+// Note: Insert will cover the origin data, it should be called after
+// PreAlloc.
+func (l *List) Insert(ptr RowPtr, row Row) {
+	l.chunks[ptr.ChkIdx].Insert(int(ptr.RowIdx), row)
 }
 
 // ListWalkFunc is used to walk the list.
@@ -124,15 +186,4 @@ func (l *List) Walk(walkFunc ListWalkFunc) error {
 		}
 	}
 	return nil
-}
-
-// MemoryUsage calculates the total memory usage of a list.
-func (l *List) MemoryUsage() (sum int64) {
-	for _, c := range l.chunks {
-		sum += c.MemoryUsage()
-	}
-	for _, f := range l.freelist {
-		sum += f.MemoryUsage()
-	}
-	return sum
 }

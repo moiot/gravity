@@ -16,8 +16,7 @@ package chunk
 import (
 	"sort"
 
-	"github.com/pingcap/tidb/mysql"
-	"github.com/pingcap/tidb/terror"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/types/json"
 )
@@ -129,8 +128,8 @@ func cmpDuration(l Row, lCol int, r Row, rCol int) int {
 	if lNull || rNull {
 		return cmpNull(lNull, rNull)
 	}
-	lDur, rDur := l.GetDuration(lCol), r.GetDuration(rCol)
-	return types.CompareInt64(int64(lDur.Duration), int64(rDur.Duration))
+	lDur, rDur := l.GetDuration(lCol, 0).Duration, r.GetDuration(rCol, 0).Duration
+	return types.CompareInt64(int64(lDur), int64(rDur))
 }
 
 func cmpNameValue(l Row, lCol int, r Row, rCol int) int {
@@ -150,11 +149,7 @@ func cmpBit(l Row, lCol int, r Row, rCol int) int {
 	}
 	lBit := types.BinaryLiteral(l.GetBytes(lCol))
 	rBit := types.BinaryLiteral(r.GetBytes(rCol))
-	lUint, err := lBit.ToInt()
-	terror.Log(err)
-	rUint, err := rBit.ToInt()
-	terror.Log(err)
-	return types.CompareUint64(lUint, rUint)
+	return lBit.Compare(rBit)
 }
 
 func cmpJSON(l Row, lCol int, r Row, rCol int) int {
@@ -166,7 +161,8 @@ func cmpJSON(l Row, lCol int, r Row, rCol int) int {
 	return json.CompareBinary(lJ, rJ)
 }
 
-func compare(row Row, colIdx int, ad *types.Datum) int {
+// Compare compares the value with ad.
+func Compare(row Row, colIdx int, ad *types.Datum) int {
 	switch ad.Kind() {
 	case types.KindNull:
 		if row.IsNull(colIdx) {
@@ -194,8 +190,8 @@ func compare(row Row, colIdx int, ad *types.Datum) int {
 		l, r := row.GetMyDecimal(colIdx), ad.GetMysqlDecimal()
 		return l.Compare(r)
 	case types.KindMysqlDuration:
-		l, r := row.GetDuration(colIdx), ad.GetMysqlDuration()
-		return types.CompareInt64(int64(l.Duration), int64(r.Duration))
+		l, r := row.GetDuration(colIdx, 0).Duration, ad.GetMysqlDuration().Duration
+		return types.CompareInt64(int64(l), int64(r))
 	case types.KindMysqlEnum:
 		l, r := row.GetEnum(colIdx).Value, ad.GetMysqlEnum().Value
 		return types.CompareUint64(l, r)
@@ -214,14 +210,22 @@ func compare(row Row, colIdx int, ad *types.Datum) int {
 }
 
 // LowerBound searches on the non-decreasing column colIdx,
-// returns the smallest index i such that the value at row i is not less than `ad`.
-func (c *Chunk) LowerBound(colIdx int, ad *types.Datum) (index int, match bool) {
+// returns the smallest index i such that the value at row i is not less than `d`.
+func (c *Chunk) LowerBound(colIdx int, d *types.Datum) (index int, match bool) {
 	index = sort.Search(c.NumRows(), func(i int) bool {
-		cmp := compare(c.GetRow(i), colIdx, ad)
+		cmp := Compare(c.GetRow(i), colIdx, d)
 		if cmp == 0 {
 			match = true
 		}
 		return cmp >= 0
 	})
 	return
+}
+
+// UpperBound searches on the non-decreasing column colIdx,
+// returns the smallest index i such that the value at row i is larger than `d`.
+func (c *Chunk) UpperBound(colIdx int, d *types.Datum) int {
+	return sort.Search(c.NumRows(), func(i int) bool {
+		return Compare(c.GetRow(i), colIdx, d) > 0
+	})
 }

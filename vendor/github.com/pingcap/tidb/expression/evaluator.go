@@ -14,8 +14,7 @@
 package expression
 
 import (
-	"github.com/juju/errors"
-	"github.com/pingcap/tidb/context"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/util/chunk"
 )
 
@@ -26,7 +25,7 @@ type columnEvaluator struct {
 // run evaluates "Column" expressions.
 // NOTE: It should be called after all the other expressions are evaluated
 //	     since it will change the content of the input Chunk.
-func (e *columnEvaluator) run(ctx context.Context, input, output *chunk.Chunk) {
+func (e *columnEvaluator) run(ctx sessionctx.Context, input, output *chunk.Chunk) {
 	for inputIdx, outputIdxes := range e.inputIdxToOutputIdxes {
 		output.SwapColumn(outputIdxes[0], input, inputIdx)
 		for i, length := 1, len(outputIdxes); i < length; i++ {
@@ -41,59 +40,59 @@ type defaultEvaluator struct {
 	vectorizable bool
 }
 
-func (e *defaultEvaluator) run(ctx context.Context, input, output *chunk.Chunk) error {
-	sc := ctx.GetSessionVars().StmtCtx
+func (e *defaultEvaluator) run(ctx sessionctx.Context, input, output *chunk.Chunk) error {
+	iter := chunk.NewIterator4Chunk(input)
 	if e.vectorizable {
 		for i := range e.outputIdxes {
-			err := evalOneColumn(sc, e.exprs[i], input, output, e.outputIdxes[i])
+			err := evalOneColumn(ctx, e.exprs[i], iter, output, e.outputIdxes[i])
 			if err != nil {
-				return errors.Trace(err)
+				return err
 			}
 		}
 		return nil
 	}
 
-	for row := input.Begin(); row != input.End(); row = row.Next() {
+	for row := iter.Begin(); row != iter.End(); row = iter.Next() {
 		for i := range e.outputIdxes {
-			err := evalOneCell(sc, e.exprs[i], row, output, e.outputIdxes[i])
+			err := evalOneCell(ctx, e.exprs[i], row, output, e.outputIdxes[i])
 			if err != nil {
-				return errors.Trace(err)
+				return err
 			}
 		}
 	}
 	return nil
 }
 
-// EvaluatorSuit is responsible for the evaluation of a list of expressions.
-// It seperates them to "column" and "other" expressions and evaluates "other"
+// EvaluatorSuite is responsible for the evaluation of a list of expressions.
+// It separates them to "column" and "other" expressions and evaluates "other"
 // expressions before "column" expressions.
-type EvaluatorSuit struct {
+type EvaluatorSuite struct {
 	*columnEvaluator  // Evaluator for column expressions.
 	*defaultEvaluator // Evaluator for other expressions.
 }
 
-// NewEvaluatorSuit creates an EvaluatorSuit to evaluate all the exprs.
-func NewEvaluatorSuit(exprs []Expression) *EvaluatorSuit {
-	e := &EvaluatorSuit{}
+// NewEvaluatorSuite creates an EvaluatorSuite to evaluate all the exprs.
+// avoidColumnEvaluator can be removed after column pool is supported.
+func NewEvaluatorSuite(exprs []Expression, avoidColumnEvaluator bool) *EvaluatorSuite {
+	e := &EvaluatorSuite{}
 
-	for i, expr := range exprs {
-		switch x := expr.(type) {
-		case *Column:
+	for i := 0; i < len(exprs); i++ {
+		if col, isCol := exprs[i].(*Column); isCol && !avoidColumnEvaluator {
 			if e.columnEvaluator == nil {
 				e.columnEvaluator = &columnEvaluator{inputIdxToOutputIdxes: make(map[int][]int)}
 			}
-			inputIdx, outputIdx := x.Index, i
+			inputIdx, outputIdx := col.Index, i
 			e.columnEvaluator.inputIdxToOutputIdxes[inputIdx] = append(e.columnEvaluator.inputIdxToOutputIdxes[inputIdx], outputIdx)
-		default:
-			if e.defaultEvaluator == nil {
-				e.defaultEvaluator = &defaultEvaluator{
-					outputIdxes: make([]int, 0, len(exprs)),
-					exprs:       make([]Expression, 0, len(exprs)),
-				}
-			}
-			e.defaultEvaluator.exprs = append(e.defaultEvaluator.exprs, x)
-			e.defaultEvaluator.outputIdxes = append(e.defaultEvaluator.outputIdxes, i)
+			continue
 		}
+		if e.defaultEvaluator == nil {
+			e.defaultEvaluator = &defaultEvaluator{
+				outputIdxes: make([]int, 0, len(exprs)),
+				exprs:       make([]Expression, 0, len(exprs)),
+			}
+		}
+		e.defaultEvaluator.exprs = append(e.defaultEvaluator.exprs, exprs[i])
+		e.defaultEvaluator.outputIdxes = append(e.defaultEvaluator.outputIdxes, i)
 	}
 
 	if e.defaultEvaluator != nil {
@@ -102,13 +101,18 @@ func NewEvaluatorSuit(exprs []Expression) *EvaluatorSuit {
 	return e
 }
 
-// Run evaluates all the expressions hold by this EvaluatorSuit.
+// Vectorizable checks whether this EvaluatorSuite can use vectorizd execution mode.
+func (e *EvaluatorSuite) Vectorizable() bool {
+	return e.defaultEvaluator == nil || e.defaultEvaluator.vectorizable
+}
+
+// Run evaluates all the expressions hold by this EvaluatorSuite.
 // NOTE: "defaultEvaluator" must be evaluated before "columnEvaluator".
-func (e *EvaluatorSuit) Run(ctx context.Context, input, output *chunk.Chunk) error {
+func (e *EvaluatorSuite) Run(ctx sessionctx.Context, input, output *chunk.Chunk) error {
 	if e.defaultEvaluator != nil {
 		err := e.defaultEvaluator.run(ctx, input, output)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 

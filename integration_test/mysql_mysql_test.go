@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	_ "net/http/pprof"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/moiot/gravity/pkg/consts"
 
 	"github.com/moiot/gravity/pkg/core"
 
@@ -23,12 +26,17 @@ import (
 
 func init() {
 	db := mysql_test.MustCreateSourceDBConn()
-	_, err := db.Exec("drop database if exists drc")
+	_, err := db.Exec("drop database if exists " + consts.GravityDBName)
 	if err != nil {
 		panic(err)
 	}
 	_ = db.Close()
-	log.Println("dropped db drc")
+	go func() {
+		err = http.ListenAndServe(":8080", nil)
+		if err != nil {
+			log.Println("http error", err)
+		}
+	}()
 }
 
 func TestMySQLToMySQLStream(t *testing.T) {
@@ -53,7 +61,7 @@ func TestMySQLToMySQLStream(t *testing.T) {
 			Concurrency: 5,
 		},
 	}
-	generator.SetupTestTables()
+	generator.SetupTestTables(true)
 
 	sourceDBConfig := mysql_test.SourceDBConfig()
 	targetDBConfig := mysql_test.TargetDBConfig()
@@ -79,7 +87,7 @@ func TestMySQLToMySQLStream(t *testing.T) {
 					"password": targetDBConfig.Password,
 					"port":     targetDBConfig.Port,
 				},
-
+				"enable-ddl": true,
 				"routes": []map[string]interface{}{
 					{
 						"match-schema":  sourceDBName,
@@ -144,7 +152,7 @@ func TestMySQLBatch(t *testing.T) {
 			Concurrency: 5,
 		},
 	}
-	tables := generator.SetupTestTables()
+	tables := generator.SetupTestTables(false)
 	generator.SeedRows()
 
 	sourceDBConfig := mysql_test.SourceDBConfig()
@@ -187,6 +195,7 @@ func TestMySQLBatch(t *testing.T) {
 						"target-schema": targetDBName,
 					},
 				},
+				"enable-ddl": true,
 			},
 		},
 	}
@@ -225,7 +234,7 @@ func TestMySQLToMySQLReplication(t *testing.T) {
 			Concurrency: 5,
 		},
 	}
-	tables := generator.SetupTestTables()
+	tables := generator.SetupTestTables(false)
 	generator.SeedRows()
 
 	sourceDBConfig := mysql_test.SourceDBConfig()
@@ -268,6 +277,7 @@ func TestMySQLToMySQLReplication(t *testing.T) {
 						"target-schema": targetDBName,
 					},
 				},
+				"enable-ddl": true,
 			},
 		},
 	}
@@ -336,7 +346,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 			Concurrency: 5,
 		},
 	}
-	tables := generator.SetupTestTables()
+	tables := generator.SetupTestTables(false)
 	generator.SeedRows()
 
 	sourceDBConfig := mysql_test.SourceDBConfig()
@@ -377,6 +387,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 						"target-schema": targetDBName,
 					},
 				},
+				"enable-ddl": true,
 			},
 		},
 	}

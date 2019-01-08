@@ -14,31 +14,29 @@
 package executor
 
 import (
+	"context"
+
 	"github.com/cznic/mathutil"
-	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/util/chunk"
-	goctx "golang.org/x/net/context"
 )
 
 // ExplainExec represents an explain executor.
 type ExplainExec struct {
 	baseExecutor
 
-	rows   [][]string
-	cursor int
+	explain     *core.Explain
+	analyzeExec Executor
+	rows        [][]string
+	cursor      int
 }
 
-// Next implements Execution Next interface.
-func (e *ExplainExec) Next(goCtx goctx.Context) (Row, error) {
-	if e.cursor >= len(e.rows) {
-		return nil, nil
+// Open implements the Executor Open interface.
+func (e *ExplainExec) Open(ctx context.Context) error {
+	if e.analyzeExec != nil {
+		return e.analyzeExec.Open(ctx)
 	}
-	resultRow := make([]types.Datum, 0, len(e.rows[0]))
-	for i := range e.rows[e.cursor] {
-		resultRow = append(resultRow, types.NewStringDatum(e.rows[e.cursor][i]))
-	}
-	e.cursor++
-	return resultRow, nil
+	return nil
 }
 
 // Close implements the Executor Close interface.
@@ -47,14 +45,22 @@ func (e *ExplainExec) Close() error {
 	return nil
 }
 
-// NextChunk implements the Executor NextChunk interface.
-func (e *ExplainExec) NextChunk(goCtx goctx.Context, chk *chunk.Chunk) error {
-	chk.Reset()
+// Next implements the Executor Next interface.
+func (e *ExplainExec) Next(ctx context.Context, chk *chunk.Chunk) error {
+	if e.rows == nil {
+		var err error
+		e.rows, err = e.generateExplainInfo(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	chk.GrowAndReset(e.maxChunkSize)
 	if e.cursor >= len(e.rows) {
 		return nil
 	}
 
-	numCurRows := mathutil.Min(e.maxChunkSize, len(e.rows)-e.cursor)
+	numCurRows := mathutil.Min(chk.Capacity(), len(e.rows)-e.cursor)
 	for i := e.cursor; i < e.cursor+numCurRows; i++ {
 		for j := range e.rows[i] {
 			chk.AppendString(j, e.rows[i][j])
@@ -62,4 +68,29 @@ func (e *ExplainExec) NextChunk(goCtx goctx.Context, chk *chunk.Chunk) error {
 	}
 	e.cursor += numCurRows
 	return nil
+}
+
+func (e *ExplainExec) generateExplainInfo(ctx context.Context) ([][]string, error) {
+	if e.analyzeExec != nil {
+		chk := e.analyzeExec.newFirstChunk()
+		for {
+			err := e.analyzeExec.Next(ctx, chk)
+			if err != nil {
+				return nil, err
+			}
+			if chk.NumRows() == 0 {
+				break
+			}
+		}
+		if err := e.analyzeExec.Close(); err != nil {
+			return nil, err
+		}
+	}
+	if err := e.explain.RenderResult(); err != nil {
+		return nil, err
+	}
+	if e.analyzeExec != nil {
+		e.ctx.GetSessionVars().StmtCtx.RuntimeStatsColl = nil
+	}
+	return e.explain.Rows, nil
 }
