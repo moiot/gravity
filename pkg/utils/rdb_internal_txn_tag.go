@@ -51,5 +51,5 @@ func InitInternalTxnTags(db *sql.DB) error {
 
 func GenerateTxnTagSQL(pipelineName string) string {
 	id := rand.Int31n(999) + 1
-	return fmt.Sprintf("insert into `%s`.`%s` (id,pipeline_name) values (%d,'%s') on duplicate key update v = v + 1", dbNameV2, tableNameV2, id, pipelineName)
+	return fmt.Sprintf("insert into `%s`.`%s` (id,pipeline_name) values (%d,'%s') on duplicate key update v = v + 1, pipeline_name = '%s'", dbNameV2, tableNameV2, id, pipelineName, pipelineName)
 }
