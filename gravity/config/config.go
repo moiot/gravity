@@ -16,8 +16,6 @@ import (
 	"github.com/moiot/gravity/pkg/utils"
 )
 
-const GravityDBName = "_gravity"
-
 var DefaultBinlogSyncerTimeout = "10s"
 
 // Config is the configuration.
@@ -72,7 +70,7 @@ type PipelineConfig struct {
 
 	TargetMySQL *utils.DBConfig `toml:"target-mysql" json:"target-mysql"`
 
-	TargetMySQLWorkerCfg *config.TargetMySQLWorkerConfig `toml:"target-mysql-worker" json:"target-mysql-worker"`
+	TargetMySQLWorkerCfg *TargetMySQLWorkerConfig `toml:"target-mysql-worker" json:"target-mysql-worker"`
 
 	// WorkerPoolConfig *worker_pool.WorkerPoolConfig `toml:"worker-pool-config" json:"worker-pool-config"`
 
@@ -138,6 +136,15 @@ type MongoConnConfig struct {
 	Database string `mapstructure:"database" toml:"database" json:"database"`
 	Direct   bool   `mapstructure:"-" toml:"-" json:"-"`
 }
+
+type TargetMySQLWorkerConfig struct {
+	EnableDDL          bool     `toml:"enable-ddl" json:"enable-ddl"`
+	UseBidirection     bool     `toml:"use-bidirection" json:"use-bidirection"`
+	UseShadingProxy    bool     `toml:"use-shading-proxy" json:"use-shading-proxy"`
+	SQLExecutionEngine string   `toml:"sql-execution-engine" json:"sql-execution-engine"`
+	Plugins            []string `toml:"plugins" json:"plugins"`
+}
+
 
 // NewConfig creates a new config.
 func NewConfig() *Config {

@@ -3,6 +3,7 @@ package position_store
 import (
 	"database/sql"
 	"fmt"
+	"github.com/moiot/gravity/pkg/consts"
 
 	"github.com/moiot/gravity/gravity/inputs/stages"
 
@@ -20,7 +21,7 @@ var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
 var (
 	oldTable                     = `cluster_gravity_binlog_position`
 	positionTableName            = `gravity_positions`
-	positionFullTableName        = fmt.Sprintf("%s.%s", config.GravityDBName, positionTableName)
+	positionFullTableName        = fmt.Sprintf("%s.%s", consts.GravityDBName, positionTableName)
 	createPositionTableStatement = fmt.Sprintf(`
 	CREATE TABLE IF NOT EXISTS %s (
 		name VARCHAR(255) NOT NULL,
@@ -73,12 +74,12 @@ type ISerializablePosition interface {
 }
 
 func PrepareMetaRepo(db *sql.DB, annotation string) error {
-	_, err := db.Exec(fmt.Sprintf("%sCREATE DATABASE IF NOT EXISTS %s", annotation, config.GravityDBName))
+	_, err := db.Exec(fmt.Sprintf("%sCREATE DATABASE IF NOT EXISTS %s", annotation, consts.GravityDBName))
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	_, err = db.Exec(fmt.Sprintf("%sDROP TABLE IF EXISTS %s.%s", annotation, config.GravityDBName, oldTable))
+	_, err = db.Exec(fmt.Sprintf("%sDROP TABLE IF EXISTS %s.%s", annotation, consts.GravityDBName, oldTable))
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -89,7 +90,7 @@ func PrepareMetaRepo(db *sql.DB, annotation string) error {
 	}
 
 	err = retry.Do(func() error {
-		row := db.QueryRow("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'stage'", config.GravityDBName, positionTableName)
+		row := db.QueryRow("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'stage'", consts.GravityDBName, positionTableName)
 		var cnt int
 		err := row.Scan(&cnt)
 		if err != nil {
