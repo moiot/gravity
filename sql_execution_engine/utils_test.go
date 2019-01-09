@@ -1,11 +1,67 @@
 package sql_execution_engine
 
 import (
+	"testing"
+
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/schema_store"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
+
+func TestGenerateInsertIgnoreSQL(t *testing.T) {
+	r := require.New(t)
+
+	columns := []schema_store.Column{
+		{
+			Idx:  1,
+			Name: "v1",
+		},
+		{
+			Idx:  0,
+			Name: "v2",
+		},
+	}
+
+	tableDef := schema_store.Table{
+		Schema:  "test_db",
+		Name:    "test_table",
+		Columns: columns,
+	}
+
+	data1 := map[string]interface{}{
+		"v1": "v1_value_1",
+		"v2": "v2_value_1",
+	}
+
+	data2 := map[string]interface{}{
+		"v2": "v2_value_2",
+		"v1": "v1_value_2",
+	}
+
+	msgBatch := []*core.Msg{
+		{
+			DmlMsg: &core.DMLMsg{
+				Operation: core.Update,
+				Data:      data1,
+			},
+		},
+		{
+			DmlMsg: &core.DMLMsg{
+				Operation: core.Update,
+				Data:      data2,
+			},
+		},
+	}
+
+	sql, args, err := GenerateInsertIgnoreSQL(msgBatch, &tableDef)
+	r.NoError(err)
+	r.Equal("INSERT IGNORE INTO `test_db`.`test_table` (`v2`,`v1`) VALUES (?,?),(?,?)", sql)
+	r.Equal("v2_value_1", args[0])
+	r.Equal("v1_value_1", args[1])
+	r.Equal("v2_value_2", args[2])
+	r.Equal("v1_value_2", args[3])
+
+}
 
 func TestGenerateReplaceSQLWithMultipleValues(t *testing.T) {
 	r := require.New(t)

@@ -14,21 +14,46 @@ import (
 func TestConfigure(t *testing.T) {
 	r := require.New(t)
 
-	p, err := registry.GetPlugin(registry.OutputPlugin, OutputMySQL)
-	r.NoError(err)
+	t.Run("default plugin exists", func(tt *testing.T) {
+		p, err := registry.GetPlugin(registry.OutputPlugin, OutputMySQL)
+		r.NoError(err)
 
-	r.NoError(p.Configure("test", map[string]interface{}{
-		"target": map[string]interface{}{
-			"host":     "localhost",
-			"username": "root",
-		},
-	}))
+		r.NoError(p.Configure("test", map[string]interface{}{
+			"target": map[string]interface{}{
+				"host":     "localhost",
+				"username": "root",
+			},
+		}))
 
-	o, ok := p.(*MySQLOutput)
-	r.True(ok)
+		o, ok := p.(*MySQLOutput)
+		r.True(ok)
 
-	r.NotNil(o.sqlExecutionEnginePlugin)
-	r.Nil(o.sqlExecutor)
+		r.NotNil(o.sqlExecutionEnginePlugin)
+		r.Nil(o.sqlExecutor)
+	})
+
+	t.Run("sql plugin without any configuration", func(tt *testing.T) {
+		p, err := registry.GetPlugin(registry.OutputPlugin, OutputMySQL)
+		r.NoError(err)
+
+		r.NoError(p.Configure("test", map[string]interface{}{
+			"target": map[string]interface{}{
+				"host":     "localhost",
+				"username": "root",
+			},
+			"sql-engine-config": map[string]interface{}{
+				"mysql-insert-ignore": make(map[string]interface{}),
+			},
+		}))
+
+		o, ok := p.(*MySQLOutput)
+		r.True(ok)
+
+		r.NotNil(o.sqlExecutionEnginePlugin)
+
+		r.Nil(o.sqlExecutor)
+	})
+
 }
 
 func TestSplitBatch(t *testing.T) {
