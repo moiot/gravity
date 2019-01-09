@@ -111,7 +111,7 @@ func (tableScanner *TableScanner) InitTablePosition(tableDef *schema_store.Table
 		var scanColumn string
 		var scanType string
 
-		column, err := DetectScanColumn(tableScanner.db, tableDef.Schema, tableDef.Name, 10000)
+		column, err := DetectScanColumn(tableScanner.db, tableDef.Schema, tableDef.Name, tableScanner.cfg.MaxFullDumpCount)
 		if err != nil {
 			return errors.Trace(err)
 		}
