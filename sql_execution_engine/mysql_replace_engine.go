@@ -100,7 +100,7 @@ func (engine *mysqlReplaceEngine) Execute(msgBatch []*core.Msg, targetTableDef *
 			return errors.Trace(err)
 		}
 
-		logDelete(query, args, result)
+		logOperation(msgBatch, query, args, result)
 		return nil
 	}
 
@@ -117,11 +117,6 @@ func (engine *mysqlReplaceEngine) Execute(msgBatch []*core.Msg, targetTableDef *
 		return errors.Trace(err)
 	}
 
-	// log all the delete information
-	if msgBatch[0].DmlMsg.Operation == core.Delete {
-		logDelete(query, args, result)
-	}
-
 	result, err = txn.Exec(query, args...)
 	if err != nil {
 		txn.Rollback()
@@ -129,14 +124,21 @@ func (engine *mysqlReplaceEngine) Execute(msgBatch []*core.Msg, targetTableDef *
 	}
 
 	// log all the delete information
-	if msgBatch[0].DmlMsg.Operation == core.Delete {
-		logDelete(query, args, result)
-	}
+	logOperation(msgBatch, query, args, result)
 
 	return errors.Trace(txn.Commit())
 }
 
-func logDelete(query string, args []interface{}, result sql.Result) {
+// Only log delete operation for now.
+func logOperation(batch []*core.Msg, query string, args []interface{}, result sql.Result) {
+	if len(batch) == 0 {
+		return
+	}
+
+	if batch[0].DmlMsg.Operation != core.Delete {
+		return
+	}
+
 	nrDeleted, err := result.RowsAffected()
 	if err != nil {
 		log.Warnf("[mysqlReplaceEngine]: %v", err.Error())
