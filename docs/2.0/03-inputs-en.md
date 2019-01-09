@@ -140,6 +140,12 @@ table-scan-batch = 10000
 # Optional
 #
 batch-per-second-limit = 1
+
+# When neither primary key, nor unique index could be found, we can use full table scan on tables with less rows than `max-full-dump-count`. Otherwise we'll stop and exit.
+# - Default 100,000
+# - Optional
+#
+max-full-dump-count = 10000
 ```
 
 In the above default configuration:
