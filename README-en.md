@@ -1,15 +1,13 @@
-# DRC
+# Gravity
 
-DRC (Data Replication Center) is an open source data replication component of Mobike. It is used to synchronize the full data and incremental data and send the data mutation to the message queue.
+[![Build Status](https://travis-ci.org/moiot/gravity.svg?branch=master)](https://travis-ci.org/moiot/gravity.svg?branch=master)
+
+Gravity (Data Replication Center) is an open source data replication component of Mobike. It is used to synchronize the full data and incremental data and send the data mutation to the message queue.
 
 It is designed to be a customizable data replication tool that
 
 - Supports multiple data sources, data output platforms, and data consistency requirements
 - Supports Kubernetes-based PaaS platform to facilitate the maintenance tasks
-
-## Architecture
-
-[DRC 2.0 Architecture](docs/2.0/drc-architecture.png)
 
 ## Application scenarios
 
@@ -23,7 +21,7 @@ It is designed to be a customizable data replication tool that
 
 ### Data source support
 
-DRC supports the following data sources:
+Gravity supports the following data sources:
 
 - MySQL binlogs
 - MySQL full data
@@ -36,7 +34,7 @@ The support for the following items is in progress:
 
 ### Data output platform support
 
-DRC supports outputting data to the following platforms:
+Gravity supports outputting data to the following platforms:
 
 - Kafka 
 - MySQL
@@ -46,7 +44,7 @@ The support for outputting data to MongoDB is in progress.
 
 ### Data mutation support
 
-DRC supports the following data mutations:
+Gravity supports the following data mutations:
 
 - Data filtering
 - Renaming columns
