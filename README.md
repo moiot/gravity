@@ -1,60 +1,64 @@
-![2.0 Product](docs/2.0/product.png)
-
 # Gravity
-
+-------------------------
 [![Build Status](https://travis-ci.org/moiot/gravity.svg?branch=master)](https://travis-ci.org/moiot/gravity.svg?branch=master)
 
-Gravity 是一款数据复制组件，提供全量、增量数据同步，以及向消息队列发布数据更新。
+![2.0 Product](docs/2.0/product.png)
 
-DRC 的设计目标是：
-- 支持多种数据源和目标的，可灵活定制的数据复制组件
-- 支持基于 Kubernetes 的 PaaS 平台，简化运维任务
+Gravity is build for data replication. It is used to replicate dat between databases.
 
+It is designed to be a customizable data replication tool that
 
-### 使用场景
+- Supports multiple sources and destinations
 
-- 大数据总线：发送 MySQL Binlog，Mongo Oplog 的数据变更到 kafka 供下游消费
-- 单向数据同步：MySQL --> MySQL 的全量、增量同步
-- 双向数据同步：MySQL <--> MySQL 的双向增量同步，同步过程中可以防止循环复制
-- 分库分表到合库的同步：MySQL 分库分表 --> 合库的同步，可以指定源表和目标表的对应关系
-- 在线数据变换：同步过程中，可支持对进行数据变换
+- Supports Kubernetes-based PaaS platform to facilitate the maintenance tasks
 
-### 功能列表
+## Application scenarios
 
-- 数据源
+- Data Bus: Use Change Data Capture (MySQL binlog, MongoDB Oplog) and batch scan to publish data to message queue like Kafka.
+- Unidirectional data replication: Replicates data from one MySQL cluster to another MySQL cluster.
+- Bidirectional data replication: Replicates data between two MySQL clusters bidirectionally.
+- Synchronization of shards to the merged table: Synchronizes MySQL sharded tables to the merged table. You can specify the corresponding relationship between the source table and the target table.
+- Online data mutation: Data can be changed during the replication. For example, rename the column, encrypt/decrypt data columns. 
+## Features
 
-|   | 是否支持  |
+### Data source support
+
+Gravity supports the following data sources:
+
+|   |   |
 |---|---|
 |  MySQL Binlog | ✅  | 
-|  MySQL 全量 |  ✅ |   
+|  MySQL Scan |  ✅ |   
 |  Mongo Oplog | ✅  | 
 |  TiDB Binlog | 开发中  |
 |  PostgreSQL WAL | 开发中  |
 
-- 数据输出
+The support for the following items is in progress:
 
-|   | 是否支持  |
-|---|---|
-| Kafka | ✅  | 
-|  MySQL/TiDB |  ✅ |   
-|  Mongo DB | 开发中  | 
+- TiDB binlogs
+- PostgreSQL WAL logs
 
+### Data output platform support
 
-- 数据变换
+Gravity supports outputting data to the following platforms:
 
-|   | 是否支持  |
-|---|---|
-| 数据过滤 | ✅  | 
-|  重命令列 |  ✅ |   
-|   删除列|✅| 
+- Kafka 
+- MySQL
+- TiDB
 
+The support for outputting data to MongoDB is in progress. 
 
-### 文档
+### Data mutation support
 
-[架构简介](docs/2.0/00-arch.md)
+Gravity supports the following data mutations:
 
-[快速上手](docs/2.0/01-quick-start.md)
+- Data filtering
+- Renaming columns
+- Deleting columns
 
-[配置手册](docs/2.0/02-config-index.md)
+### Documentation
 
-[集群部署](https://github.com/moiot/gravity-operator)
+- [Architecture](docs/2.0/00-arch-en.md)
+- [Quick Start](docs/2.0/01-quick-start-en.md)
+- [Configuration](docs/2.0/02-config-index-en.md)
+- [Deployment](https://github.com/moiot/gravity-operator)
