@@ -42,6 +42,30 @@ type PluginConfig struct {
 	BatchPerSecondLimit int `mapstructure:"batch-per-second-limit" toml:"batch-per-second-limit" json:"batch-per-second-limit"`
 }
 
+func (cfg *PluginConfig) ValidateAndSetDefault() error {
+	if cfg.SourceMaster == nil {
+		return errors.Errorf("[mysqlscanner] source master must be configured")
+	}
+
+	if cfg.NrScanner <= 0 {
+		cfg.NrScanner = 10
+	}
+
+	if cfg.TableScanBatch <= 0 {
+		cfg.TableScanBatch = 10000
+	}
+
+	if cfg.BatchPerSecondLimit <= 0 {
+		cfg.BatchPerSecondLimit = 1
+	}
+
+	if cfg.MaxFullDumpCount <= 0 {
+		cfg.MaxFullDumpCount = 100000
+	}
+
+	return nil
+}
+
 type mysqlFullInput struct {
 	pipelineName string
 	cfg          *PluginConfig
@@ -83,24 +107,8 @@ func (plugin *mysqlFullInput) Configure(pipelineName string, data map[string]int
 		return errors.Trace(err)
 	}
 
-	if cfg.SourceMaster == nil {
-		return errors.Errorf("[mysqlscanner] source master must be configured")
-	}
-
-	if cfg.NrScanner <= 0 {
-		cfg.NrScanner = 10
-	}
-
-	if cfg.TableScanBatch <= 0 {
-		cfg.TableScanBatch = 10000
-	}
-
-	if cfg.BatchPerSecondLimit <= 0 {
-		cfg.BatchPerSecondLimit = 1
-	}
-
-	if cfg.MaxFullDumpCount <= 0 {
-		cfg.MaxFullDumpCount = 100000
+	if err := cfg.ValidateAndSetDefault(); err != nil {
+		return errors.Trace(err)
 	}
 
 	plugin.cfg = &cfg

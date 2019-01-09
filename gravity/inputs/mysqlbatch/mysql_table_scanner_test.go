@@ -313,6 +313,9 @@ func TestFindInBatch(t *testing.T) {
 		}
 
 		for _, c := range testCases {
+			err := c.cfg.ValidateAndSetDefault()
+			r.NoError(err)
+
 			db := mysql_test.MustSetupSourceDB(testDBName)
 
 			if c.seedFunc != nil {
@@ -387,6 +390,8 @@ func TestInitTablePosition(t *testing.T) {
 			TableScanBatch:      1,
 			BatchPerSecondLimit: 10000,
 		}
+		err := cfg.ValidateAndSetDefault()
+		r.NoError(err)
 
 		schemaStore, err := schema_store.NewSimpleSchemaStoreFromDBConn(db)
 		r.NoError(err)
