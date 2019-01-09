@@ -45,8 +45,8 @@ dml-topic = "test.test_table"
 [output.async-kafka]
 # "json" by default
 output-format = "json"
-# "2.0" by default
-schema-version = "2.0"
+# "0.1" by default
+schema-version = "0.1"
 ```
 
 The DML JSON format output by Kafka is as follows:
