@@ -1,6 +1,6 @@
 # Gravity
 
-[![Build Status](https://travis-ci.org/moiot/gravity.svg?branch=master)](https://travis-ci.org/moiot/gravity.svg?branch=master)
+[![Build Status](https://travis-ci.org/moiot/gravity.svg?branch=master)](https://travis-ci.org/moiot/gravity)
 
 Gravity (Data Replication Center) is an open source data replication component of Mobike. It is used to synchronize the full data and incremental data and send the data mutation to the message queue.
 
