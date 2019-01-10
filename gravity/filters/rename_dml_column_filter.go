@@ -30,30 +30,40 @@ func (f *renameDmlColumnFilter) Configure(data map[string]interface{}) error {
 
 	from, ok := data["from"]
 	if !ok {
-		return errors.Errorf("\"from\" is not configured")
+		return errors.Errorf("'from' is not configured")
 	}
 
 	to, ok := data["to"]
 	if !ok {
-		return errors.Errorf("\"to\" is not configured")
+		return errors.Errorf("'to' is not configured")
 	}
 
-	fromColumns, ok := from.([]string)
+	fromColumns, ok := from.([]interface{})
 	if !ok {
-		return errors.Errorf("\"from\" must be an array of string")
+		return errors.Errorf("'from' must be an array")
 	}
 
-	toColumns, ok := to.([]string)
+	fromColumnStrings, err := arrayInterfaceToArrayString(fromColumns)
+	if err != nil {
+		return errors.Errorf("'from' should be an array of string")
+	}
+
+	toColumns, ok := to.([]interface{})
 	if !ok {
-		return errors.Errorf("\"to\" must be an array of string")
+		return errors.Errorf("'to' must be an array")
+	}
+
+	toColumnStrings, err := arrayInterfaceToArrayString(toColumns)
+	if err != nil {
+		return errors.Errorf("'to' should be an array of string")
 	}
 
 	if len(fromColumns) != len(toColumns) {
 		return errors.Errorf("\"from\" should have the same length of \"to\"")
 	}
 
-	f.from = fromColumns
-	f.to = toColumns
+	f.from = fromColumnStrings
+	f.to = toColumnStrings
 
 	return nil
 }
@@ -74,6 +84,12 @@ func (f *renameDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err er
 		msg.DmlMsg.Data[toColumn] = msg.DmlMsg.Data[fromColumn]
 		delete(msg.DmlMsg.Data, fromColumn)
 
+		// Old
+		if msg.DmlMsg.Old != nil {
+			msg.DmlMsg.Old[toColumn] = msg.DmlMsg.Old[fromColumn]
+			delete(msg.DmlMsg.Old, fromColumn)
+		}
+
 		// Pks
 		if msg.DmlMsg.Pks != nil {
 			if _, ok := msg.DmlMsg.Pks[fromColumn]; ok {
@@ -81,6 +97,14 @@ func (f *renameDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err er
 				delete(msg.DmlMsg.Pks, fromColumn)
 			}
 		}
+
+		// pkColumns
+		for j, c := range msg.DmlMsg.PkColumns {
+			if fromColumn == c {
+				msg.DmlMsg.PkColumns[j] = toColumn
+			}
+		}
+
 	}
 
 	return true, nil

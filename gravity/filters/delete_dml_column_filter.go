@@ -28,15 +28,20 @@ func (f *deleteDmlColumnFilter) Configure(data map[string]interface{}) error {
 
 	columns, ok := data["columns"]
 	if !ok {
-		return errors.Errorf("\"column\" is not configured")
+		return errors.Errorf("'column' is not configured")
 	}
 
-	c, ok := columns.([]string)
+	c, ok := columns.([]interface{})
 	if !ok {
-		return errors.Errorf("\"column\" should be an array of string")
+		return errors.Errorf("'column' should be an array")
 	}
 
-	f.columns = c
+	columnStrings, err := arrayInterfaceToArrayString(c)
+	if err != nil {
+		return errors.Errorf("'column' should be an array of string")
+	}
+
+	f.columns = columnStrings
 	return nil
 }
 
@@ -49,6 +54,23 @@ func (f *deleteDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err er
 		return false, errors.Errorf("DmlMsg is null")
 	}
 
+	if msg.DmlMsg.PkColumns != nil {
+		var newPkColumns []string
+		for _, oldName := range msg.DmlMsg.PkColumns {
+			for _, name := range f.columns {
+				_, ok := msg.DmlMsg.Pks[name]
+				if !ok {
+					continue
+				}
+
+				if name != oldName {
+					newPkColumns = append(newPkColumns, oldName)
+				}
+			}
+		}
+		msg.DmlMsg.PkColumns = newPkColumns
+	}
+
 	for _, name := range f.columns {
 		delete(msg.DmlMsg.Data, name)
 
@@ -59,6 +81,7 @@ func (f *deleteDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err er
 		if msg.DmlMsg.Pks != nil {
 			delete(msg.DmlMsg.Pks, name)
 		}
+
 	}
 
 	return true, nil

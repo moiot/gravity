@@ -3,7 +3,6 @@ package integration_test
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/moiot/gravity/pkg/consts"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/core"
 
