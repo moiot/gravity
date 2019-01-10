@@ -321,16 +321,24 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 			if err := tableScanner.emitter.Emit(msg); err != nil {
 				log.Fatalf("[LoopInBatch] failed to emit job: %v", errors.ErrorStack(err))
 			}
+
+			// we break the loop here in case the currentMinPos comes larger than the max we have in the beginning.
+			if maxReached {
+				log.Infof("[LoopInBatch] max reached")
+				<-msg.Done
+
+				// close the stream
+				msg := NewCloseStreamMsg(tableDef)
+				if err := tableScanner.emitter.Emit(msg); err != nil {
+					log.Fatalf("[LoopInBatch] failed to emit close stream msg: %v", errors.ErrorStack(err))
+				}
+				return
+			}
+
 		}
 
 		log.Infof("[LoopInBatch] sourceDB: %s, table: %s, currentMinPos: %v, maxMapString.column: %v, maxMapString.value: %v, maxMapString.type: %v, resultCount: %v",
 			tableDef.Schema, tableDef.Name, currentMinValue, maxMapString["column"], maxMapString["value"], maxMapString["type"], resultCount)
-
-		// we break the loop here in case the currentMinPos comes larger than the max we have in the beginning.
-		if maxReached {
-			log.Infof("[LoopInBatch] max reached")
-			return
-		}
 
 		select {
 		case <-tableScanner.ctx.Done():
