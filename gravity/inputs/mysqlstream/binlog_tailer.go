@@ -1,7 +1,6 @@
 package mysqlstream
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -316,9 +315,7 @@ func (tailer *BinlogTailer) Start() error {
 
 				schema, err := tailer.sourceSchemaStore.GetSchema(schemaName)
 				if err != nil {
-					b := bytes.NewBufferString("")
-					e.Dump(b)
-					log.Fatalf("[binlog_tailer] failed GetSchema: %v. ev: %#v.", b.String(), errors.ErrorStack(err))
+					log.Fatalf("[binlog_tailer] failed GetSchema %v. err: %v.", schemaName, errors.ErrorStack(err))
 				}
 
 				tableDef := schema[tableName]
