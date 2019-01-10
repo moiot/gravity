@@ -93,3 +93,13 @@ func NewCreateTableMsg(parser *parser.Parser, table *schema_store.Table, createT
 	}
 	return &msg
 }
+
+func NewCloseInputStreamMsg(sourceTableDef *schema_store.Table) *core.Msg {
+	msg := core.Msg{
+		Type:            core.MsgCloseInputStream,
+		InputStreamKey:  utils.NewStringPtr(utils.TableIdentity(sourceTableDef.Schema, sourceTableDef.Name)),
+		OutputStreamKey: utils.NewStringPtr(""),
+		Done:            make(chan struct{}),
+	}
+	return &msg
+}

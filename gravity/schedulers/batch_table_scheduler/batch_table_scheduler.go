@@ -249,14 +249,24 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 
 	if scheduler.cfg.SlidingWindowSize > 0 {
 		key := *msg.InputStreamKey
+
 		scheduler.windowMutex.Lock()
 		window, ok := scheduler.slidingWindows[key]
 		if !ok {
 			window = sliding_window.NewStaticSlidingWindow(scheduler.cfg.SlidingWindowSize, scheduler.pipelineName)
 			scheduler.slidingWindows[key] = window
 			log.Infof("[batchScheduler.SubmitMsg] added new sliding window, key=%s", key)
+		} else {
+			// Do not process MsgCloseInputStream, just close the sliding window
+			if msg.Type == core.MsgCloseInputStream {
+				window.Close()
+				delete(scheduler.slidingWindows, key)
+				scheduler.windowMutex.Unlock()
+				return nil
+			}
 		}
 		scheduler.windowMutex.Unlock()
+
 		item := &slidingWindowItem{*msg}
 		window.AddWindowItem(item)
 	}

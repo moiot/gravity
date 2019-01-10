@@ -310,6 +310,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 
 		batchIdx++
 
+		var lastMsg *core.Msg
 		// process this batch's data
 		for i := 0; i < rowIdx; i++ {
 			rowPtrs := rowsBatchDataPtrs[i]
@@ -321,6 +322,8 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 			if err := tableScanner.emitter.Emit(msg); err != nil {
 				log.Fatalf("[LoopInBatch] failed to emit job: %v", errors.ErrorStack(err))
 			}
+
+			lastMsg = msg
 		}
 
 		log.Infof("[LoopInBatch] sourceDB: %s, table: %s, currentMinPos: %v, maxMapString.column: %v, maxMapString.value: %v, maxMapString.type: %v, resultCount: %v",
@@ -328,7 +331,19 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 
 		// we break the loop here in case the currentMinPos comes larger than the max we have in the beginning.
 		if maxReached {
+
 			log.Infof("[LoopInBatch] max reached")
+
+			if lastMsg != nil {
+				<-lastMsg.Done
+
+				// close the stream
+				msg := NewCloseInputStreamMsg(tableDef)
+				if err := tableScanner.emitter.Emit(msg); err != nil {
+					log.Fatalf("[LoopInBatch] failed to emit close stream msg: %v", errors.ErrorStack(err))
+				}
+				log.Infof("[LoopInBatch] sent close input stream msg")
+			}
 			return
 		}
 

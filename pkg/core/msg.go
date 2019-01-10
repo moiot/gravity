@@ -17,9 +17,13 @@ type MsgType string
 const (
 	MsgDML MsgType = "dml"
 	MsgDDL MsgType = "ddl"
+
 	// ctl message is internal messages like
 	// heartbeat, barrier that is not dml/ddl.
 	MsgCtl MsgType = "ctl"
+
+	// MsgCloseInputStream is used to tell the scheduler to close a stream
+	MsgCloseInputStream MsgType = "closeInput"
 )
 
 type DMLOp string
