@@ -110,7 +110,7 @@ func (output *AsyncKafka) Configure(pipelineName string, data map[string]interfa
 	}
 
 	if pluginConfig.SchemaVersion == "" {
-		pluginConfig.SchemaVersion = encoding.Version20Alpha
+		pluginConfig.SchemaVersion = encoding.Version01
 	}
 
 	// setup output

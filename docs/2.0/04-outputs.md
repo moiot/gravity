@@ -40,8 +40,8 @@ dml-topic = "test.test_table"
 [output.async-kafka]
 # 默认为 json
 output-format = "json"
-# 默认为 2.0 版本
-schema-version = "2.0"
+# 默认为 0.1 版本
+schema-version = "0.1"
 ```
 
 Kafka 输出的 DML json 格式如下

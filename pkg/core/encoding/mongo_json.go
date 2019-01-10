@@ -21,6 +21,7 @@ type JsonMsgVersion20 struct {
 	Database   string                 `json:"database"`
 	Collection string                 `json:"collection"`
 	Data       map[string]interface{} `json:"data"`
+	Row        map[string]interface{} `json:"row"`
 }
 
 type mongoJsonSerde struct {
@@ -42,6 +43,7 @@ func (s *mongoJsonSerde) Serialize(msg *core.Msg, version string) ([]byte, error
 		jsonMsg.Database = msg.Database
 		jsonMsg.Collection = msg.Table
 		jsonMsg.Data = msg.Oplog.Data
+		jsonMsg.Row = msg.Oplog.Row
 		return json.Marshal(jsonMsg)
 	default:
 		return nil, nil

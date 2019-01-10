@@ -269,7 +269,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 		queryStartTime := time.Now()
 		rows, err := db.Query(statement, currentMinValue, batch)
 		if err != nil {
-			log.Fatalf("[LoopInBatch] err: %v", err)
+			log.Fatalf("[LoopInBatch] table %s.%s, err: %v", tableDef.Schema, tableDef.Name, err)
 		}
 
 		rowIdx := 0
@@ -281,7 +281,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 
 			rowsBatchDataPtrs[rowIdx], err = utils.ScanGeneralRowsWithDataPtrs(rows, columnTypes, rowsBatchDataPtrs[rowIdx])
 			if err != nil {
-				log.Fatalf("[LoopInBatch] scan error: %v", errors.ErrorStack(err))
+				log.Fatalf("[LoopInBatch] table %s.%s, scan error: %v", tableDef.Schema, tableDef.Name, errors.ErrorStack(err))
 			}
 
 			currentMinValue = reflect.ValueOf(rowsBatchDataPtrs[rowIdx][scanIdx]).Elem().Interface()
@@ -295,7 +295,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 
 		err = rows.Err()
 		if err != nil {
-			log.Fatalf("[LoopInBatch] rows err: %v", err)
+			log.Fatalf("[LoopInBatch] table %s.%s, rows err: %v", tableDef.Schema, tableDef.Name, err)
 		}
 
 		rows.Close()

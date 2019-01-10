@@ -2,7 +2,7 @@
 
 # Gravity
 
-[![Build Status](https://travis-ci.org/moiot/gravity.svg?branch=master)](https://travis-ci.org/moiot/gravity.svg?branch=master)
+[![Build Status](https://travis-ci.org/moiot/gravity.svg?branch=master)](https://travis-ci.org/moiot/gravity)
 
 Gravity 是一款数据复制组件，提供全量、增量数据同步，以及向消息队列发布数据更新。
 

@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
+
+	"github.com/go-sql-driver/mysql"
 
 	"github.com/juju/errors"
-
-	"sync"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/utils"
 )
@@ -44,7 +46,11 @@ func GetSchemaFromDB(db *sql.DB, dbName string) (Schema, error) {
 
 			table, err := GetTableDefFromDB(db, dbName, t)
 			if err != nil {
-				tableDefErr = err
+				if errors.Cause(err).(*mysql.MySQLError).Number == 1146 {
+					log.Error(err)
+				} else {
+					tableDefErr = err
+				}
 				return
 			}
 
@@ -121,9 +127,10 @@ func GetTableDefFromDB(db *sql.DB, dbName string, tableName string) (*Table, err
 		return nil, errors.Trace(err)
 	}
 
-	rows, err := db.Query(fmt.Sprintf("show columns from `%s`.`%s`", dbName, tableName))
+	stmt := fmt.Sprintf("show columns from `%s`.`%s`", dbName, tableName)
+	rows, err := db.Query(stmt)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.Annotatef(err, "error %s", stmt)
 	}
 	defer rows.Close()
 
