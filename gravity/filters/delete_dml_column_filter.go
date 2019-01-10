@@ -2,6 +2,7 @@ package filters
 
 import (
 	"github.com/juju/errors"
+	"github.com/moiot/gravity/pkg/utils"
 
 	"github.com/moiot/gravity/gravity/registry"
 	"github.com/moiot/gravity/pkg/core"
@@ -31,12 +32,12 @@ func (f *deleteDmlColumnFilter) Configure(data map[string]interface{}) error {
 		return errors.Errorf("'column' is not configured")
 	}
 
-	c, ok := columns.([]interface{})
+	c, ok := utils.CastToSlice(columns)
 	if !ok {
 		return errors.Errorf("'column' should be an array")
 	}
 
-	columnStrings, err := arrayInterfaceToArrayString(c)
+	columnStrings, err := utils.CastSliceInterfaceToSliceString(c)
 	if err != nil {
 		return errors.Errorf("'column' should be an array of string")
 	}

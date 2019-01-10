@@ -2,6 +2,7 @@ package filters
 
 import (
 	"github.com/juju/errors"
+	"github.com/moiot/gravity/pkg/utils"
 
 	"github.com/moiot/gravity/gravity/registry"
 	"github.com/moiot/gravity/pkg/core"
@@ -38,22 +39,22 @@ func (f *renameDmlColumnFilter) Configure(data map[string]interface{}) error {
 		return errors.Errorf("'to' is not configured")
 	}
 
-	fromColumns, ok := from.([]interface{})
+	fromColumns, ok := utils.CastToSlice(from)
 	if !ok {
 		return errors.Errorf("'from' must be an array")
 	}
 
-	fromColumnStrings, err := arrayInterfaceToArrayString(fromColumns)
+	fromColumnStrings, err := utils.CastSliceInterfaceToSliceString(fromColumns)
 	if err != nil {
 		return errors.Errorf("'from' should be an array of string")
 	}
 
-	toColumns, ok := to.([]interface{})
+	toColumns, ok := utils.CastToSlice(to)
 	if !ok {
 		return errors.Errorf("'to' must be an array")
 	}
 
-	toColumnStrings, err := arrayInterfaceToArrayString(toColumns)
+	toColumnStrings, err := utils.CastSliceInterfaceToSliceString(toColumns)
 	if err != nil {
 		return errors.Errorf("'to' should be an array of string")
 	}
