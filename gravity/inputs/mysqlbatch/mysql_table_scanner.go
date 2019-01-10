@@ -332,6 +332,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 				if err := tableScanner.emitter.Emit(msg); err != nil {
 					log.Fatalf("[LoopInBatch] failed to emit close stream msg: %v", errors.ErrorStack(err))
 				}
+				log.Infof("[LoopInBatch] sent close input stream msg")
 				return
 			}
 

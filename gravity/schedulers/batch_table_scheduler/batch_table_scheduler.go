@@ -261,6 +261,7 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 			if msg.Type == core.MsgCloseInputStream {
 				window.Close()
 				delete(scheduler.slidingWindows, key)
+				scheduler.windowMutex.Unlock()
 				return nil
 			}
 		}
