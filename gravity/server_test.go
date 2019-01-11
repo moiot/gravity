@@ -100,6 +100,12 @@ type = "reject"
 match-schema = "test"
 match-table = "test_table_*"
 
+[[filters]]
+type = "reject"
+
+[filters.config]
+match-dml-op = ["insert", "update", "delete"]
+
 [output]
 type = "mysql"
 
@@ -132,5 +138,5 @@ sliding-window-size = 1024
 
 	server, err := Parse(pipelineConfig)
 	at.NoError(err, errors.ErrorStack(err))
-	at.True(len(server.filters) == 1)
+	at.True(len(server.filters) == 2)
 }
