@@ -6,6 +6,7 @@ import (
 	"github.com/juju/errors"
 )
 
+// arg can be slice of any type
 func CastToSlice(arg interface{}) (out []interface{}, ok bool) {
 	slice, success := TakeArg(arg, reflect.Slice)
 	if !success {

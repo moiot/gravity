@@ -39,6 +39,8 @@ func (f *renameDmlColumnFilter) Configure(data map[string]interface{}) error {
 		return errors.Errorf("'to' is not configured")
 	}
 
+	// from can be any type of slice, for example:
+	// []interface{}, []string{}
 	fromColumns, ok := utils.CastToSlice(from)
 	if !ok {
 		return errors.Errorf("'from' must be an array")
@@ -49,6 +51,8 @@ func (f *renameDmlColumnFilter) Configure(data map[string]interface{}) error {
 		return errors.Errorf("'from' should be an array of string")
 	}
 
+	// to can be any type of slice, for example:
+	// []interface{}, []string{}
 	toColumns, ok := utils.CastToSlice(to)
 	if !ok {
 		return errors.Errorf("'to' must be an array")

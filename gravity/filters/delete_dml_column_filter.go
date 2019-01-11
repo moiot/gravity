@@ -32,6 +32,8 @@ func (f *deleteDmlColumnFilter) Configure(data map[string]interface{}) error {
 		return errors.Errorf("'column' is not configured")
 	}
 
+	// columns can be any type of slice, for example:
+	// []interface{}, []string{}
 	c, ok := utils.CastToSlice(columns)
 	if !ok {
 		return errors.Errorf("'column' should be an array")
