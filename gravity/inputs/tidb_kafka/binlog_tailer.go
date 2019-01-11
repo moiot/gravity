@@ -130,7 +130,6 @@ func (t *BinlogTailer) createMsgs(
 		schemaName := *table.SchemaName
 		tableName := *table.TableName
 		pkColumnList := buildPKColumnList(table.ColumnInfo)
-		pkNameList := buildPKNameList(pkColumnList)
 		for _, mutation := range table.Mutations {
 			msg := core.Msg{
 				Type:      core.MsgDML,
@@ -192,7 +191,6 @@ func (t *BinlogTailer) createMsgs(
 
 			dmlMsg.Data = data
 			dmlMsg.Pks = buildPKValueMap(pkColumnList, mutation.Row)
-			dmlMsg.PkColumns = pkNameList
 			msg.DmlMsg = dmlMsg
 			msgList = append(msgList, &msg)
 		}

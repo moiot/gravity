@@ -103,13 +103,6 @@ func (f *renameDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err er
 			}
 		}
 
-		// pkColumns
-		for j, c := range msg.DmlMsg.PkColumns {
-			if fromColumn == c {
-				msg.DmlMsg.PkColumns[j] = toColumn
-			}
-		}
-
 	}
 
 	return true, nil

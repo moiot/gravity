@@ -45,7 +45,7 @@ func TestDeleteDmlColumnFilter_Filter(t *testing.T) {
 	"type": "delete-dml-column",
 	"match-schema": "test",
 	"match-table": "test_table",
-	"columns": ["a", "b"]
+	"columns": ["b", "a", "d"]
 }
 `)
 	r.NoError(err)
@@ -69,8 +69,9 @@ func TestDeleteDmlColumnFilter_Filter(t *testing.T) {
 			},
 			Pks: map[string]interface{}{
 				"a": 1,
+				"b": 2,
+				"c": 3,
 			},
-			PkColumns: []string{"a"},
 		},
 	}
 
@@ -99,9 +100,15 @@ func TestDeleteDmlColumnFilter_Filter(t *testing.T) {
 	r.True(ok)
 
 	// Pks
+	r.Equal(1, len(msg.DmlMsg.Pks))
+
 	_, ok = msg.DmlMsg.Pks["a"]
 	r.False(ok)
 
-	// PkColumns
-	r.EqualValues(0, len(msg.DmlMsg.PkColumns))
+	_, ok = msg.DmlMsg.Pks["c"]
+	r.True(ok)
+
+	_, ok = msg.DmlMsg.Pks["d"]
+	r.False(ok)
+
 }

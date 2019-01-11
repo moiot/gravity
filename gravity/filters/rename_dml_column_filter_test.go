@@ -74,7 +74,6 @@ func TestRenameDmlColumnFilter_Filter(t *testing.T) {
 			Pks: map[string]interface{}{
 				"a": 1,
 			},
-			PkColumns: []string{"a"},
 		},
 	}
 
@@ -121,7 +120,6 @@ func TestRenameDmlColumnFilter_Filter(t *testing.T) {
 	_, exists = msg.DmlMsg.Pks["d"]
 	r.False(exists)
 
-	r.Equal([]string{"c"}, msg.DmlMsg.PkColumns)
 	r.Equal(1, msg.DmlMsg.Data["c"])
 	r.Equal(2, msg.DmlMsg.Data["d"])
 	r.Equal(100, msg.DmlMsg.Old["c"])

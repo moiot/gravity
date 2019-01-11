@@ -57,23 +57,6 @@ func (f *deleteDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err er
 		return false, errors.Errorf("DmlMsg is null")
 	}
 
-	if msg.DmlMsg.PkColumns != nil {
-		var newPkColumns []string
-		for _, oldName := range msg.DmlMsg.PkColumns {
-			for _, name := range f.columns {
-				_, ok := msg.DmlMsg.Pks[name]
-				if !ok {
-					continue
-				}
-
-				if name != oldName {
-					newPkColumns = append(newPkColumns, oldName)
-				}
-			}
-		}
-		msg.DmlMsg.PkColumns = newPkColumns
-	}
-
 	for _, name := range f.columns {
 		delete(msg.DmlMsg.Data, name)
 
