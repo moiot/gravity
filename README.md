@@ -58,4 +58,4 @@ It is designed to be a customizable data replication tool that:
 
 -----------
 
-Special thanks to @dantin, @LiangShang, and @liwink for the early work to this project, and thanks @CaitinChen for the initial translation of the documentation.
+Special thanks to [@dantin](https://github.com/dantin), [@LiangShang](https://github.com/liangshang), and [@liwink](https://github.com/liwink) for the early work to this project, and thanks [@CaitinChen](https://github.com/CaitinChen) for the initial translation of the documentation.
