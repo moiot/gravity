@@ -297,6 +297,7 @@ func (plugin *mysqlFullInput) waitFinish() {
 			Raw:        position,
 			UpdateTime: time.Now(),
 		}
+		close(plugin.doneC)
 	} else if plugin.ctx.Err() == context.Canceled {
 		log.Infof("[plugin.waitFinish] table scanner cancelled")
 		close(plugin.doneC)

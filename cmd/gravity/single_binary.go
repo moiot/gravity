@@ -118,6 +118,14 @@ func main() {
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
 
+	if cfg.PipelineConfig.InputPlugin.Mode == config.Batch {
+		go func(server *gravity.Server) {
+			<-server.Input.Done()
+			server.Close()
+			os.Exit(0)
+		}(server)
+	}
+
 	for {
 		select {
 		case sig := <-sc:
