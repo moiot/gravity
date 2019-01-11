@@ -3,7 +3,6 @@ package integration_test
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -14,6 +13,7 @@ import (
 	"github.com/moiot/gravity/pkg/sliding_window"
 
 	"github.com/moiot/gravity/pkg/consts"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/core"
 

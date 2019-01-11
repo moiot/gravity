@@ -27,10 +27,9 @@ type MysqlJson_0_1_header struct {
 
 type DmlStringMsg_0_1 struct {
 	MysqlJson_0_1_header
-	Data      map[string]*string `json:"data"`
-	Old       map[string]*string `json:"old"`
-	Pks       map[string]*string `json:"pks,omitempty"`
-	PkColumns []string           `json:"-"`
+	Data map[string]*string `json:"data"`
+	Old  map[string]*string `json:"old"`
+	Pks  map[string]*string `json:"pks,omitempty"`
 }
 
 type DDLMsg_0_1 struct {
@@ -75,7 +74,6 @@ func serializeVersion01JsonMsg(msg *core.Msg) ([]byte, error) {
 			Data:                 formatVersion01Data(msg.DmlMsg.Data),
 			Old:                  formatVersion01Data(msg.DmlMsg.Old),
 			Pks:                  formatVersion01Data(msg.DmlMsg.Pks),
-			PkColumns:            msg.DmlMsg.PkColumns,
 		}
 		switch msg.DmlMsg.Operation {
 		case core.Insert:

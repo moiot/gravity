@@ -188,7 +188,6 @@ func (tailer *OplogTailer) Run() {
 					Pks: map[string]interface{}{
 						"_id": op.Id,
 					},
-					PkColumns: []string{"_id"},
 				}
 			}
 

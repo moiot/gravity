@@ -94,7 +94,6 @@ type DMLMsg struct {
 	Data      map[string]interface{}
 	Old       map[string]interface{}
 	Pks       map[string]interface{}
-	PkColumns []string
 }
 
 type TaskReportStage string

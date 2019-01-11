@@ -52,7 +52,6 @@ func NewMsg(
 	for i := range pkColumns {
 		pkColumnsString = append(pkColumnsString, pkColumns[i].Name)
 	}
-	dmlMsg.PkColumns = pkColumnsString
 	dmlMsg.Pks = pkDataMap
 
 	msg.DmlMsg = dmlMsg
