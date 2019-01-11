@@ -54,4 +54,4 @@ Gravity supports the following data mutations:
 - [Architecture](docs/2.0/00-arch-en.md)
 - [Quick Start](docs/2.0/01-quick-start-en.md)
 - [Configuration](docs/2.0/02-config-index-en.md)
-- [Deployment](https://github.com/moiot/gravity-operator)
+- [Cluster Deployment](https://github.com/moiot/gravity-operator)
