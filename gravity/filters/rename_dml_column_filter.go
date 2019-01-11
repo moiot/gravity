@@ -2,6 +2,7 @@ package filters
 
 import (
 	"github.com/juju/errors"
+	"github.com/moiot/gravity/pkg/utils"
 
 	"github.com/moiot/gravity/gravity/registry"
 	"github.com/moiot/gravity/pkg/core"
@@ -30,30 +31,44 @@ func (f *renameDmlColumnFilter) Configure(data map[string]interface{}) error {
 
 	from, ok := data["from"]
 	if !ok {
-		return errors.Errorf("\"from\" is not configured")
+		return errors.Errorf("'from' is not configured")
 	}
 
 	to, ok := data["to"]
 	if !ok {
-		return errors.Errorf("\"to\" is not configured")
+		return errors.Errorf("'to' is not configured")
 	}
 
-	fromColumns, ok := from.([]string)
+	// from can be any type of slice, for example:
+	// []interface{}, []string{}
+	fromColumns, ok := utils.CastToSlice(from)
 	if !ok {
-		return errors.Errorf("\"from\" must be an array of string")
+		return errors.Errorf("'from' must be an array")
 	}
 
-	toColumns, ok := to.([]string)
+	fromColumnStrings, err := utils.CastSliceInterfaceToSliceString(fromColumns)
+	if err != nil {
+		return errors.Errorf("'from' should be an array of string")
+	}
+
+	// to can be any type of slice, for example:
+	// []interface{}, []string{}
+	toColumns, ok := utils.CastToSlice(to)
 	if !ok {
-		return errors.Errorf("\"to\" must be an array of string")
+		return errors.Errorf("'to' must be an array")
+	}
+
+	toColumnStrings, err := utils.CastSliceInterfaceToSliceString(toColumns)
+	if err != nil {
+		return errors.Errorf("'to' should be an array of string")
 	}
 
 	if len(fromColumns) != len(toColumns) {
 		return errors.Errorf("\"from\" should have the same length of \"to\"")
 	}
 
-	f.from = fromColumns
-	f.to = toColumns
+	f.from = fromColumnStrings
+	f.to = toColumnStrings
 
 	return nil
 }
@@ -74,6 +89,12 @@ func (f *renameDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err er
 		msg.DmlMsg.Data[toColumn] = msg.DmlMsg.Data[fromColumn]
 		delete(msg.DmlMsg.Data, fromColumn)
 
+		// Old
+		if msg.DmlMsg.Old != nil {
+			msg.DmlMsg.Old[toColumn] = msg.DmlMsg.Old[fromColumn]
+			delete(msg.DmlMsg.Old, fromColumn)
+		}
+
 		// Pks
 		if msg.DmlMsg.Pks != nil {
 			if _, ok := msg.DmlMsg.Pks[fromColumn]; ok {
@@ -81,6 +102,7 @@ func (f *renameDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err er
 				delete(msg.DmlMsg.Pks, fromColumn)
 			}
 		}
+
 	}
 
 	return true, nil

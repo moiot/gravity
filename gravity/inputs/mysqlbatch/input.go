@@ -35,10 +35,35 @@ type PluginConfig struct {
 
 	TableConfigs []TableConfig `mapstructure:"table-configs"json:"table-configs"`
 
-	NrScanner      int `mapstructure:"nr-scanner" toml:"nr-scanner" json:"nr-scanner"`
-	TableScanBatch int `mapstructure:"table-scan-batch" toml:"table-scan-batch" json:"table-scan-batch"`
+	NrScanner        int `mapstructure:"nr-scanner" toml:"nr-scanner" json:"nr-scanner"`
+	TableScanBatch   int `mapstructure:"table-scan-batch" toml:"table-scan-batch" json:"table-scan-batch"`
+	MaxFullDumpCount int `mapstructure:"max-full-dump-count"  toml:"max-full-dump-count"  json:"max-full-dump-count"`
 
 	BatchPerSecondLimit int `mapstructure:"batch-per-second-limit" toml:"batch-per-second-limit" json:"batch-per-second-limit"`
+}
+
+func (cfg *PluginConfig) ValidateAndSetDefault() error {
+	if cfg.SourceMaster == nil {
+		return errors.Errorf("[mysqlscanner] source master must be configured")
+	}
+
+	if cfg.NrScanner <= 0 {
+		cfg.NrScanner = 10
+	}
+
+	if cfg.TableScanBatch <= 0 {
+		cfg.TableScanBatch = 10000
+	}
+
+	if cfg.BatchPerSecondLimit <= 0 {
+		cfg.BatchPerSecondLimit = 1
+	}
+
+	if cfg.MaxFullDumpCount <= 0 {
+		cfg.MaxFullDumpCount = 100000
+	}
+
+	return nil
 }
 
 type mysqlFullInput struct {
@@ -82,20 +107,8 @@ func (plugin *mysqlFullInput) Configure(pipelineName string, data map[string]int
 		return errors.Trace(err)
 	}
 
-	if cfg.SourceMaster == nil {
-		return errors.Errorf("[mysqlscanner] source master must be configured")
-	}
-
-	if cfg.NrScanner <= 0 {
-		cfg.NrScanner = 10
-	}
-
-	if cfg.TableScanBatch <= 0 {
-		cfg.TableScanBatch = 10000
-	}
-
-	if cfg.BatchPerSecondLimit <= 0 {
-		cfg.BatchPerSecondLimit = 1
+	if err := cfg.ValidateAndSetDefault(); err != nil {
+		return errors.Trace(err)
 	}
 
 	plugin.cfg = &cfg
@@ -251,7 +264,6 @@ func (plugin *mysqlFullInput) Close() {
 		if plugin.sourceDB != nil {
 			plugin.sourceDB.Close()
 		}
-
 
 		if plugin.scanDB != nil {
 			plugin.scanDB.Close()

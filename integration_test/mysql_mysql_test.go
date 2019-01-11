@@ -3,7 +3,6 @@ package integration_test
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -11,7 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moiot/gravity/pkg/sliding_window"
+
 	"github.com/moiot/gravity/pkg/consts"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/core"
 
@@ -206,6 +208,12 @@ func TestMySQLBatch(t *testing.T) {
 	r.NoError(server.Start())
 
 	<-server.Input.Done()
+
+	// wait for some time to see if server is healthy
+	sliding_window.DefaultHealthyThreshold = 4
+	time.Sleep(5)
+
+	r.True(server.Scheduler.Healthy())
 
 	server.Close()
 

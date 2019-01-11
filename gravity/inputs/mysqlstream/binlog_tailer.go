@@ -315,7 +315,7 @@ func (tailer *BinlogTailer) Start() error {
 
 				schema, err := tailer.sourceSchemaStore.GetSchema(schemaName)
 				if err != nil {
-					log.Fatalf("[binlog_tailer] failed GetSchema: %v", errors.ErrorStack(err))
+					log.Fatalf("[binlog_tailer] failed GetSchema %v. err: %v.", schemaName, errors.ErrorStack(err))
 				}
 
 				tableDef := schema[tableName]

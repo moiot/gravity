@@ -111,7 +111,7 @@ func (tableScanner *TableScanner) InitTablePosition(tableDef *schema_store.Table
 		var scanColumn string
 		var scanType string
 
-		column, err := DetectScanColumn(tableScanner.db, tableDef.Schema, tableDef.Name, 10000)
+		column, err := DetectScanColumn(tableScanner.db, tableDef.Schema, tableDef.Name, tableScanner.cfg.MaxFullDumpCount)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -269,7 +269,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 		queryStartTime := time.Now()
 		rows, err := db.Query(statement, currentMinValue, batch)
 		if err != nil {
-			log.Fatalf("[LoopInBatch] err: %v", err)
+			log.Fatalf("[LoopInBatch] table %s.%s, err: %v", tableDef.Schema, tableDef.Name, err)
 		}
 
 		rowIdx := 0
@@ -281,7 +281,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 
 			rowsBatchDataPtrs[rowIdx], err = utils.ScanGeneralRowsWithDataPtrs(rows, columnTypes, rowsBatchDataPtrs[rowIdx])
 			if err != nil {
-				log.Fatalf("[LoopInBatch] scan error: %v", errors.ErrorStack(err))
+				log.Fatalf("[LoopInBatch] table %s.%s, scan error: %v", tableDef.Schema, tableDef.Name, errors.ErrorStack(err))
 			}
 
 			currentMinValue = reflect.ValueOf(rowsBatchDataPtrs[rowIdx][scanIdx]).Elem().Interface()
@@ -295,7 +295,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 
 		err = rows.Err()
 		if err != nil {
-			log.Fatalf("[LoopInBatch] rows err: %v", err)
+			log.Fatalf("[LoopInBatch] table %s.%s, rows err: %v", tableDef.Schema, tableDef.Name, err)
 		}
 
 		rows.Close()
@@ -310,6 +310,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 
 		batchIdx++
 
+		var lastMsg *core.Msg
 		// process this batch's data
 		for i := 0; i < rowIdx; i++ {
 			rowPtrs := rowsBatchDataPtrs[i]
@@ -321,6 +322,8 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 			if err := tableScanner.emitter.Emit(msg); err != nil {
 				log.Fatalf("[LoopInBatch] failed to emit job: %v", errors.ErrorStack(err))
 			}
+
+			lastMsg = msg
 		}
 
 		log.Infof("[LoopInBatch] sourceDB: %s, table: %s, currentMinPos: %v, maxMapString.column: %v, maxMapString.value: %v, maxMapString.type: %v, resultCount: %v",
@@ -328,7 +331,19 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 
 		// we break the loop here in case the currentMinPos comes larger than the max we have in the beginning.
 		if maxReached {
+
 			log.Infof("[LoopInBatch] max reached")
+
+			if lastMsg != nil {
+				<-lastMsg.Done
+
+				// close the stream
+				msg := NewCloseInputStreamMsg(tableDef)
+				if err := tableScanner.emitter.Emit(msg); err != nil {
+					log.Fatalf("[LoopInBatch] failed to emit close stream msg: %v", errors.ErrorStack(err))
+				}
+				log.Infof("[LoopInBatch] sent close input stream msg")
+			}
 			return
 		}
 

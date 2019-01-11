@@ -1,6 +1,6 @@
 # Gravity [简体中文](./README-cn.md)
 -------------------------
-[![Build Status](https://travis-ci.org/moiot/gravity.svg?branch=master)](https://travis-ci.org/moiot/gravity.svg?branch=master)
+[![Build Status](https://travis-ci.org/moiot/gravity.svg?branch=master)](https://travis-ci.org/moiot/gravity)
 
 ![2.0 Product](docs/2.0/product.png)
 

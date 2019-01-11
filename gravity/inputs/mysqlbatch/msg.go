@@ -52,7 +52,6 @@ func NewMsg(
 	for i := range pkColumns {
 		pkColumnsString = append(pkColumnsString, pkColumns[i].Name)
 	}
-	dmlMsg.PkColumns = pkColumnsString
 	dmlMsg.Pks = pkDataMap
 
 	msg.DmlMsg = dmlMsg
@@ -90,6 +89,16 @@ func NewCreateTableMsg(parser *parser.Parser, table *schema_store.Table, createT
 	msg.Done = make(chan struct{})
 	msg.Metrics = core.Metrics{
 		MsgCreateTime: time.Now(),
+	}
+	return &msg
+}
+
+func NewCloseInputStreamMsg(sourceTableDef *schema_store.Table) *core.Msg {
+	msg := core.Msg{
+		Type:            core.MsgCloseInputStream,
+		InputStreamKey:  utils.NewStringPtr(utils.TableIdentity(sourceTableDef.Schema, sourceTableDef.Name)),
+		OutputStreamKey: utils.NewStringPtr(""),
+		Done:            make(chan struct{}),
 	}
 	return &msg
 }

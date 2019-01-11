@@ -82,7 +82,6 @@ func NewInsertMsgs(
 			return nil, errors.Trace(err)
 		}
 		dmlMsg.Pks = pks
-		dmlMsg.PkColumns = pkColumnNames
 		msg.DmlMsg = dmlMsg
 		msg.Done = make(chan struct{})
 		msg.InputStreamKey = utils.NewStringPtr(inputStreamKey)
@@ -153,7 +152,6 @@ func NewUpdateMsgs(
 				return nil, errors.Trace(err)
 			}
 			dmlMsg.Pks = pks
-			dmlMsg.PkColumns = pkColumnNames
 
 			dmlMsg.Data = data
 			dmlMsg.Old = old
@@ -184,8 +182,6 @@ func NewUpdateMsgs(
 				return nil, errors.Trace(err)
 			}
 			dmlMsg1.Pks = pks
-			dmlMsg1.PkColumns = pkColumnNames
-
 			dmlMsg1.Data = old
 			msgDelete.DmlMsg = dmlMsg1
 			msgDelete.Done = make(chan struct{})
@@ -213,7 +209,6 @@ func NewUpdateMsgs(
 				return nil, errors.Trace(err)
 			}
 			dmlMsg2.Pks = pks
-			dmlMsg2.PkColumns = pkColumnNames
 
 			dmlMsg2.Data = data
 			msgInsert.DmlMsg = dmlMsg2
@@ -305,7 +300,6 @@ func NewDeleteMsgs(
 		}
 
 		dmlMsg.Pks = pks
-		dmlMsg.PkColumns = pkColumnNames
 		msg.DmlMsg = dmlMsg
 		msg.Done = make(chan struct{})
 		msg.InputStreamKey = utils.NewStringPtr(inputStreamKey)
