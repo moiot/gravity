@@ -230,5 +230,6 @@ func (c *Config) ConfigFromFile(path string) error {
 	} else {
 		return errors.Errorf("unrecognized path %s", path)
 	}
+	c.PipelineConfig.SetDefault()
 	return nil
 }

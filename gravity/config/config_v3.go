@@ -2,12 +2,21 @@ package config
 
 import "encoding/json"
 
+const PipelineConfigV3Version = "1"
+
 type PipelineConfigV3 struct {
-	PipelineName    string          `mapstructure:"name" toml:"name" json:"name"`
-	InputPlugin     InputConfig     `mapstructure:"input" toml:"input" json:"input"`
-	FilterPlugins   []GenericConfig `mapstructure:"filters" toml:"filters" json:"filters,omitempty"`
-	OutputPlugin    GenericConfig   `mapstructure:"output" toml:"output" json:"output"`
-	SchedulerPlugin *GenericConfig  `mapstructure:"scheduler" toml:"scheduler" json:"scheduler,omitempty"`
+	PipelineName    string          `yaml:"name" toml:"name" json:"name"`
+	Version         string          `yaml:"version" toml:"version" json:"version"`
+	InputPlugin     InputConfig     `yaml:"input" toml:"input" json:"input"`
+	FilterPlugins   []GenericConfig `yaml:"filters" toml:"filters" json:"filters,omitempty"`
+	OutputPlugin    GenericConfig   `yaml:"output" toml:"output" json:"output"`
+	SchedulerPlugin *GenericConfig  `yaml:"scheduler" toml:"scheduler" json:"scheduler,omitempty"`
+}
+
+func (c *PipelineConfigV3) SetDefault() {
+	if c.Version == "" {
+		c.Version = PipelineConfigV3Version
+	}
 }
 
 func (c *PipelineConfigV3) DeepCopy() PipelineConfigV3 {
@@ -31,12 +40,12 @@ const (
 type InputMode string
 
 type InputConfig struct {
-	Type   string                 `mapstructure:"type"  json:"type"  toml:"type"`
-	Mode   InputMode              `mapstructure:"mode" json:"mode" toml:"mode"`
-	Config map[string]interface{} `mapstructure:"config"  json:"config"  toml:"config"`
+	Type   string                 `yaml:"type"  json:"type"  toml:"type"`
+	Mode   InputMode              `yaml:"mode" json:"mode" toml:"mode"`
+	Config map[string]interface{} `yaml:"config"  json:"config"  toml:"config"`
 }
 
 type GenericConfig struct {
-	Type   string                 `mapstructure:"type"  json:"type"  toml:"type"`
-	Config map[string]interface{} `mapstructure:"config"  json:"config,omitempty"  toml:"config,omitempty"`
+	Type   string                 `yaml:"type"  json:"type"  toml:"type"`
+	Config map[string]interface{} `yaml:"config"  json:"config,omitempty"  toml:"config,omitempty"`
 }

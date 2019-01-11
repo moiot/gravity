@@ -3,6 +3,7 @@ package config
 import (
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 type PipelineConfigV2 struct {
@@ -15,6 +16,9 @@ type PipelineConfigV2 struct {
 
 func (c *PipelineConfigV2) IsV3() bool {
 	_, ok := c.InputPlugins["type"]
+	if !ok {
+		log.Warn("received v2 config")
+	}
 	return ok
 }
 
