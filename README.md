@@ -1,10 +1,10 @@
-# Gravity [简体中文](./README-cn.md)
+# **Gravity** [简体中文](./README-cn.md)
 -------------------------
-[![Build Status](https://travis-ci.org/moiot/gravity.svg?branch=master)](https://travis-ci.org/moiot/gravity)
+[![Build Status](https://travis-ci.org/moiot/**Gravity**.svg?branch=master)](https://travis-ci.org/moiot/**Gravity**)
 
 ![2.0 Product](docs/2.0/product.png)
 
-Gravity is used to replicate data between various inputs and outputs (databases, message queues).
+**Gravity** is used to replicate data between various inputs and outputs (databases, message queues).
 
 It is designed to be a customizable data replication tool that:
 
@@ -43,7 +43,7 @@ It is designed to be a customizable data replication tool that:
 
 ### Data mutation support
 
-Gravity supports the following data mutations:
+**Gravity** supports the following data mutations:
 
 - Ignore specific data
 - Renaming columns
@@ -54,4 +54,4 @@ Gravity supports the following data mutations:
 - [Architecture](docs/2.0/00-arch-en.md)
 - [Quick Start](docs/2.0/01-quick-start-en.md)
 - [Configuration](docs/2.0/02-config-index-en.md)
-- [Cluster Deployment](https://github.com/moiot/gravity-operator)
+- [Cluster Deployment](https://github.com/moiot/**Gravity**-operator)
