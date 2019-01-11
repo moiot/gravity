@@ -45,9 +45,10 @@ name = "mysql2mysqlDemo"
 #
 # Input 插件的定义，此处定义使用 mysql
 #
-[input.mysql]
+[input]
+type = "mysql"
 mode = "stream"
-[input.mysql.source]
+[input.config.source]
 host = "127.0.0.1"
 username = "root"
 password = ""
@@ -56,27 +57,20 @@ port = 3306
 #
 # Output 插件的定义，此处使用 mysql
 #
-[output.mysql.target]
+[output]
+type = "mysql"
+[output.config.target]
 host = "127.0.0.1"
 username = "root"
 password = ""
 port = 3306
 
 # 路由规则的定义
-[[output.mysql.routes]]
+[[output.config.routes]]
 match-schema = "test"
 match-table = "test_source_table"
 target-schema = "test"
 target-table = "test_target_table"
-
-#
-# scheduler 插件的定义，此处使用默认 scheduler
-#
-[scheduler.batch-table-scheduler]
-nr-worker = 2
-batch-size = 1
-queue-size = 1024
-sliding-window-size = 1024
 ```
 
 启动 `gravity`
@@ -97,9 +91,10 @@ name = "mysql2kafkaDemo"
 #
 # Input 插件的定义，此处定义使用 mysql
 #
-[input.mysql]
+[input]
+type = "mysql"
 mode = "stream"
-[input.mysql.source]
+[input.config.source]
 host = "127.0.0.1"
 username = "root"
 password = ""
@@ -108,24 +103,17 @@ port = 3306
 #
 # Output 插件的定义，此处使用 mysql
 #
-[output.async-kafka.kafka-global-config]
+[output]
+type = "async-kafka"
+[output.config.kafka-global-config]
 broker-addrs = ["127.0.0.1:9092"]
 mode = "async"
 
 # kafka 路由的定义
-[[output.async-kafka.routes]]
+[[output.config.routes]]
 match-schema = "test"
 match-table = "test_source_table"
 dml-topic = "test"
-
-#
-# scheduler 插件的定义，此处使用默认 scheduler
-#
-[scheduler.batch-table-scheduler]
-nr-worker = 1
-batch-size = 1
-queue-size = 1024
-sliding-window-size = 1024
 ```
 
 启动 `gravity`

@@ -14,6 +14,8 @@ Filter 是以数组的方式配置的，系统会按照顺序执行每一个 Fil
 ```toml
 [[filters]]
 type = "reject"
+
+[filters.config]
 match-schema = "test"
 match-table = "test_table_*"
 ```
@@ -25,6 +27,7 @@ match-table = "test_table_*"
 ```toml
 [[filters]]
 type = "reject"
+[filters.config]
 match-schema = "test"
 match-dml-op = "delete"
 ```
@@ -35,6 +38,7 @@ match-dml-op = "delete"
 ```toml
 [[filters]]
 type = "delete-dml-column"
+[filters.config]
 match-schema = "test"
 match-table = "test_table"
 columns = ["e", "f"]
@@ -49,6 +53,7 @@ columns = ["e", "f"]
 ```toml
 [[filters]]
 type = "rename-dml-column"
+[filters.config]
 match-schema = "test"
 match-table = "test_table"
 from = ["a", "b"]

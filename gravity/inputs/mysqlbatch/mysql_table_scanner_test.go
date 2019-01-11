@@ -181,7 +181,7 @@ func TestFindInBatch(t *testing.T) {
 				"no record in table",
 				nil,
 				PluginConfig{
-					SourceMaster: dbCfg,
+					Source: dbCfg,
 					TableConfigs: []TableConfig{
 						{
 							Schema: testDBName,
@@ -203,7 +203,7 @@ func TestFindInBatch(t *testing.T) {
 					mysql_test.InsertIntoTestTable(db, testDBName, mysql_test.TestScanColumnTableIdPrimary, args)
 				},
 				PluginConfig{
-					SourceMaster: dbCfg,
+					Source: dbCfg,
 					TableConfigs: []TableConfig{
 						{
 							Schema: testDBName,
@@ -226,7 +226,7 @@ func TestFindInBatch(t *testing.T) {
 					}
 				},
 				PluginConfig{
-					SourceMaster: dbCfg,
+					Source: dbCfg,
 					TableConfigs: []TableConfig{
 						{
 							Schema: testDBName,
@@ -255,7 +255,7 @@ func TestFindInBatch(t *testing.T) {
 					}
 				},
 				PluginConfig{
-					SourceMaster: dbCfg,
+					Source: dbCfg,
 					TableConfigs: []TableConfig{
 						{
 							Schema: testDBName,
@@ -281,7 +281,7 @@ func TestFindInBatch(t *testing.T) {
 					}
 				},
 				PluginConfig{
-					SourceMaster: dbCfg,
+					Source: dbCfg,
 					TableConfigs: []TableConfig{
 						{
 							Schema: testDBName,
@@ -306,7 +306,7 @@ func TestFindInBatch(t *testing.T) {
 
 				},
 				PluginConfig{
-					SourceMaster: dbCfg,
+					Source: dbCfg,
 					TableConfigs: []TableConfig{
 						{
 							Schema: testDBName,
@@ -388,7 +388,7 @@ func TestInitTablePosition(t *testing.T) {
 		db := mysql_test.MustSetupSourceDB(testDBName)
 
 		cfg := PluginConfig{
-			SourceMaster: mysql_test.SourceDBConfig(),
+			Source: mysql_test.SourceDBConfig(),
 			TableConfigs: []TableConfig{
 				{
 					Schema: testDBName,

@@ -3,6 +3,8 @@ package filters
 import (
 	"testing"
 
+	"github.com/moiot/gravity/gravity/config"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/moiot/gravity/pkg/core"
@@ -11,11 +13,14 @@ import (
 func TestRejectFilter(t *testing.T) {
 	assert := assert.New(t)
 
-	data := []interface{}{
-		map[string]interface{}{
-			"type":         "reject",
-			"match-schema": "test_db",
-			"match-table":  "test_table_1",
+	data := []config.GenericConfig{
+		{
+			Type: "reject",
+			Config: map[string]interface{}{
+				"type":         "reject",
+				"match-schema": "test_db",
+				"match-table":  "test_table_1",
+			},
 		},
 	}
 

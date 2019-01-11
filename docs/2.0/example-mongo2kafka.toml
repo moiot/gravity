@@ -1,19 +1,26 @@
 name = "example-mongo2kafka"
 
-[input.mongooplog.source]
+[input]
+type = "mongooplog"
+
+[input.config.source]
 host = "127.0.0.1"
 port = 27017
 
-[output.async-kafka.kafka-global-config]
+[output]
+type = "async-kafka"
+
+[output.config.kafka-global-config]
 broker-addrs = ["localhost:9092"]
 
-[[output.async-kafka.routes]]
+[[output.config.routes]]
 match-schema = "test"
 match-table = "test_table"
 dml-topic = "test.test_table"
 
-[system.scheduler]
+[scheduler]
 type = "batch-table-scheduler"
+[scheduler.config]
 nr-worker = 1
 batch-size = 2
 queue-size = 1024

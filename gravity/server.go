@@ -24,70 +24,49 @@ type Server struct {
 	Output        core.Output
 }
 
-func Parse(pipelineConfig *config.PipelineConfigV2) (*Server, error) {
+func Parse(pipelineConfig config.PipelineConfigV3) (*Server, error) {
+	pipelineConfig = pipelineConfig.DeepCopy()
+
 	server := Server{}
 
 	// output
-	outputPlugins := pipelineConfig.OutputPlugins
-	if len(outputPlugins) != 1 {
-		return nil, errors.Errorf("only one output plugin can be configured")
+	plugin, err := registry.GetPlugin(registry.OutputPlugin, pipelineConfig.OutputPlugin.Type)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
-	for name := range outputPlugins {
-		plugin, err := registry.GetPlugin(registry.OutputPlugin, name)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
 
-		// type assertion
-		output, ok := plugin.(core.Output)
-		if !ok {
-			return nil, errors.Errorf("not a valid output plugin: %v", name)
-		}
-		server.Output = output
+	// type assertion
+	output, ok := plugin.(core.Output)
+	if !ok {
+		return nil, errors.Errorf("not a valid output plugin: %v", pipelineConfig.OutputPlugin.Type)
+	}
+	server.Output = output
 
-		configData, ok := pipelineConfig.OutputPlugins[name].(map[string]interface{})
-		if !ok {
-			return nil, errors.Errorf("output plugin config error")
-		}
-
-		if err := plugin.Configure(pipelineConfig.PipelineName, configData); err != nil {
-			return nil, errors.Trace(err)
-		}
-
+	if err := plugin.Configure(pipelineConfig.PipelineName, pipelineConfig.OutputPlugin.Config); err != nil {
+		return nil, errors.Trace(err)
 	}
 
 	// scheduler
-	schedulerPlugin := pipelineConfig.SchedulerPlugins
-	if len(schedulerPlugin) > 1 {
-		return nil, errors.Errorf("only one scheduler can be configured")
-	}
-
-	if len(schedulerPlugin) == 0 {
-		schedulerPlugin = map[string]interface{}{
-			"batch-table-scheduler": batch_table_scheduler.DefaultConfig,
+	if pipelineConfig.SchedulerPlugin == nil {
+		pipelineConfig.SchedulerPlugin = &config.GenericConfig{
+			Type:   "batch-table-scheduler",
+			Config: batch_table_scheduler.DefaultConfig,
 		}
 	}
 
-	for name := range schedulerPlugin {
-		plugin, err := registry.GetPlugin(registry.SchedulerPlugin, name)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
+	plugin, err = registry.GetPlugin(registry.SchedulerPlugin, pipelineConfig.SchedulerPlugin.Type)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 
-		scheduler, ok := plugin.(core.Scheduler)
-		if !ok {
-			return nil, errors.Errorf("not a valid scheduler plugin")
-		}
-		server.Scheduler = scheduler
+	scheduler, ok := plugin.(core.Scheduler)
+	if !ok {
+		return nil, errors.Errorf("not a valid scheduler plugin")
+	}
+	server.Scheduler = scheduler
 
-		configData, ok := schedulerPlugin[name].(map[string]interface{})
-		if !ok {
-			return nil, errors.Errorf("scheduler plugin config error")
-		}
-
-		if err := plugin.Configure(pipelineConfig.PipelineName, configData); err != nil {
-			return nil, errors.Trace(err)
-		}
+	if err := plugin.Configure(pipelineConfig.PipelineName, pipelineConfig.SchedulerPlugin.Config); err != nil {
+		return nil, errors.Trace(err)
 	}
 
 	// emitters
@@ -104,7 +83,7 @@ func Parse(pipelineConfig *config.PipelineConfigV2) (*Server, error) {
 	server.Emitter = e
 
 	// input
-	inputPlugins := pipelineConfig.InputPlugins
+	inputPlugins := pipelineConfig.InputPlugin
 	input, err := newInput(pipelineConfig.PipelineName, inputPlugins)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -114,7 +93,7 @@ func Parse(pipelineConfig *config.PipelineConfigV2) (*Server, error) {
 	return &server, nil
 }
 
-func NewServer(pipelineConfig *config.PipelineConfigV2) (*Server, error) {
+func NewServer(pipelineConfig config.PipelineConfigV3) (*Server, error) {
 	server, err := Parse(pipelineConfig)
 	if err != nil {
 		return nil, err
@@ -129,35 +108,23 @@ func NewServer(pipelineConfig *config.PipelineConfigV2) (*Server, error) {
 	return server, nil
 }
 
-func newInput(pipelineName string, inputPluginConfigs map[string]interface{}) (core.Input, error) {
-	if len(inputPluginConfigs) != 1 {
-		return nil, errors.Errorf("only one input plugin can be configured")
+func newInput(pipelineName string, inputConfig config.InputConfig) (core.Input, error) {
+	plugin, err := registry.GetPlugin(registry.InputPlugin, inputConfig.Type)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 
-	for name := range inputPluginConfigs {
-		plugin, err := registry.GetPlugin(registry.InputPlugin, name)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-
-		cfg, ok := inputPluginConfigs[name].(map[string]interface{})
-		if !ok {
-			return nil, errors.Errorf("input plugin config is not map")
-		}
-
-		if err := plugin.Configure(pipelineName, cfg); err != nil {
-			return nil, errors.Trace(err)
-		}
-
-		p, ok := plugin.(core.Input)
-		if !ok {
-			return nil, errors.Errorf("not a valid input type")
-		} else {
-			return p, nil
-		}
+	inputConfig.Config["mode"] = inputConfig.Mode
+	if err := plugin.Configure(pipelineName, inputConfig.Config); err != nil {
+		return nil, errors.Trace(err)
 	}
 
-	panic("impossible")
+	p, ok := plugin.(core.Input)
+	if !ok {
+		return nil, errors.Errorf("not a valid input type")
+	} else {
+		return p, nil
+	}
 }
 
 func (s *Server) Start() error {

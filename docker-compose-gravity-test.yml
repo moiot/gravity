@@ -49,7 +49,7 @@ services:
     logging:
       driver: none
 
-  drc-test:
+  gravity-test:
     build:
       context: ./
       dockerfile: Dockerfile.test.gravity

@@ -24,7 +24,7 @@ type Config struct {
 
 	EtcdEndpoints string `toml:"etcd-endpoints" json:"etcd-endpoints"`
 
-	PipelineConfig *PipelineConfigV2 `toml:"pipeline" json:"pipeline"`
+	PipelineConfig PipelineConfigV3 `toml:"pipeline" json:"pipeline"`
 
 	// Log related configuration.
 	Log logutil.LogConfig `toml:"log" json:"log"`
@@ -148,7 +148,7 @@ type TargetMySQLWorkerConfig struct {
 // NewConfig creates a new config.
 func NewConfig() *Config {
 	cfg := &Config{}
-	cfg.PipelineConfig = &PipelineConfigV2{}
+	cfg.PipelineConfig = PipelineConfigV3{}
 	cfg.FlagSet = flag.NewFlagSet("gravity", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
@@ -195,32 +195,40 @@ func (c *Config) ParseCmd(arguments []string) error {
 
 // ConfigFromFile loads config from file.
 func (c *Config) ConfigFromFile(path string) error {
+	old := PipelineConfigV2{}
 	if strings.HasSuffix(path, ".toml") {
-		_, err := toml.DecodeFile(path, c.PipelineConfig)
-		return errors.Trace(err)
+		_, err := toml.DecodeFile(path, &old)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if old.IsV3() {
+			_, err := toml.DecodeFile(path, &c.PipelineConfig)
+			if err != nil {
+				return errors.Trace(err)
+			}
+		} else {
+			c.PipelineConfig = old.ToV3()
+		}
+
 	} else if strings.HasSuffix(path, ".json") {
 		content, err := ioutil.ReadFile(path)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		return errors.Trace(json.Unmarshal(content, c.PipelineConfig))
+		err = json.Unmarshal(content, &old)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if old.IsV3() {
+			err = json.Unmarshal(content, &c.PipelineConfig)
+			if err != nil {
+				return errors.Trace(err)
+			}
+		} else {
+			c.PipelineConfig = old.ToV3()
+		}
 	} else {
 		return errors.Errorf("unrecognized path %s", path)
 	}
-}
-
-func ValidatePipelineConfig(cfg *PipelineConfigV2) error {
-	if cfg == nil {
-		return errors.Errorf("pipeline config nil")
-	}
-
-	if len(cfg.InputPlugins) == 0 {
-		return errors.Errorf("input is empty: %v", cfg)
-	}
-
-	if len(cfg.OutputPlugins) == 0 {
-		return errors.Errorf("output is empty: %v", cfg)
-	}
-
 	return nil
 }

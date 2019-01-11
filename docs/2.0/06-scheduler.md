@@ -9,7 +9,10 @@
 # batch-table-scheduler 配置
 # - 可选
 #
-[scheduler.batch-table-scheduler]
+[scheduler]
+type = "batch-table-scheduler"
+
+[scheduler.config]
 # 默认值 1
 nr-worker = 1
 

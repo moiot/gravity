@@ -66,14 +66,9 @@ func main() {
 	logutil.MustInitLogger(&cfg.Log)
 	utils.LogRawInfo("gravity")
 
-	pipelineConfig := cfg.PipelineConfig
-	if err := config.ValidatePipelineConfig(pipelineConfig); err != nil {
-		log.Fatalf("[gravity] pipeline config validation failed: %v", errors.ErrorStack(err))
-	}
+	logutil.PipelineName = cfg.PipelineConfig.PipelineName
 
-	logutil.PipelineName = pipelineConfig.PipelineName
-
-	server, err := gravity.NewServer(pipelineConfig)
+	server, err := gravity.NewServer(cfg.PipelineConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -95,8 +90,8 @@ func main() {
 
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
-		http.HandleFunc("/reset", resetHandler(server, lock, pipelineConfig))
-		http.HandleFunc("/status", statusHandler(server, pipelineConfig.PipelineName, hash))
+		http.HandleFunc("/reset", resetHandler(server, lock, cfg.PipelineConfig))
+		http.HandleFunc("/status", statusHandler(server, cfg.PipelineConfig.PipelineName, hash))
 		http.HandleFunc("/healthz", healthzHandler(server))
 		err = http.ListenAndServe(cfg.HttpAddr, nil)
 		if err != nil {
@@ -213,7 +208,7 @@ func statusHandler(server *gravity.Server, name, config string) func(http.Respon
 	}
 }
 
-func resetHandler(server *gravity.Server, lock *sync.Mutex, pipelineConfig *config.PipelineConfigV2) func(http.ResponseWriter, *http.Request) {
+func resetHandler(server *gravity.Server, lock *sync.Mutex, pipelineConfig config.PipelineConfigV3) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		lock.Lock()
 		defer lock.Unlock()
