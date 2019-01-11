@@ -1,4 +1,4 @@
-# Gravity
+# Gravity [简体中文](./README-cn.md)
 -------------------------
 [![Build Status](https://travis-ci.org/moiot/gravity.svg?branch=master)](https://travis-ci.org/moiot/gravity.svg?branch=master)
 
@@ -6,7 +6,7 @@
 
 Gravity is used to replicate data between various inputs and outputs (databases, message queues).
 
-It is designed to be a customizable data replication tool that
+It is designed to be a customizable data replication tool that:
 
 - Supports multiple sources and destinations
 
@@ -21,7 +21,7 @@ It is designed to be a customizable data replication tool that
 - Online data mutation: Data can be changed during the replication. For example, rename the column, encrypt/decrypt data columns. 
 ## Features
 
-### Data Input support
+### Input support
 
 | Input | Status  |
 |---|---|
@@ -32,7 +32,7 @@ It is designed to be a customizable data replication tool that
 |  PostgreSQL WAL | Doing  |
 
 
-### Data output support
+### output support
 
 
 | Output | Status  |
