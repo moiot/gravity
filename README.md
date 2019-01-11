@@ -55,3 +55,7 @@ It is designed to be a customizable data replication tool that:
 - [Quick Start](docs/2.0/01-quick-start-en.md)
 - [Configuration](docs/2.0/02-config-index-en.md)
 - [Cluster Deployment](https://github.com/moiot/**Gravity**-operator)
+
+-----------
+
+Special thanks to @dantin, @LiangShang, and @liwink for the early work to this project, and thanks @CaitinChen for the initial translation of the documentation.
