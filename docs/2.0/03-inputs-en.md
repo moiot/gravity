@@ -1,8 +1,3 @@
----
-title: Input Configuration
-summary: Learn how to configure Input.
----
-
 # Input Configuration
 
 Currently, DRC supports the following Input plugins:
@@ -31,7 +26,7 @@ gtid-mode=ON
 binlog_format=ROW
 ```
 
-DRC account privileges are as follows:
+Gravity account privileges are as follows:
 
 ```sql
 CREATE USER drc IDENTIFIED BY 'xxx';

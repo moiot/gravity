@@ -1,13 +1,8 @@
----
-title: Gravity Configuration
-summary: Learn how to configure DRC Single Process and DRC Cluster.
----
-
-# Gravity Configuration
+# Configuration
 
 This document introduces how to configure DRC Single Process and DRC Cluster respectively.
 
-## Configuration of Gravity Single Process
+## Gravity Single Process
 
 To configure Gravity Single Process, use the configuration file.
 
@@ -15,7 +10,7 @@ Gravity works in the plugin-based mode and each plugin has its own configuration
 
 This section uses the configuration file in the `toml` format to describe configuration rules.
 
-## Configuration of Gravity Cluster
+## Gravity Cluster
 
 To configure Gravity Cluster, use Rest API to start the task. Make sure the Rest API and the `json` format of the configuration file are consistent.
 
