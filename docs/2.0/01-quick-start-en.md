@@ -1,9 +1,9 @@
 ---
-title: DRC Quick Start Guide
+title: Gravity Quick Start Guide
 summary: Learn how to quickly start DRC.
 ---
 
-# DRC Quick Start Guide
+# Gravity Quick Start Guide
 
 This document takes synchronizing the data of the local MySQL instance and data subscription as examples to introduce how to quickly start DRC.
 

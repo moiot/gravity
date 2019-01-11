@@ -1,25 +1,20 @@
----
-title: DRC Configuration
-summary: Learn how to configure DRC Single Process and DRC Cluster.
----
-
-# DRC Configuration
+# Configuration
 
 This document introduces how to configure DRC Single Process and DRC Cluster respectively.
 
-## Configuration of DRC Single Process
+## Gravity Single Process
 
-To configure DRC Single Process, use the configuration file.
+To configure Gravity Single Process, use the configuration file.
 
-DRC works in the plugin-based microkernel mode and each plugin has its own configuration. Currently, DRC supports the configuration file in the `toml` and `json` formats.
+Gravity works in the plugin-based mode and each plugin has its own configuration. Currently, DRC supports the configuration file in the `toml` and `json` formats.
 
 This section uses the configuration file in the `toml` format to describe configuration rules.
 
-## Configuration of DRC Cluster
+## Gravity Cluster
 
-To configure DRC Cluster, use Rest API to start the task. Make sure the Rest API and the `json` format of the configuration file are consistent.
+To configure Gravity Cluster, use Rest API to start the task. Make sure the Rest API and the `json` format of the configuration file are consistent.
 
-For DRC Cluster, the Web interface configuration is provided. For details about the options of Rest API, see the configuration file in the `toml` format.
+For Gravity Cluster, the Web interface configuration is provided. For details about the options of Rest API, see the configuration file in the `toml` format.
 
 ## Note
 
