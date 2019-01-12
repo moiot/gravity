@@ -12,36 +12,38 @@
 # 目标端 Kafka 连接配置
 # - 必填
 #
-[output.async-kafka.kafka-global-config]
+[output]
+type = "async-kafka"
+
+#
+# 目标端编码规则：输出类型和版本号
+# - 可选
+[output.config]
+# 默认为 json
+output-format = "json"
+# 默认为 0.1 版本
+schema-version = "0.1"
+
+[output.config.kafka-global-config]
 # - 必填
 broker-addrs = ["localhost:9092"]
 mode = "async"
 
 # 目标端 kafka SASL 配置
 # - 可选
-[output.async-kafka.kafka-global-config.net.sasl]
+[output.config.kafka-global-config.net.sasl]
 enable = false
 user = ""
 password = ""
-
 
 #
 # 目标端 Kafka 路由配置
 # - 必填
 #
-[[output.async-kafka.routes]]
+[[output.config.routes]]
 match-schema = "test"
 match-table = "test_table"
 dml-topic = "test.test_table"
-
-#
-# 目标端编码规则：输出类型和版本号
-# - 可选
-[output.async-kafka]
-# 默认为 json
-output-format = "json"
-# 默认为 0.1 版本
-schema-version = "0.1"
 ```
 
 Kafka 输出的 DML json 格式如下
@@ -91,19 +93,20 @@ Kafka 输出的 DDL json 格式如下
 # 目标端 MySQL 连接配置
 # - 必填
 #
-[output.mysql.target]
+[output]
+type = "mysql"
+
+[output.config.target]
 host = "127.0.0.1"
 username = ""
 password = ""
 port = 3306
-# 目标端 MySQL 的时区： https://github.com/go-sql-driver/mysql#loc
-location = "Local"
 
 #
 # 目标端 MySQL 路由配置；match-schema, match-table 支持 * 匹配
 # - 必填
 #
-[[output.mysql.routes]]
+[[output.config.routes]]
 match-schema = "test"
 match-table = "test_source_table_*"
 target-schema = "test"
@@ -113,7 +116,7 @@ target-table = "test_target_table"
 # MySQL 执行引擎配置
 # - 可选
 #
-[output.mysql.execution-engine]
+[output.config.execution-engine]
 # 开启双向同步标识的写入
 use-bidirection = false
 ```
@@ -122,7 +125,7 @@ use-bidirection = false
 在上述配置中，如果配置了
 
 ```toml
-[output.mysql.execution-engine]
+[output.config.execution-engine]
 # 开启双向同步标识的写入
 use-bidirection = true
 ```

@@ -100,7 +100,7 @@ func TestMySQLToMySQLStream(t *testing.T) {
 		},
 	}
 	// start the server
-	server, err := gravity.NewServer(&pipelineConfig)
+	server, err := gravity.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -115,7 +115,7 @@ func TestMySQLToMySQLStream(t *testing.T) {
 	server.Close()
 
 	// start the server again without insert/update.
-	server, err = gravity.NewServer(&pipelineConfig)
+	server, err = gravity.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -202,7 +202,7 @@ func TestMySQLBatch(t *testing.T) {
 		},
 	}
 
-	server, err := gravity.NewServer(&pipelineConfig)
+	server, err := gravity.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -290,7 +290,7 @@ func TestMySQLToMySQLReplication(t *testing.T) {
 		},
 	}
 
-	server, err := gravity.NewServer(&pipelineConfig)
+	server, err := gravity.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -306,7 +306,7 @@ func TestMySQLToMySQLReplication(t *testing.T) {
 	server.Close()
 
 	// restart server
-	server, err = gravity.NewServer(&pipelineConfig)
+	server, err = gravity.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -401,7 +401,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 	}
 
 	// start full, incremental, close server
-	server, err := gravity.NewServer(&pipelineConfig)
+	server, err := gravity.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -417,7 +417,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 
 	// clear position store, truncate table,
 	// and start over again.
-	server, err = gravity.NewServer(&pipelineConfig)
+	server, err = gravity.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	server.PositionStore.Clear()
@@ -426,7 +426,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 		r.NoError(err)
 	}
 
-	server, err = gravity.NewServer(&pipelineConfig)
+	server, err = gravity.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 	r.NoError(server.Start())
 

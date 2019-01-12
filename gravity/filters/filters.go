@@ -3,6 +3,8 @@ package filters
 import (
 	"reflect"
 
+	"github.com/moiot/gravity/gravity/config"
+
 	"github.com/juju/errors"
 
 	"github.com/moiot/gravity/gravity/registry"
@@ -10,33 +12,18 @@ import (
 	"github.com/moiot/gravity/pkg/core"
 )
 
-func NewFilters(filterConfigs []interface{}) ([]core.IFilter, error) {
+func NewFilters(filterConfigs []config.GenericConfig) ([]core.IFilter, error) {
 	var retFilters []core.IFilter
-	for _, filterData := range filterConfigs {
-		filterDataMap, ok := filterData.(map[string]interface{})
-		if !ok {
-			return nil, errors.Errorf("filter should be a map")
-		}
-
-		filterType, ok := filterDataMap["type"]
-		if !ok {
-			return nil, errors.Errorf("unknown filter type: %v", filterDataMap["type"])
-		}
-
-		filterTypeString, ok := filterType.(string)
-		if !ok {
-			return nil, errors.Errorf("filter type should be a string")
-		}
-
-		if filterTypeString == "go-plugin" {
-			name, p, err := registry.DownloadGoPlugin(filterDataMap)
+	for _, c := range filterConfigs {
+		if c.Type == "go-plugin" {
+			name, p, err := registry.DownloadGoPlugin(c.Config)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
 			registry.RegisterPlugin(registry.FilterPlugin, name, p, true)
 		}
 
-		factory, err := registry.GetPlugin(registry.FilterPlugin, filterTypeString)
+		factory, err := registry.GetPlugin(registry.FilterPlugin, c.Type)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -48,8 +35,7 @@ func NewFilters(filterConfigs []interface{}) ([]core.IFilter, error) {
 
 		f := filterFactory.NewFilter()
 
-		delete(filterDataMap, "type")
-		if err := f.Configure(filterDataMap); err != nil {
+		if err := f.Configure(c.Config); err != nil {
 			return nil, errors.Trace(err)
 		}
 

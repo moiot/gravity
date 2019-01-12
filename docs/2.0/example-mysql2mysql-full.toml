@@ -8,13 +8,14 @@
 # 来匹配 filter 和 output 的路由，filter/output 里的每一个 match 函数
 # 都匹配才算满足匹配规则
 #
-[input.mysql]
+[input]
+type = "mysql"
 mode = "stream"
+
+[input.config]
 ignore-bidirectional-data = true
 
-[input.mysql]
-mode = "stream"
-[input.mysql.source]
+[input.config.source]
 host = "127.0.0.1"
 username = "root"
 password = ""
@@ -22,11 +23,13 @@ port = 3306
 
 [[filters]]
 type = "reject"
+[filters.config]
 match-schema = "test_db"
 match-table = "test_table"
 
 [[filters]]
 type = "rename-dml-column"
+[filters.config]
 match-schema = "test"
 match-table = "test_table_2"
 from = ["b"]
@@ -34,27 +37,31 @@ to = ["d"]
 
 [[filters]]
 type = "delete-dml-column"
+[filters.config]
 match-schema = "test"
 match-table = "test_table"
 columns = ["e", "f"]
 
 [[filters]]
 type = "dml-pk-override"
+[filters.config]
 match-schema = "test"
 match-table = "test_table"
 id = "another_id"
 
-[output.kafka]
+[output]
+type = "async-kafka"
+[output.config]
 broker-addrs = ["1.2.3.4:9002"]
-mode = "async"
 
-[[output.kafka.routes]]
+[[output.config.routes]]
 match-schema = "test_db"
 match-table = "test_table_2"
 dml-topic = "binlog.test_db.test_table_2"
 
-[system.scheduler]
+[scheduler]
 type = "batch-scheduler"
+[scheduler.config]
 nr-worker = 1
 batch-size = 2
 queue-size = 1024

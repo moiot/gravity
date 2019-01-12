@@ -20,7 +20,7 @@ func (baseFilter *BaseFilter) ConfigureMatchers(configData map[string]interface{
 	baseFilter.matchers = retMatchers
 
 	if len(baseFilter.matchers) == 0 {
-		return errors.Errorf("no matcher configured for this filter")
+		return errors.Errorf("no matcher configured for this filter. config: %v", configData)
 	}
 	return nil
 }

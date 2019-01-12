@@ -1,11 +1,11 @@
 ---
 title: Gravity Quick Start Guide
-summary: Learn how to quickly start DRC.
+summary: Learn how to quickly start Gravity.
 ---
 
 # Gravity Quick Start Guide
 
-This document takes synchronizing the data of the local MySQL instance and data subscription as examples to introduce how to quickly start DRC.
+This document takes synchronizing the data of the local MySQL instance and data subscription as examples to introduce how to quickly start Gravity.
 
 ## Step 1: Configure the MySQL environment
 
@@ -53,7 +53,10 @@ You can choose to synchronize data between two MySQL clusters or from MySQL to K
         #
         # The definition of Input. `mysqlbinlog` is used for this definition.
         #
-        [input.mysqlbinlog.source]
+        [input]
+        type = "mysql"
+        mode = "stream"
+        [input.config.source]
         host = "127.0.0.1"
         username = "root"
         password = ""
@@ -63,7 +66,9 @@ You can choose to synchronize data between two MySQL clusters or from MySQL to K
         #
         # The definition of Output. `mysql` is used for this definition.
         #
-        [output.mysql.target]
+        [output]
+        type = "mysql"
+        [output.config.target]
         host = "127.0.0.1"
         username = "root"
         password = ""
@@ -71,26 +76,17 @@ You can choose to synchronize data between two MySQL clusters or from MySQL to K
         location = "Local"
 
         # The definition of the routing rule
-        [[output.mysql.routes]]
+        [[output.config.routes]]
         match-schema = "test"
         match-table = "test_source_table"
         target-schema = "test"
         target-table = "test_target_table"
-
-        #
-        # The definition of Scheduler. `scheduler` is used for this definition by default.
-        #
-        [scheduler.batch-table-scheduler]
-        nr-worker = 2
-        batch-size = 1
-        queue-size = 1024
-        sliding-window-size = 1024
         ```
 
-    2. Enable `drc`.
+    2. Enable `gravity`.
 
         ```bash
-        bin/drc -config mysql2mysql.toml
+        bin/gravity -config mysql2mysql.toml
         ```
 
     3. After the incremental synchronization between `test_source_table` and `test_target_table` begins, you can insert data in the source cluster and then you will see the change in the target cluster.
@@ -100,12 +96,16 @@ You can choose to synchronize data between two MySQL clusters or from MySQL to K
     1. Create the configuration file, as shown in the following file `mysql2kafka.toml`:
 
         ```toml
+        
         name = "mysql2kafkaDemo"
-
+ 
         #
         # The definition of Input. `mysqlbinlog` is used for this definition.
         #
-        [input.mysqlbinlog.source]
+        [input]
+        type = "mysql"
+        mode = "stream"
+        [input.config.source]
         host = "127.0.0.1"
         username = "root"
         password = ""
@@ -115,30 +115,23 @@ You can choose to synchronize data between two MySQL clusters or from MySQL to K
         #
         # The definition of Output. `mysql` is used for this definition.
         #
-        [output.async-kafka.kafka-global-config]
+        [output]
+        type = "async-kafka"
+        [output.config.kafka-global-config]
         broker-addrs = ["127.0.0.1:9092"]
         mode = "async"
 
         # The routing definition of Kafka
-        [[output.async-kafka.routes]]
+        [[output.config.routes]]
         match-schema = "test"
         match-table = "test_source_table"
         dml-topic = "test"
-
-        #
-        # The definition of Scheduler. `scheduler` is used for this definition by default.
-        #
-        [scheduler.batch-table-scheduler]
-        nr-worker = 1
-        batch-size = 1
-        queue-size = 1024
-        sliding-window-size = 1024
         ```
 
-    2. Enable `drc`:
+    2. Enable `gravity`:
 
         ```bash
-        bin/drc -config mysql2kafka.toml
+        bin/gravity -config mysql2kafka.toml
         ```
 
     3. The data mutation of `test`.`test_source_table` table in the MySQL cluster is sent to `test` of Kafka.

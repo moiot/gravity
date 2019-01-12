@@ -30,8 +30,8 @@ type TableConfig struct {
 }
 
 type PluginConfig struct {
-	SourceMaster *utils.DBConfig `mapstructure:"source" toml:"source" json:"source"` // keep same with mysql binlog config to make most cases simple
-	SourceSlave  *utils.DBConfig `mapstructure:"source-slave" toml:"source-slave" json:"source-slave"`
+	Source      *utils.DBConfig `mapstructure:"source" toml:"source" json:"source"` // keep same with mysql binlog config to make most cases simple
+	SourceSlave *utils.DBConfig `mapstructure:"source-slave" toml:"source-slave" json:"source-slave"`
 
 	TableConfigs []TableConfig `mapstructure:"table-configs"json:"table-configs"`
 
@@ -43,8 +43,8 @@ type PluginConfig struct {
 }
 
 func (cfg *PluginConfig) ValidateAndSetDefault() error {
-	if cfg.SourceMaster == nil {
-		return errors.Errorf("[mysqlscanner] source master must be configured")
+	if cfg.Source == nil {
+		return errors.Errorf("[mysqlscanner] source must be configured")
 	}
 
 	if cfg.NrScanner <= 0 {
@@ -118,7 +118,7 @@ func (plugin *mysqlFullInput) Configure(pipelineName string, data map[string]int
 func (plugin *mysqlFullInput) Start(emitter core.Emitter) error {
 	cfg := plugin.cfg
 
-	sourceDB, err := utils.CreateDBConnection(cfg.SourceMaster)
+	sourceDB, err := utils.CreateDBConnection(cfg.Source)
 	if err != nil {
 		return errors.Annotatef(err, "[NewMysqlFullInput] failed to create source connection ")
 	}
@@ -218,7 +218,7 @@ func (plugin *mysqlFullInput) NewPositionStore() (position_store2.PositionStore,
 
 	positionStore, err := position_store.NewMySQLTableDBPositionStore(
 		plugin.pipelineName,
-		plugin.cfg.SourceMaster,
+		plugin.cfg.Source,
 		"",
 	)
 	if err != nil {
@@ -297,6 +297,7 @@ func (plugin *mysqlFullInput) waitFinish() {
 			Raw:        position,
 			UpdateTime: time.Now(),
 		}
+		close(plugin.doneC)
 	} else if plugin.ctx.Err() == context.Canceled {
 		log.Infof("[plugin.waitFinish] table scanner cancelled")
 		close(plugin.doneC)

@@ -3,6 +3,8 @@ package emitter
 import (
 	"testing"
 
+	"github.com/moiot/gravity/gravity/config"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/moiot/gravity/gravity/filters"
@@ -21,24 +23,29 @@ func (submitter *fakeMsgSubmitter) SubmitMsg(msg *core.Msg) error {
 
 func TestEmitterWithFilters(t *testing.T) {
 	assert := assert.New(t)
-	filtersConfigData := []interface{}{
-		map[string]interface{}{
-			"type":         "reject",
-			"match-schema": "bad_db",
-			"match-table":  "test_table",
+	filtersConfigData := []config.GenericConfig{
+		{
+			Type: "reject",
+			Config: map[string]interface{}{
+				"match-schema": "bad_db",
+				"match-table":  "test_table",
+			},
 		},
-		map[string]interface{}{
-			"type":         "rename-dml-column",
-			"match-schema": "test",
-			"match-table":  "test_table",
-			"from":         []string{"a", "b"},
-			"to":           []string{"c", "d"},
-		},
-		map[string]interface{}{
-			"type":         "delete-dml-column",
-			"match-schema": "test",
-			"match-table":  "test_table",
-			"columns":      []string{"h", "i"},
+		{
+			Type: "rename-dml-column",
+			Config: map[string]interface{}{
+				"match-schema": "test",
+				"match-table":  "test_table",
+				"from":         []string{"a", "b"},
+				"to":           []string{"c", "d"},
+			}},
+		{
+			Type: "delete-dml-column",
+			Config: map[string]interface{}{
+				"match-schema": "test",
+				"match-table":  "test_table",
+				"columns":      []string{"h", "i"},
+			},
 		},
 	}
 

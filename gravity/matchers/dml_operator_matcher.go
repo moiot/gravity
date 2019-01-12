@@ -21,6 +21,15 @@ func (m *dmlOpMatcher) Configure(data interface{}) error {
 		} else {
 			return errors.Errorf("match-dml-op invalid operation type %v", data)
 		}
+	case []interface{}:
+		for _, o := range d {
+			s := o.(string)
+			if validateOp(s) {
+				m.op[s] = true
+			} else {
+				return errors.Errorf("match-dml-op invalid operation type %v", data)
+			}
+		}
 	case []string:
 		for _, o := range d {
 			if validateOp(o) {

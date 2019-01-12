@@ -3,6 +3,8 @@ package mysql
 import (
 	log "github.com/sirupsen/logrus"
 
+	"github.com/moiot/gravity/gravity/config"
+
 	"github.com/juju/errors"
 
 	"github.com/moiot/gravity/gravity/inputs/helper"
@@ -14,12 +16,6 @@ func init() {
 	registry.RegisterPlugin(registry.InputPlugin, "mysql", &input{}, false)
 }
 
-const (
-	batch       = "batch"
-	stream      = "stream"
-	replication = "replication" // scan + binlog
-)
-
 type input struct {
 	core.Input
 }
@@ -27,25 +23,25 @@ type input struct {
 func (i *input) Configure(pipelineName string, data map[string]interface{}) error {
 	mode := data["mode"]
 	if mode == nil {
-		return errors.Errorf("mysql input should have mode %s, %s or %s", batch, stream, replication)
+		return errors.Errorf("mysql input should have mode %s, %s or %s", config.Batch, config.Stream, config.Replication)
 	}
 
 	var err error
 
-	switch mode.(string) {
-	case batch:
+	switch mode.(config.InputMode) {
+	case config.Batch:
 		i.Input, err = getDelegate("mysqlbatch", pipelineName, data)
 		if err != nil {
 			return errors.Trace(err)
 		}
 
-	case stream:
+	case config.Stream:
 		i.Input, err = getDelegate("mysqlstream", pipelineName, data)
 		if err != nil {
 			return errors.Trace(err)
 		}
 
-	case replication:
+	case config.Replication:
 		scan, err := getDelegate("mysqlbatch", pipelineName, data)
 		if err != nil {
 			return errors.Trace(err)
