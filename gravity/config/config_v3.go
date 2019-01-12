@@ -2,7 +2,7 @@ package config
 
 import "encoding/json"
 
-const PipelineConfigV3Version = "1"
+const PipelineConfigV3Version = "1.0"
 
 type PipelineConfigV3 struct {
 	PipelineName    string          `yaml:"name" toml:"name" json:"name"`
