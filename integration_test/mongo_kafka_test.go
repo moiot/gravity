@@ -130,7 +130,7 @@ func TestMongoJson(t *testing.T) {
 		}
 	}()
 
-	server, err := gravity.NewServer(pipelineConfig.ToV3())
+	server, err := gravity.NewServer(pipelineConfig)
 	r.NoError(err)
 
 	server.Input.PositionStore().Clear()
