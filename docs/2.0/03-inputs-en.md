@@ -153,6 +153,16 @@ In the above default configuration:
 - Each thread pulls 10,000 rows at a time.
 - At most one batch (namely 10,000 rows) are allowed to be scanned per second in the global system. 
 
+### `mysql` replication mode
+
+```toml
+[input]
+type = "mysql"
+mode = "replication"
+```
+
+In `replication` mode, it will firs do a `batch` mode table scan, and then start `stream` mode automatically. 
+
 ## `mongo` stream configuration
 
 ```toml

@@ -141,7 +141,14 @@ table = "test_source_*"
 同时，系统全局每秒扫描 batch 数不超过 1 ，也就是不超过 10000 行每秒。
 
 ### mysql 全量+增量
-需设置 mysql.mode = "replication"，其余设置分别于全量、增量相同。
+
+```toml
+[input]
+type = "mysql"
+mode = "replication"
+
+```
+其余设置分别于全量、增量相同。
 系统会先保存起始位点，再执行全量。若表未创建，会自动创建表结构。全量完成后自动从保存的位点开始增量。
 
 ### mongo 增量
