@@ -153,7 +153,7 @@ table = "test_source_*"
 # - 必填
 #
 [input]
-type = "mongooplog"
+type = "mongo"
 
 #
 # 源端 Mongo Oplog 的起始点，若不配置，则从当前最新的 Oplog 开始同步

@@ -12,11 +12,11 @@ import (
 type PluginType string
 
 const (
-	InputPlugin     PluginType = "input"
-	OutputPlugin    PluginType = "output"
-	FilterPlugin    PluginType = "filters"
-	MatcherPlugin   PluginType = "matcher"
-	SchedulerPlugin PluginType = "scheduler"
+	InputPlugin              PluginType = "input"
+	OutputPlugin             PluginType = "output"
+	FilterPlugin             PluginType = "filters"
+	MatcherPlugin            PluginType = "matcher"
+	SchedulerPlugin          PluginType = "scheduler"
 	SQLExecutionEnginePlugin PluginType = "sqlExecutionEngine"
 )
 
