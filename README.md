@@ -1,6 +1,6 @@
 # **Gravity** [简体中文](./README-cn.md)
 -------------------------
-[![Build Status](https://travis-ci.org/moiot/**Gravity**.svg?branch=master)](https://travis-ci.org/moiot/**Gravity**)
+[![Build Status](https://travis-ci.org/moiot/gravity.svg?branch=master)](https://travis-ci.org/moiot/gravity)
 
 ![2.0 Product](docs/2.0/product.png)
 
@@ -54,7 +54,7 @@ It is designed to be a customizable data replication tool that:
 - [Architecture](docs/2.0/00-arch-en.md)
 - [Quick Start](docs/2.0/01-quick-start-en.md)
 - [Configuration](docs/2.0/02-config-index-en.md)
-- [Cluster Deployment](https://github.com/moiot/**Gravity**-operator)
+- [Cluster Deployment](https://github.com/moiot/gravity-operator)
 
 -----------
 
