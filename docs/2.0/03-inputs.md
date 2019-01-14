@@ -144,7 +144,7 @@ table = "test_source_*"
 需设置 mysql.mode = "replication"，其余设置分别于全量、增量相同。
 系统会先保存起始位点，再执行全量。若表未创建，会自动创建表结构。全量完成后自动从保存的位点开始增量。
 
-### mongooplog
+### mongo 增量
 
 ```toml
 
@@ -154,6 +154,7 @@ table = "test_source_*"
 #
 [input]
 type = "mongo"
+mode = "stream"
 
 #
 # 源端 Mongo Oplog 的起始点，若不配置，则从当前最新的 Oplog 开始同步

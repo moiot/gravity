@@ -153,7 +153,7 @@ In the above default configuration:
 - Each thread pulls 10,000 rows at a time.
 - At most one batch (namely 10,000 rows) are allowed to be scanned per second in the global system. 
 
-## `mongo` batch configuration
+## `mongo` stream configuration
 
 ```toml
 
