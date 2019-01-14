@@ -6,21 +6,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moiot/gravity/pkg/app"
+
 	"github.com/Shopify/sarama"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
-	"github.com/moiot/gravity/gravity"
-	gravityConfig "github.com/moiot/gravity/gravity/config"
+	gravityConfig "github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/kafka"
 	"github.com/moiot/gravity/pkg/kafka_test"
-	"github.com/moiot/gravity/pkg/sarama_cluster"
-
 	"github.com/moiot/gravity/pkg/mongo"
-
 	"github.com/moiot/gravity/pkg/mongo_test"
+	"github.com/moiot/gravity/pkg/sarama_cluster"
 )
 
 // see https://stackoverflow.com/a/44342358 for mgo and mongo replication init
@@ -130,7 +129,7 @@ func TestMongoJson(t *testing.T) {
 		}
 	}()
 
-	server, err := gravity.NewServer(pipelineConfig)
+	server, err := app.NewServer(pipelineConfig)
 	r.NoError(err)
 
 	server.Input.PositionStore().Clear()

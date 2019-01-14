@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/moiot/gravity/metrics"
+	"github.com/moiot/gravity/pkg/metrics"
 )
 
 type MsgTimestamp int

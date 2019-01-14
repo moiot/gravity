@@ -15,7 +15,7 @@ GOTEST  := $(GO) test
 PACKAGES := $$(go list ./...| grep -vE 'vendor' | grep -vE 'nuclear')
 TEST_DIRS := $(shell find . -iname "*_test.go" -exec dirname {} \; | uniq | grep -vE 'vendor' | grep -vE 'integration_test' | grep -vE 'protocol' | grep -vE 'padder' | grep -vE 'dcp')
 
-.PHONY: update clean go-test test init dev-up dev-down run-dev test-down check tag deploy scanner e2e
+.PHONY: update clean go-test test init dev-up dev-down run-dev test-down check tag deploy scanner e2e mock
 
 default: build
 
@@ -47,14 +47,14 @@ run-dev:
 	bin/gravity -config=gravity/configdata/dev.toml -meta=gravity/configdata/gravity.meta -bootstrap-mode
 
 build:
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity cmd/gravity/single_binary.go
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -race -o bin/gravity-race cmd/gravity/single_binary.go
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity cmd/gravity/main.go
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -race -o bin/gravity-race cmd/gravity/main.go
 	#$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/padder cmd/padder/main.go
 
 
 build-linux:
-	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-linux-amd64 cmd/gravity/single_binary.go
-	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -race -o bin/gravity-race-linux-amd64 cmd/gravity/single_binary.go
+	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-linux-amd64 cmd/gravity/main.go
+	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -race -o bin/gravity-race-linux-amd64 cmd/gravity/main.go
 
 check:
 	@echo "gofmt"
@@ -71,12 +71,6 @@ lint:
 	gometalinter.v2 --install
 	gometalinter.v2 --vendor --deadline=120s ./...
 
-rmq-cli:
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/rmq-cli cmd/rocketmq_consumer/main.go
-
-kafka-cli:
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/kafka-cli cmd/kafka_consumer/*.go
-
 proto:
 	@ which protoc >/dev/null || brew install protobuf
 	@ which protoc-gen-gofast >/dev/null || go get github.com/gogo/protobuf/protoc-gen-gofast
@@ -84,10 +78,6 @@ proto:
 	protoc --gofast_out=plugins=grpc:./pkg protocol/dcp/message.proto
 
 mock:
-	mockgen github.com/moiot/gravity/gravity/binlog_checker BinlogChecker > gravity/mocks/mysql/mysql.go
-	mockgen github.com/moiot/gravity/position_store MySQLPositionStore,MongoPositionStore,MySQLTablePositionStore > mocks/position_store/position_store.go
-	mockgen github.com/moiot/gravity/schema_store SchemaStore > mocks/schema_store/schema_store.go
-	mockgen github.com/moiot/gravity/pkg/sliding_window WindowItem > mocks/pkg/sliding_window/sliding_window.go
-	mockgen github.com/Shopify/sarama Client > mocks/pkg/kafka_client/kafka_client.go
-	mockgen github.com/moiot/gravity/pkg/worker_pool Scheduler,Job,JobSubmitter,JobAcker > mocks/pkg/worker_pool/worker_pool.go
-	mockgen github.com/moiot/gravity/sql_execution_engine SQlExecutionEngine > mocks/sql_execution_engine/sql_execution_engine.go
+	mockgen -destination ./mock/binlog_checker/mock.go github.com/moiot/gravity/pkg/inputs/helper/binlog_checker BinlogChecker
+	mockgen -destination ./mock/position_store/mock.go github.com/moiot/gravity/pkg/position_store MySQLPositionStore,MongoPositionStore,MySQLTablePositionStore
+	mockgen -destination ./mock/sliding_window/mock.go github.com/moiot/gravity/pkg/sliding_window WindowItem

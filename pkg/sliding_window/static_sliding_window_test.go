@@ -2,14 +2,13 @@ package sliding_window_test
 
 import (
 	"sync"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"time"
-
-	"github.com/moiot/gravity/mocks/pkg/sliding_window"
+	"github.com/moiot/gravity/mock/sliding_window"
 	. "github.com/moiot/gravity/pkg/sliding_window"
 )
 

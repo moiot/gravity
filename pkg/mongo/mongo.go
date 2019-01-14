@@ -7,7 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/mgo.v2"
 
-	"github.com/moiot/gravity/gravity/config"
+	"github.com/moiot/gravity/pkg/config"
 )
 
 func CreateMongoSession(cfg *config.MongoConnConfig) (*mgo.Session, error) {

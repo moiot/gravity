@@ -7,22 +7,21 @@ import (
 
 	"github.com/moiot/gravity/pkg/core"
 
-	mysqlUtils "github.com/moiot/gravity/pkg/mysql/utils"
+	"github.com/moiot/gravity/pkg/schema_store"
 	"github.com/moiot/gravity/pkg/utils"
-	"github.com/moiot/gravity/schema_store"
 )
 
 type Job struct {
 	seqNum      int64
 	srcId       string
-	opType      mysqlUtils.OperationType
+	opType      string
 	JobMsg      core.Msg
 	pos         gomysql.Position
 	gtidSet     gomysql.MysqlGTIDSet
 	schemaStore schema_store.SchemaStore
 }
 
-func CreateJob(seqNum int64, srcId string, opType mysqlUtils.OperationType, jobMsg core.Msg, pos gomysql.Position, gtidSet gomysql.MysqlGTIDSet) Job {
+func CreateJob(seqNum int64, srcId string, opType string, jobMsg core.Msg, pos gomysql.Position, gtidSet gomysql.MysqlGTIDSet) Job {
 	return Job{
 		seqNum:  seqNum,
 		srcId:   srcId,

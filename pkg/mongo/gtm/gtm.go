@@ -8,12 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/moiot/gravity/metrics"
-	"github.com/moiot/gravity/pkg/protocol"
 	"github.com/serialx/hashring"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
+
+	"github.com/moiot/gravity/pkg/metrics"
+	"github.com/moiot/gravity/pkg/protocol"
 )
 
 type OrderingGuarantee int
