@@ -3,6 +3,8 @@ package mysql
 import (
 	"testing"
 
+	"github.com/moiot/gravity/gravity/config"
+
 	"github.com/moiot/gravity/gravity/registry"
 	"github.com/stretchr/testify/require"
 
@@ -41,8 +43,8 @@ func TestConfigure(t *testing.T) {
 				"host":     "localhost",
 				"username": "root",
 			},
-			"sql-engine-config": map[string]interface{}{
-				"mysql-insert-ignore": make(map[string]interface{}),
+			"sql-engine-config": &config.GenericConfig{
+				Type: "mysql-insert-ignore",
 			},
 		}))
 

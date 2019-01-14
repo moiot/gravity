@@ -10,6 +10,7 @@ import (
 	"github.com/pingcap/parser/model"
 	log "github.com/sirupsen/logrus"
 
+	gravityConfig "github.com/moiot/gravity/gravity/config"
 	"github.com/moiot/gravity/gravity/outputs/routers"
 	"github.com/moiot/gravity/gravity/registry"
 	"github.com/moiot/gravity/pkg/config"
@@ -25,10 +26,10 @@ const (
 )
 
 type MySQLPluginConfig struct {
-	DBConfig     *utils.DBConfig          `mapstructure:"target"  json:"target"`
-	Routes       []map[string]interface{} `mapstructure:"routes"  json:"routes"`
-	EnableDDL    bool                     `mapstructure:"enable-ddl" json:"enable-ddl"`
-	EngineConfig map[string]interface{}   `mapstructure:"sql-engine-config"  json:"sql-engine-config"`
+	DBConfig     *utils.DBConfig              `mapstructure:"target"  json:"target"`
+	Routes       []map[string]interface{}     `mapstructure:"routes"  json:"routes"`
+	EnableDDL    bool                         `mapstructure:"enable-ddl" json:"enable-ddl"`
+	EngineConfig *gravityConfig.GenericConfig `mapstructure:"sql-engine-config"  json:"sql-engine-config"`
 }
 
 type MySQLOutput struct {
@@ -60,32 +61,24 @@ func (output *MySQLOutput) Configure(pipelineName string, data map[string]interf
 		return errors.Errorf("empty db config")
 	}
 
-	engineConfig := pluginConfig.EngineConfig
-
-	if len(engineConfig) == 0 {
-		engineConfig = sql_execution_engine.DefaultMySQLReplaceEngineConfig
+	if pluginConfig.EngineConfig == nil {
+		pluginConfig.EngineConfig = &gravityConfig.GenericConfig{
+			Type:   sql_execution_engine.MySQLReplaceEngine,
+			Config: sql_execution_engine.DefaultMySQLReplaceEngineConfig,
+		}
 	}
 
-	if len(engineConfig) > 1 {
-		return errors.Errorf("only one sql engine should be configured")
+	p, err := registry.GetPlugin(registry.SQLExecutionEnginePlugin, pluginConfig.EngineConfig.Type)
+	if err != nil {
+		return errors.Errorf("failed to find plugin: %v", errors.ErrorStack(err))
 	}
 
-	for engineName, configData := range engineConfig {
-		p, err := registry.GetPlugin(registry.SQLExecutionEnginePlugin, engineName)
-		if err != nil {
-			return errors.Errorf("failed to find plugin: %v", errors.ErrorStack(err))
-		}
+	log.Infof("[output-mysql] Using %s", pluginConfig.EngineConfig.Type)
 
-		configDataMap, ok := configData.(map[string]interface{})
-		if !ok {
-			return errors.Errorf("engine config is not a map")
-		}
-
-		if err := p.Configure(pipelineName, configDataMap); err != nil {
-			return errors.Trace(err)
-		}
-		output.sqlExecutionEnginePlugin = p
+	if err := p.Configure(pipelineName, pluginConfig.EngineConfig.Config); err != nil {
+		return errors.Trace(err)
 	}
+	output.sqlExecutionEnginePlugin = p
 
 	output.cfg = &pluginConfig
 
