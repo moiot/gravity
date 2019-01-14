@@ -9,7 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
-	"github.com/moiot/gravity/schema_store"
+	"github.com/moiot/gravity/pkg/schema_store"
 )
 
 func BuildPkColumns(table *schema_store.Table, tableConfig *config.TableConfig) []schema_store.Column {

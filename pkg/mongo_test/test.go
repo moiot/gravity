@@ -6,7 +6,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/moiot/gravity/gravity/config"
+	"github.com/moiot/gravity/pkg/config"
 )
 
 func TestConfig() config.MongoConnConfig {

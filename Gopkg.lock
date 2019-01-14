@@ -180,11 +180,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:c7cba6e21faab3adff6b3f6cdd4ed538fb8e54e3dcb1ef0cf04c6d33b0599bef"
+  digest = "1:01ab6c545140cb5c3c55dbc8ba8f3742c55431c1c06614195bf94809d68fea7a"
   name = "github.com/golang/mock"
   packages = ["gomock"]
   pruneopts = "T"
-  revision = "b3e60bcdc577185fce3cf625fc96b62857ce5574"
+  revision = "e698a2ea17fee71b248fc2bba82fc544c2017f93"
 
 [[projects]]
   branch = "master"
@@ -806,8 +806,10 @@
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
     "github.com/onsi/gomega/gstruct",
+    "github.com/pingcap/errors",
     "github.com/pingcap/parser",
     "github.com/pingcap/parser/ast",
+    "github.com/pingcap/parser/model",
     "github.com/pingcap/tidb/types/parser_driver",
     "github.com/prometheus/client_golang/prometheus",
     "github.com/prometheus/client_golang/prometheus/promhttp",

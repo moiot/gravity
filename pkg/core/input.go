@@ -1,14 +1,14 @@
 package core
 
 import (
-	"github.com/moiot/gravity/gravity/inputs/position_store"
-	"github.com/moiot/gravity/gravity/inputs/stages"
+	"github.com/moiot/gravity/pkg/config"
+	"github.com/moiot/gravity/pkg/position_store"
 )
 
 type Input interface {
 	Start(emitter Emitter) error
 	Close()
-	Stage() stages.InputStage
+	Stage() config.InputMode
 	// TODO position store can be hidden by input plugin
 	// or we should use a configuration dedicated for position store
 	NewPositionStore() (position_store.PositionStore, error)

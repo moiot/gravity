@@ -25,9 +25,9 @@ import (
 
 	"sync"
 
+	"github.com/moiot/gravity/pkg/schema_store"
 	"github.com/moiot/gravity/pkg/utils"
 	"github.com/moiot/gravity/pkg/utils/retry"
-	"github.com/moiot/gravity/schema_store"
 )
 
 type Config struct {

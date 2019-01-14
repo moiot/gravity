@@ -10,20 +10,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/moiot/gravity/pkg/sliding_window"
-
-	"github.com/moiot/gravity/pkg/consts"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/moiot/gravity/pkg/core"
-
-	"github.com/moiot/gravity/gravity/inputs/stages"
-
 	"github.com/stretchr/testify/require"
 
-	"github.com/moiot/gravity/gravity"
-	gravityConfig "github.com/moiot/gravity/gravity/config"
+	"github.com/moiot/gravity/pkg/app"
+	"github.com/moiot/gravity/pkg/config"
+	"github.com/moiot/gravity/pkg/consts"
+	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/mysql_test"
+	"github.com/moiot/gravity/pkg/sliding_window"
 )
 
 func init() {
@@ -68,7 +63,7 @@ func TestMySQLToMySQLStream(t *testing.T) {
 	sourceDBConfig := mysql_test.SourceDBConfig()
 	targetDBConfig := mysql_test.TargetDBConfig()
 
-	pipelineConfig := gravityConfig.PipelineConfigV2{
+	pipelineConfig := config.PipelineConfigV2{
 		PipelineName: sourceDBName,
 		InputPlugins: map[string]interface{}{
 			"mysql": map[string]interface{}{
@@ -100,7 +95,7 @@ func TestMySQLToMySQLStream(t *testing.T) {
 		},
 	}
 	// start the server
-	server, err := gravity.NewServer(pipelineConfig.ToV3())
+	server, err := app.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -115,7 +110,7 @@ func TestMySQLToMySQLStream(t *testing.T) {
 	server.Close()
 
 	// start the server again without insert/update.
-	server, err = gravity.NewServer(pipelineConfig.ToV3())
+	server, err = app.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -167,7 +162,7 @@ func TestMySQLBatch(t *testing.T) {
 		},
 	}
 
-	pipelineConfig := gravityConfig.PipelineConfigV2{
+	pipelineConfig := config.PipelineConfigV2{
 		PipelineName: sourceDBName,
 		InputPlugins: map[string]interface{}{
 			"mysql": map[string]interface{}{
@@ -202,7 +197,7 @@ func TestMySQLBatch(t *testing.T) {
 		},
 	}
 
-	server, err := gravity.NewServer(pipelineConfig.ToV3())
+	server, err := app.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -254,10 +249,10 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 			"table":  tables,
 		},
 	}
-	pipelineConfig := gravityConfig.PipelineConfigV3{
+	pipelineConfig := config.PipelineConfigV3{
 		PipelineName: sourceDBName,
-		Version:      gravityConfig.PipelineConfigV3Version,
-		InputPlugin: gravityConfig.InputConfig{
+		Version:      config.PipelineConfigV3Version,
+		InputPlugin: config.InputConfig{
 			Type: "mysql",
 			Mode: "batch",
 			Config: map[string]interface{}{
@@ -271,7 +266,7 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 				"mode":          "batch",
 			},
 		},
-		OutputPlugin: gravityConfig.GenericConfig{
+		OutputPlugin: config.GenericConfig{
 			Type: "mysql",
 			Config: map[string]interface{}{
 				"target": map[string]interface{}{
@@ -281,7 +276,7 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 					"port":     targetDBConfig.Port,
 				},
 				"enable-ddl": true,
-				"sql-engine-config": &gravityConfig.GenericConfig{
+				"sql-engine-config": &config.GenericConfig{
 					Type: "mysql-insert-ignore",
 				},
 				"routes": []map[string]interface{}{
@@ -295,7 +290,7 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 		},
 	}
 
-	server, err := gravity.NewServer(pipelineConfig)
+	server, err := app.NewServer(pipelineConfig)
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -348,7 +343,7 @@ func TestMySQLToMySQLReplication(t *testing.T) {
 		},
 	}
 
-	pipelineConfig := gravityConfig.PipelineConfigV2{
+	pipelineConfig := config.PipelineConfigV2{
 		PipelineName: sourceDBName,
 		InputPlugins: map[string]interface{}{
 			"mysql": map[string]interface{}{
@@ -383,7 +378,7 @@ func TestMySQLToMySQLReplication(t *testing.T) {
 		},
 	}
 
-	server, err := gravity.NewServer(pipelineConfig.ToV3())
+	server, err := app.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -399,7 +394,7 @@ func TestMySQLToMySQLReplication(t *testing.T) {
 	server.Close()
 
 	// restart server
-	server, err = gravity.NewServer(pipelineConfig.ToV3())
+	server, err = app.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -418,7 +413,7 @@ func TestMySQLToMySQLReplication(t *testing.T) {
 
 func waitFullComplete(i core.Input) {
 	for {
-		if i.Stage() == stages.InputStageIncremental {
+		if i.Stage() == config.Stream {
 			return
 		}
 
@@ -459,7 +454,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 			"table":  tables,
 		},
 	}
-	pipelineConfig := gravityConfig.PipelineConfigV2{
+	pipelineConfig := config.PipelineConfigV2{
 		PipelineName: sourceDBName,
 		InputPlugins: map[string]interface{}{
 			"mysql": map[string]interface{}{
@@ -494,7 +489,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 	}
 
 	// start full, incremental, close server
-	server, err := gravity.NewServer(pipelineConfig.ToV3())
+	server, err := app.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -510,7 +505,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 
 	// clear position store, truncate table,
 	// and start over again.
-	server, err = gravity.NewServer(pipelineConfig.ToV3())
+	server, err = app.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
 	server.PositionStore.Clear()
@@ -519,7 +514,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 		r.NoError(err)
 	}
 
-	server, err = gravity.NewServer(pipelineConfig.ToV3())
+	server, err = app.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 	r.NoError(server.Start())
 

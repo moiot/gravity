@@ -10,7 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/moiot/gravity/metrics"
+	"github.com/moiot/gravity/pkg/metrics"
 )
 
 type itemWithTime struct {

@@ -196,7 +196,7 @@ func (g *Generator) execArbitraryTxn(ctx context.Context, idx int, r *rand.Rand)
 					if !executedDDL[i] {
 						_, err := g.SourceDB.Exec(ddls[i])
 						if err != nil {
-							log.Errorf("error exec ", ddls[i], ". err: ", err)
+							log.Error("error exec ", ddls[i], ". err: ", err)
 						} else {
 							executedDDL[i] = true
 						}
