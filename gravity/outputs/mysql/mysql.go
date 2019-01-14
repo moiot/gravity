@@ -73,6 +73,8 @@ func (output *MySQLOutput) Configure(pipelineName string, data map[string]interf
 		return errors.Errorf("failed to find plugin: %v", errors.ErrorStack(err))
 	}
 
+	log.Infof("[output-mysql] Using %s", pluginConfig.EngineConfig.Type)
+
 	if err := p.Configure(pipelineName, pluginConfig.EngineConfig.Config); err != nil {
 		return errors.Trace(err)
 	}
