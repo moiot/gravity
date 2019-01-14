@@ -47,5 +47,5 @@ type InputConfig struct {
 
 type GenericConfig struct {
 	Type   string                 `yaml:"type"  json:"type"  toml:"type"`
-	Config map[string]interface{} `yaml:"config"  json:"config,omitempty"  toml:"config,omitempty" mapstructure:"config"`
+	Config map[string]interface{} `yaml:"config"  json:"config,omitempty"  toml:"config,omitempty"`
 }
