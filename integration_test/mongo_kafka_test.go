@@ -61,10 +61,13 @@ func TestMongoJson(t *testing.T) {
 
 	mongoCfg := mongo_test.TestConfig()
 	kafkaBroker := kafka_test.TestBroker()
-	pipelineConfig := gravityConfig.PipelineConfigV2{
+	pipelineConfig := gravityConfig.PipelineConfigV3{
 		PipelineName: t.Name(),
-		InputPlugins: map[string]interface{}{
-			"mongooplog": map[string]interface{}{
+		Version:      gravityConfig.PipelineConfigV3Version,
+		InputPlugin: gravityConfig.InputConfig{
+			Type: "mongo",
+			Mode: "stream",
+			Config: map[string]interface{}{
 				"source": map[string]interface{}{
 					"host":     mongoCfg.Host,
 					"port":     mongoCfg.Port,
@@ -74,12 +77,12 @@ func TestMongoJson(t *testing.T) {
 				},
 			},
 		},
-		OutputPlugins: map[string]interface{}{
-			"async-kafka": map[string]interface{}{
+		OutputPlugin: gravityConfig.GenericConfig{
+			Type: "async-kafka",
+			Config: map[string]interface{}{
 				"kafka-global-config": map[string]interface{}{
 					"broker-addrs": kafkaBroker,
-					"mode":         "async",
-				},
+					"mode":         "async"},
 				"routes": []map[string]interface{}{
 					{
 						"match-schema": t.Name(),
@@ -127,7 +130,7 @@ func TestMongoJson(t *testing.T) {
 		}
 	}()
 
-	server, err := gravity.NewServer(pipelineConfig.ToV3())
+	server, err := gravity.NewServer(pipelineConfig)
 	r.NoError(err)
 
 	server.Input.PositionStore().Clear()

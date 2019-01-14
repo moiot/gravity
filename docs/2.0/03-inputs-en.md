@@ -1,16 +1,15 @@
 # Input Configuration
 
-Currently, DRC supports the following Input plugins:
+Currently, Gravity supports the following Input plugins:
 
-- `mysqlbinlog`: Takes the MySQL binlog as the input source and monitors the incremental data mutation of MySQL.
-- `mysqlscan`: Scans MySQL tables, which can be used as the full data of MySQL for the usage of Output.
-- `mongooplog`: Takes MongoDB Oplog as the input source and monitors the incremental data mutation of MongoDB.
+- `mysql`: Can be run as three modes: `batch`, `stream`, `replication`
+- `mongo`: Can be run as `stream` mode.
 
-## `mysqlbinlog` configuration
+## `mysql` stream configuration
 
 ### MySQL environment configuration
 
-The `mysqlbinlog` requirements for the source MySQL database:
+It requirements for the source MySQL database:
 
 - The binlog in the GTID mode is enabled.
 - The DRC account is created and the replication related privilege and all the DRC privileges are granted.
@@ -29,24 +28,27 @@ binlog_format=ROW
 Gravity account privileges are as follows:
 
 ```sql
-CREATE USER drc IDENTIFIED BY 'xxx';
+CREATE USER _gravity IDENTIFIED BY 'xxx';
 GRANT SELECT, RELOAD, LOCK TABLES, REPLICATION SLAVE, REPLICATION CLIENT, INSERT, UPDATE, DELETE ON *.* TO 'drc'@'%';
-GRANT ALL PRIVILEGES ON drc.* TO 'drc'@'%';
+GRANT ALL PRIVILEGES ON _gravity.* TO 'drc'@'%';
 ```
 
-### `mysqlbinlog` configuration file
+### `mysql` stream configuration file
 
 ```toml
-[input.mysqlbinlog]
+[input]
+type = "mysql"
+mode = "stream"
 
 # Whether to ignore the internal data generated in the bidirectional synchronization. "false" by default
+[input.config]
 ignore-bidirectional-data = false
 
 #
 # The connection configuration of the source MySQL cluster
 # Required
 #
-[input.mysqlbinlog.source]
+[input.config.source]
 host = "127.0.0.1"
 username = "drc"
 password = ""
@@ -59,7 +61,7 @@ location = "Local"
 # Empty by default. Synchronization starts from the current the GTID position.
 # Optional
 #
-[input.mysqlbinlog.start-position]
+[input.config.start-position]
 binlog-gtid = "abcd:1-123,egbws:1-234"
 
 #
@@ -68,25 +70,27 @@ binlog-gtid = "abcd:1-123,egbws:1-234"
 # Not configured by default
 # Optional
 #
-[input.mysqlbinlog.source-probe-config]
+[input.config.source-probe-config]
 annotation = "/*some_annotataion*/"
-[input.mysqlbinlog.source-probe-config.mysql]
+[input.config.source-probe-config.mysql]
 host = "127.0.0.1"
 username = "drc"
 password = ""
 port = 3306
 ```
 
-## `mysqlscan` configuration
+## `mysql` batch configuration
 
 ```toml
-[input.mysqlscan]
+[input]
+type = "mysql"
+mode = "batch"
 
 #
 # The connection configuration of the source MySQL cluster
 # Required
 #
-[input.mysqlscan.source-master]
+[input.config.source-master]
 host = "127.0.0.1"
 username = "drc"
 password = ""
@@ -99,7 +103,7 @@ location = "Local"
 # If it is specified, the slave is scanned for high priority during the data scanning process.
 # Not configured by default
 #
-[input.mysqlscan.source-slave]
+[input.config.source-slave]
 host = "127.0.0.1"
 username = "drc"
 password = ""
@@ -110,15 +114,15 @@ location = "Local"
 #
 # The table to be scanned
 # Required
-[[input.mysqlscan.table-configs]]
+[[input.config.table-configs]]
 schema = "test_1"
 table = "test_source_*"
 
-[[input.mysqlscan.table-configs]]
+[[input.config.table-configs]]
 schema = "test_2"
 table = "test_source_*"
 
-[input.mysqlscan]
+[input.config]
 
 # The number of the concurrent threads for scanning
 # "10" by default, which indicates 10 tables are allowed to be scanned at the same time at most.
@@ -149,7 +153,17 @@ In the above default configuration:
 - Each thread pulls 10,000 rows at a time.
 - At most one batch (namely 10,000 rows) are allowed to be scanned per second in the global system. 
 
-## `mongooplog` configuration
+### `mysql` replication mode
+
+```toml
+[input]
+type = "mysql"
+mode = "replication"
+```
+
+In `replication` mode, it will firs do a `batch` mode table scan, and then start `stream` mode automatically. 
+
+## `mongo` stream configuration
 
 ```toml
 
@@ -157,7 +171,11 @@ In the above default configuration:
 # The connection configuration of the source MongoDB
 # Required
 #
-[input.mongooplog.source]
+[input]
+type = "mongo"
+mode = "stream"
+
+[input.config.source]
 host = "127.0.0.1"
 port = 27017
 username = ""
@@ -168,14 +186,14 @@ password = ""
 # Empty by default
 # Optional
 #
-[input.mongooplog]
+[input.config]
 start-position = 123456
 
 #
 # The related configuration of the source MongoDB Oplog concurrency
 # "false", "50", "512", and "750ms" respectively by default
 # Optional (to be deprecated)
-[input.mongooplog.gtm-config]
+[input.config.gtm-config]
 use-buffer-duration = false
 buffer-size = 50
 channel-size = 512

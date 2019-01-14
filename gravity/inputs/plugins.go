@@ -1,6 +1,7 @@
 package inputs
 
 import (
+	_ "github.com/moiot/gravity/gravity/inputs/mongo"
 	_ "github.com/moiot/gravity/gravity/inputs/mongooplog"
 	_ "github.com/moiot/gravity/gravity/inputs/mysql"
 	_ "github.com/moiot/gravity/gravity/inputs/mysqlbatch"
