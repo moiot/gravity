@@ -23,7 +23,7 @@ type input struct {
 func (i *input) Configure(pipelineName string, data map[string]interface{}) error {
 	mode := data["mode"]
 	if mode == nil {
-		return errors.Errorf("mysql input should have mode %s, %s or %s", config.Batch, config.Stream, config.Replication)
+		return errors.Errorf("mongo input should have mode %s", config.Stream)
 	}
 
 	var err error
