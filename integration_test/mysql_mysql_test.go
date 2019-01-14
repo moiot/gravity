@@ -280,7 +280,7 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 					"password": targetDBConfig.Password,
 					"port":     targetDBConfig.Port,
 				},
-
+				"enable-ddl": true,
 				"sql-engine-config": &gravityConfig.GenericConfig{
 					Type: "mysql-insert-ignore",
 				},
