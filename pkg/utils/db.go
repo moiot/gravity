@@ -3,25 +3,20 @@ package utils
 import (
 	"database/sql"
 	"fmt"
-	"strings"
-
-	_ "github.com/go-sql-driver/mysql"
-	log "github.com/sirupsen/logrus"
-
+	"math"
+	"math/rand"
 	"net/url"
+	"os"
+	"reflect"
+	"strconv"
+	"strings"
 	"time"
 
-	"math"
-	"os"
-	"strconv"
-
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	gomysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
-
-	"reflect"
-
-	"math/rand"
+	log "github.com/sirupsen/logrus"
 )
 
 func getIndexRowsName(db *sql.DB, statement string) ([]string, error) {
@@ -583,9 +578,9 @@ func IsBinlogPurgedError(err error) bool {
 }
 
 type MySQLBinlogPosition struct {
-	BinLogFileName string `toml:"binlog-name" json:"binlog-name" max-life-time-duration:"binlog-name"`
-	BinLogFilePos  uint32 `toml:"binlog-pos" json:"binlog-pos" max-life-time-duration:"binlog-pos"`
-	BinlogGTID     string `toml:"binlog-gtid" json:"binlog-gtid" max-life-time-duration:"binlog-gtid"`
+	BinLogFileName string `toml:"binlog-name" json:"binlog-name" mapstructure:"binlog-name"`
+	BinLogFilePos  uint32 `toml:"binlog-pos" json:"binlog-pos" mapstructure:"binlog-pos"`
+	BinlogGTID     string `toml:"binlog-gtid" json:"binlog-gtid" mapstructure:"binlog-gtid"`
 }
 
 func TableIdentity(schemaName string, tableName string) string {
