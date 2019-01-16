@@ -12,7 +12,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/pingcap/parser"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	gomysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	log "github.com/sirupsen/logrus"
@@ -386,6 +386,11 @@ func (tailer *BinlogTailer) Start() error {
 
 				// Begin comes after every CUD event so ignore
 				if ddlSQL == "BEGIN" {
+					continue
+				}
+
+				if strings.Contains(ddlSQL, consts.DDLTag) {
+					log.Infof("ignore internal ddl: %s", ddlSQL)
 					continue
 				}
 

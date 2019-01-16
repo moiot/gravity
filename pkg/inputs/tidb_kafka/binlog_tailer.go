@@ -1,25 +1,24 @@
 package tidb_kafka
 
 import (
+	"strings"
+	"sync"
 	"time"
-
-	"github.com/moiot/gravity/pkg/utils"
-
-	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/inputs/helper/binlog_checker"
-	"github.com/moiot/gravity/pkg/mysql_test"
-	"github.com/moiot/gravity/pkg/schema_store"
 
 	"github.com/Shopify/sarama"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 
-	"sync"
-
 	gCfg "github.com/moiot/gravity/pkg/config"
+	"github.com/moiot/gravity/pkg/consts"
+	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/inputs/helper/binlog_checker"
 	"github.com/moiot/gravity/pkg/kafka"
+	"github.com/moiot/gravity/pkg/mysql_test"
 	pb "github.com/moiot/gravity/pkg/protocol/tidb"
 	"github.com/moiot/gravity/pkg/sarama_cluster"
+	"github.com/moiot/gravity/pkg/schema_store"
+	"github.com/moiot/gravity/pkg/utils"
 )
 
 type BinlogTailer struct {
@@ -123,8 +122,15 @@ func (t *BinlogTailer) createMsgs(
 ) ([]*core.Msg, error) {
 	var msgList []*core.Msg
 	if binlog.Type == pb.BinlogType_DDL {
-		log.Infof("skip ddl %s", string(binlog.DdlData.DdlQuery))
-		return msgList, nil
+		ddlStmt := string(binlog.DdlData.DdlQuery)
+		if strings.Contains(ddlStmt, consts.DDLTag) {
+			log.Infof("ignore internal ddl: ", ddlStmt)
+			return msgList, nil
+		} else {
+			//TODO support ddl for tidb
+			log.Infof("skip ddl %s", ddlStmt)
+			return msgList, nil
+		}
 	}
 	for _, table := range binlog.DmlData.Tables {
 		schemaName := *table.SchemaName

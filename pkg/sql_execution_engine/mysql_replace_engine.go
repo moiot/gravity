@@ -145,5 +145,5 @@ func logOperation(batch []*core.Msg, query string, args []interface{}, result sq
 		log.Warnf("[mysqlReplaceEngine]: %v", err.Error())
 	}
 
-	log.Infof("[mysqlReplaceEngine] singleDelete %s. args: %+v. rows affected: %d", query, args, nrDeleted)
+	log.Debugf("[mysqlReplaceEngine] singleDelete %s. args: %+v. rows affected: %d", query, args, nrDeleted)
 }

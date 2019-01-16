@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
+	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/outputs/routers"
 	"github.com/moiot/gravity/pkg/registry"
@@ -167,7 +168,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				}
 				shadow.IfNotExists = true
 				stmt := RestoreCreateTblStmt(&shadow)
-				_, err := output.db.Exec(stmt)
+				err := output.executeDDL(stmt)
 				if err != nil {
 					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
 				}
@@ -186,7 +187,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					O: targetSchema,
 				}
 				stmt := RestoreAlterTblStmt(&shadow)
-				_, err := output.db.Exec(stmt)
+				err := output.executeDDL(stmt)
 				if err != nil {
 					if e := err.(*mysqldriver.MySQLError); e.Number == 1060 {
 						log.Errorf("[output-mysql] ignore duplicate column. ddl: %s. err: %s", stmt, e)
@@ -199,7 +200,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				}
 
 			default:
-				log.Info("[output-mysql] ignore ddl: ", msg.DdlMsg.Statement)
+				log.Info("[output-mysql] ignore unsupported ddl: ", msg.DdlMsg.Statement)
 			}
 
 			return nil
@@ -278,4 +279,10 @@ func splitMsgBatchWithDelete(msgBatch []*core.Msg) [][]*core.Msg {
 	}
 
 	return batches
+}
+
+func (output *MySQLOutput) executeDDL(stmt string) error {
+	stmt = consts.DDLTag + stmt
+	_, err := output.db.Exec(stmt)
+	return err
 }

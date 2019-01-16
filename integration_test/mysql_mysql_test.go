@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -43,7 +44,9 @@ func TestMySQLToMySQLStream(t *testing.T) {
 	targetDBName := strings.ToLower(t.Name()) + "_target"
 
 	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
 	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
 
 	generator := mysql_test.Generator{
 		SourceDB:     sourceDB,
@@ -134,7 +137,9 @@ func TestMySQLBatch(t *testing.T) {
 	targetDBName := strings.ToLower(t.Name()) + "_target"
 
 	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
 	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
 
 	generator := mysql_test.Generator{
 		SourceDB:     sourceDB,
@@ -222,7 +227,9 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 	targetDBName := strings.ToLower(t.Name()) + "_target"
 
 	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
 	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
 
 	generator := mysql_test.Generator{
 		SourceDB:     sourceDB,
@@ -315,7 +322,9 @@ func TestMySQLToMySQLReplication(t *testing.T) {
 	targetDBName := strings.ToLower(t.Name()) + "_target"
 
 	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
 	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
 
 	generator := mysql_test.Generator{
 		SourceDB:     sourceDB,
@@ -428,7 +437,9 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 	targetDBName := strings.ToLower(t.Name()) + "_target"
 
 	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
 	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
 
 	generator := mysql_test.Generator{
 		SourceDB:     sourceDB,
@@ -529,4 +540,76 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 	server.Input.Wait()
 	server.Close()
 	r.NoError(generator.TestChecksum())
+}
+
+func TestTagDDL(t *testing.T) {
+	r := require.New(t)
+
+	sourceDBName := strings.ToLower(t.Name()) + "_source"
+	targetDBName := strings.ToLower(t.Name()) + "_target"
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	pipelineConfig := config.PipelineConfigV3{
+		PipelineName: sourceDBName,
+		Version:      config.PipelineConfigV3Version,
+		InputPlugin: config.InputConfig{
+			Type: "mysql",
+			Mode: config.Stream,
+			Config: map[string]interface{}{
+				"source": map[string]interface{}{
+					"host":     sourceDBConfig.Host,
+					"username": sourceDBConfig.Username,
+					"password": sourceDBConfig.Password,
+					"port":     sourceDBConfig.Port,
+				},
+			},
+		},
+		OutputPlugin: config.GenericConfig{
+			Type: "mysql",
+			Config: map[string]interface{}{
+				"target": map[string]interface{}{
+					"host":     targetDBConfig.Host,
+					"username": targetDBConfig.Username,
+					"password": targetDBConfig.Password,
+					"port":     targetDBConfig.Port,
+				},
+				"enable-ddl": true,
+				"routes": []map[string]interface{}{
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "*",
+						"target-schema": targetDBName,
+					},
+				},
+			},
+		},
+	}
+
+	server, err := app.NewServer(pipelineConfig)
+	r.NoError(err)
+
+	r.NoError(server.Start())
+
+	tbl := "abc"
+	_, err = sourceDB.Exec(fmt.Sprintf("%screate table `%s`.`%s`(`id` int(11),  PRIMARY KEY (`id`)) ENGINE=InnoDB", consts.DDLTag, sourceDBName, tbl))
+	r.NoError(err)
+
+	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	r.NoError(err)
+
+	<-server.Input.Done()
+
+	server.Close()
+
+	row := targetDB.QueryRow(fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE  TABLE_SCHEMA = '%s' and table_name = '%s'", targetDBName, tbl))
+	var tblName string
+	err = row.Scan(&tblName)
+	r.Equal(sql.ErrNoRows, err)
 }
