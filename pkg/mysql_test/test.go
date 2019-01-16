@@ -346,7 +346,7 @@ func DeleteTestTable(db *sql.DB, testDBName string, testTableName string, id int
 		return errors.Trace(err)
 	}
 
-	log.Info(fmt.Sprintf("DELETE from %s WHERE id = %v", testTableName, id))
+	log.Debugf("DELETE from %s WHERE id = %v", testTableName, id)
 	if _, err := txn.Exec(fmt.Sprintf("DELETE from %s WHERE id = %v", testTableName, id)); err != nil {
 		return errors.Trace(err)
 	}
