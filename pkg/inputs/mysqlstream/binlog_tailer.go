@@ -385,7 +385,12 @@ func (tailer *BinlogTailer) Start() error {
 				ddlSQL := strings.TrimSpace(string(ev.Query))
 
 				// Begin comes after every CUD event so ignore
-				if ddlSQL == "BEGIN" || strings.Contains(ddlSQL, consts.DDLTag) {
+				if ddlSQL == "BEGIN" {
+					continue
+				}
+
+				if strings.Contains(ddlSQL, consts.DDLTag) {
+					log.Infof("ignore internal ddl: %s", ddlSQL)
 					continue
 				}
 
