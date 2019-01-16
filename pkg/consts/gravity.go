@@ -1,4 +1,6 @@
 package consts
 
-const GravityDBName = "_gravity"
-
+const (
+	GravityDBName = "_gravity"
+	DDLTag        = "/*gravityDDL*/"
+)

@@ -12,7 +12,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/pingcap/parser"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	gomysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	log "github.com/sirupsen/logrus"
@@ -385,7 +385,7 @@ func (tailer *BinlogTailer) Start() error {
 				ddlSQL := strings.TrimSpace(string(ev.Query))
 
 				// Begin comes after every CUD event so ignore
-				if ddlSQL == "BEGIN" {
+				if ddlSQL == "BEGIN" || strings.Contains(ddlSQL, consts.DDLTag) {
 					continue
 				}
 
