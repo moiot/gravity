@@ -20,6 +20,7 @@ The `reject` Filter rejects specific Input messages. Then these messages will no
 ```toml
 [[filters]]
 type = "reject"
+[filters.config]
 match-schema = "test"
 match-table = "test_table_*"
 ```
@@ -29,6 +30,7 @@ For the above configuration, all the messages with `schema` set to `test` and `t
 ```toml
 [[filters]]
 type = "reject"
+[filters.config]
 match-schema = "test"
 match-dml-op = "delete"
 ```
@@ -42,6 +44,7 @@ The `delete-dml-column` Filter deletes specific columns in the Input message.
 ```toml
 [[filters]]
 type = "delete-dml-column"
+[filters.config]
 match-schema = "test"
 match-table = "test_table"
 columns = ["e", "f"]
@@ -56,6 +59,7 @@ The `rename-dml-column` Filter renames specific columns in the source DML messag
 ```toml
 [[filters]]
 type = "rename-dml-column"
+[filters.config]
 match-schema = "test"
 match-table = "test_table"
 from = ["a", "b"]
