@@ -177,7 +177,6 @@ func (s *Server) Close() {
 	if s.isClosed {
 		return
 	}
-	s.isClosed = true
 
 	log.Infof("[Server] closing..")
 	s.Input.Close()
@@ -193,4 +192,6 @@ func (s *Server) Close() {
 	log.Infof("[Server] position store closed")
 
 	log.Infof("[Server] stopped")
+
+	s.isClosed = true
 }
