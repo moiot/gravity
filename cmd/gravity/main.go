@@ -8,7 +8,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
 	"github.com/fsnotify/fsnotify"
@@ -84,11 +83,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	lock := &sync.Mutex{}
-
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
-		http.HandleFunc("/reset", resetHandler(server, lock, cfg.PipelineConfig))
+		http.HandleFunc("/reset", resetHandler(server, cfg.PipelineConfig))
 		http.HandleFunc("/status", statusHandler(server, cfg.PipelineConfig.PipelineName, hash))
 		http.HandleFunc("/healthz", healthzHandler(server))
 		err = http.ListenAndServe(cfg.HttpAddr, nil)
@@ -128,9 +125,7 @@ func main() {
 		select {
 		case sig := <-sc:
 			log.Infof("[gravity] stop with signal %v", sig)
-			lock.Lock()
 			server.Close()
-			lock.Unlock()
 			return
 
 		case event, ok := <-watcher.Events:
@@ -155,9 +150,7 @@ func main() {
 			}
 
 			log.Info("config file updated, quit...")
-			lock.Lock()
 			server.Close()
-			lock.Unlock()
 			return
 
 		case err, ok := <-watcher.Errors:
@@ -165,9 +158,7 @@ func main() {
 				continue
 			}
 			log.Println("error:", err)
-			lock.Lock()
 			server.Close()
-			lock.Unlock()
 		}
 	}
 }
@@ -214,11 +205,8 @@ func statusHandler(server *app.Server, name, hash string) func(http.ResponseWrit
 	}
 }
 
-func resetHandler(server *app.Server, lock *sync.Mutex, pipelineConfig config.PipelineConfigV3) func(http.ResponseWriter, *http.Request) {
+func resetHandler(server *app.Server, pipelineConfig config.PipelineConfigV3) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		lock.Lock()
-		defer lock.Unlock()
-
 		server.Close()
 
 		server, err := app.NewServer(pipelineConfig)

@@ -1,6 +1,8 @@
 package app
 
 import (
+	"sync"
+
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 
@@ -22,6 +24,11 @@ type Server struct {
 	Scheduler     core.Scheduler
 	PositionStore position_store.PositionStore
 	Output        core.Output
+
+	// When Input is done, server will be closed, when config changed, server will also be closed;
+	// add a lock here to prevent race condition
+	isClosed bool
+	sync.Mutex
 }
 
 func Parse(pipelineConfig config.PipelineConfigV3) (*Server, error) {
@@ -128,6 +135,9 @@ func newInput(pipelineName string, inputConfig config.InputConfig) (core.Input, 
 }
 
 func (s *Server) Start() error {
+	s.Lock()
+	defer s.Unlock()
+
 	switch o := s.Output.(type) {
 	case core.SynchronousOutput:
 		if err := o.Start(); err != nil {
@@ -154,11 +164,20 @@ func (s *Server) Start() error {
 		return errors.Trace(err)
 	}
 
+	s.isClosed = false
+
 	log.Infof("[Server] started")
 	return nil
 }
 
 func (s *Server) Close() {
+	s.Lock()
+	defer s.Unlock()
+
+	if s.isClosed {
+		return
+	}
+
 	log.Infof("[Server] closing..")
 	s.Input.Close()
 	log.Infof("[Server] input closed")
@@ -173,4 +192,6 @@ func (s *Server) Close() {
 	log.Infof("[Server] position store closed")
 
 	log.Infof("[Server] stopped")
+
+	s.isClosed = true
 }
