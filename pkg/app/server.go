@@ -26,7 +26,7 @@ type Server struct {
 	Output        core.Output
 
 	// When Input is done, server will be closed, when config changed, server will also be closed;
-	// add a loc here to prevent race condition
+	// add a lock here to prevent race condition
 	isClosed bool
 	sync.Mutex
 }
