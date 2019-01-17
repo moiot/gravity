@@ -52,6 +52,10 @@ to = ["another_id"]
 
 [output]
 type = "mysql"
+
+[output.config]
+enable-ddl = true
+
 [output.config.target]
 host = "127.0.0.1"
 username = "root"
@@ -59,7 +63,6 @@ password = ""
 port = 3306
 
 [output.config.execution-engine]
-enable-ddl = false
 use-bidirection = true
 use-shading-proxy = false
 

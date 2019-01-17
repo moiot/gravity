@@ -17,36 +17,33 @@ Currently, DRC supports the following Output plugins:
 # The connection configuration of Kafka 
 # Required
 #
-[output.async-kafka.kafka-global-config]
-# Required
+[output]
+type = "async-kafka"
+
+[output.config]
+output-format = "json" # json or pb
+schema-version = "0.1"
+
+[output.config.kafka-global-config]
+# required
 broker-addrs = ["localhost:9092"]
 mode = "async"
 
-# The SASL configuration of the target Kafka
-# Optional
-[output.async-kafka.kafka-global-config.net.sasl]
+# kafka SASL
+# optional
+[output.config.kafka-global-config.net.sasl]
 enable = false
 user = ""
 password = ""
 
-
 #
-# The routing configuration of the target Kafka
-# Required
+# Kafka topic route
+# required
 #
-[[output.async-kafka.routes]]
+[[output.config.routes]]
 match-schema = "test"
 match-table = "test_table"
 dml-topic = "test.test_table"
-
-#
-# The target encoding rules, including the output type and the version number
-# Optional
-[output.async-kafka]
-# "json" by default
-output-format = "json"
-# "0.1" by default
-schema-version = "0.1"
 ```
 
 The DML JSON format output by Kafka is as follows:
@@ -97,19 +94,23 @@ The DDL JSON format output by Kafka is as follows:
 # The connection configuration of the target MySQL cluster
 # Required
 #
-[output.mysql.target]
+[output]
+type = "mysql"
+
+[output.config]
+enable-ddl = true # support create & alter table for now. schema and table names will be modified according to routes.
+
+[output.config.target]
 host = "127.0.0.1"
 username = ""
 password = ""
 port = 3306
-# The time zone of the target MySQL cluster: https://github.com/go-sql-driver/mysql#loc
-location = "Local"
 
 #
 # The routing configuration of the target MySQL cluster. "*" is supported for `match-schema` and `match-table`.
 # Required
 #
-[[output.mysql.routes]]
+[[output.config.routes]]
 match-schema = "test"
 match-table = "test_source_table_*"
 target-schema = "test"
@@ -119,7 +120,7 @@ target-table = "test_target_table"
 # The execution engine configuration of MySQL
 # Optional
 #
-[output.mysql.execution-engine]
+[output.config.execution-engine]
 # Whether to enable the write operation of the bidirectional synchronization identifier
 use-bidirection = false
 ```
@@ -127,7 +128,7 @@ use-bidirection = false
 In the above configuration, if `use-bidirection` is set to "true" as follows, DRC gets the internal identifer of bidirectional synchronization when writing data in the MySQL cluster (by enwrapping the DRC internal table transaction). If `ignore-bidirectional-data` is configured in the source cluster, the write traffic in DRC can be ignored.
 
 ```toml
-[output.mysql.execution-engine]
+[output.config.execution-engine]
 # "true" means enabling the write operation of the bidirectional synchronization identifier.
 use-bidirection = true
 ```

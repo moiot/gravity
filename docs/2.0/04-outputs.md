@@ -96,6 +96,9 @@ Kafka 输出的 DDL json 格式如下
 [output]
 type = "mysql"
 
+[output.config]
+enable-ddl = true # 当前支持 create & alter table 语句。库表名会根据路由信息调整。
+
 [output.config.target]
 host = "127.0.0.1"
 username = ""
