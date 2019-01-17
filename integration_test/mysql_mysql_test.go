@@ -617,8 +617,8 @@ func TestTagDDL(t *testing.T) {
 func TestDDLNoRoute(t *testing.T) {
 	r := require.New(t)
 
-	sourceDBName := strings.ToLower(t.Name()) + "_source"
-	targetDBName := strings.ToLower(t.Name()) + "_target"
+	sourceDBName := strings.ToLower(t.Name())
+	targetDBName := strings.ToLower(t.Name())
 
 	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
 	defer sourceDB.Close()
