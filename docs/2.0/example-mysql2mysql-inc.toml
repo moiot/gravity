@@ -70,7 +70,7 @@ target-schema = "test_db"
 target-table = "test_target_db"
 
 [scheduler]
-type = "batch-scheduler"
+type = "batch-table-scheduler"
 [scheduler.config]
 nr-worker = 1
 batch-size = 2

@@ -60,7 +60,7 @@ match-table = "test_table_2"
 dml-topic = "binlog.test_db.test_table_2"
 
 [scheduler]
-type = "batch-scheduler"
+type = "batch-table-scheduler"
 [scheduler.config]
 nr-worker = 1
 batch-size = 2
