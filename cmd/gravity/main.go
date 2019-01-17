@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -11,7 +12,6 @@ import (
 	"syscall"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/json-iterator/go"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -22,13 +22,6 @@ import (
 	"github.com/moiot/gravity/pkg/logutil"
 	"github.com/moiot/gravity/pkg/utils"
 )
-
-var myJson = jsoniter.Config{
-	EscapeHTML:             true,
-	SortMapKeys:            true,
-	ValidateJsonRawMessage: true,
-	UseNumber:              true,
-}.Froze()
 
 func main() {
 	cfg := config.NewConfig()
@@ -175,12 +168,14 @@ func healthzHandler(server *app.Server) func(http.ResponseWriter, *http.Request)
 
 func statusHandler(server *app.Server, name, hash string) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		pos, err := myJson.MarshalToString(server.Input.PositionStore().Position().Raw)
+		b, err := json.Marshal(server.Input.PositionStore().Position().Raw)
 		if err != nil {
 			log.Error(err)
 			http.Error(writer, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		pos := string(b)
+
 		var state = core.ReportStageIncremental
 		if server.Input.Stage() == config.Batch {
 			state = core.ReportStageFull
@@ -194,7 +189,7 @@ func statusHandler(server *app.Server, name, hash string) func(http.ResponseWrit
 			Version:    utils.Version,
 		}
 
-		resp, err := myJson.Marshal(ret)
+		resp, err := json.Marshal(ret)
 		if err != nil {
 			log.Error(err)
 			http.Error(writer, err.Error(), http.StatusInternalServerError)
