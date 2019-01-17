@@ -50,14 +50,25 @@ match-table = "test_table"
 id = "another_id"
 
 [output]
-type = "async-kafka"
+type = "mysql"
+
 [output.config]
-broker-addrs = ["1.2.3.4:9002"]
+enable-ddl = true
+
+[output.config.target]
+host = "127.0.0.1"
+username = "root"
+password = ""
+port = 3306
+
+[output.config.execution-engine]
+use-bidirection = true
 
 [[output.config.routes]]
 match-schema = "test_db"
-match-table = "test_table_2"
-dml-topic = "binlog.test_db.test_table_2"
+match-table = "test_table"
+target-schema = "test_db"
+target-table = "test_target_db"
 
 [scheduler]
 type = "batch-table-scheduler"

@@ -1,7 +1,7 @@
 当前支持的 Input Plugin 有如下几种
 
 - **mysql** 以 MySQL 作为输入源，支持全量、增量、全量+增量模式
-- **mongooplog** 以 MongoDB 的 Oplog 作为输入源，监听 MongoDB 的增量数据变更
+- **mongo** 当前仅支持增量模式。以 MongoDB 的 Oplog 作为输入源。
 
 
 ### mysql 增量模式
