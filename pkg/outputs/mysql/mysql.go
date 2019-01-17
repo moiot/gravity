@@ -167,6 +167,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					O: targetSchema,
 				}
 				shadow.IfNotExists = true
+				log.Info(shadow.Table.Schema.String(), ".", shadow.Table.Name.String())
 				stmt := RestoreCreateTblStmt(&shadow)
 				err := output.executeDDL(stmt)
 				if err != nil {

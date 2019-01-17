@@ -613,3 +613,69 @@ func TestTagDDL(t *testing.T) {
 	err = row.Scan(&tblName)
 	r.Equal(sql.ErrNoRows, err)
 }
+
+func TestDDLNoRoute(t *testing.T) {
+	r := require.New(t)
+
+	sourceDBName := strings.ToLower(t.Name()) + "_source"
+	targetDBName := strings.ToLower(t.Name()) + "_target"
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	pipelineConfig := config.PipelineConfigV3{
+		PipelineName: sourceDBName,
+		Version:      config.PipelineConfigV3Version,
+		InputPlugin: config.InputConfig{
+			Type: "mysql",
+			Mode: config.Stream,
+			Config: map[string]interface{}{
+				"source": map[string]interface{}{
+					"host":     sourceDBConfig.Host,
+					"username": sourceDBConfig.Username,
+					"password": sourceDBConfig.Password,
+					"port":     sourceDBConfig.Port,
+				},
+			},
+		},
+		OutputPlugin: config.GenericConfig{
+			Type: "mysql",
+			Config: map[string]interface{}{
+				"target": map[string]interface{}{
+					"host":     targetDBConfig.Host,
+					"username": targetDBConfig.Username,
+					"password": targetDBConfig.Password,
+					"port":     targetDBConfig.Port,
+				},
+				"enable-ddl": true,
+			},
+		},
+	}
+
+	server, err := app.NewServer(pipelineConfig)
+	r.NoError(err)
+
+	r.NoError(server.Start())
+
+	tbl := "abc"
+	_, err = sourceDB.Exec("use " + sourceDBName)
+	r.NoError(err)
+
+	_, err = sourceDB.Exec(fmt.Sprintf("create table `%s`(`id` int(11),  PRIMARY KEY (`id`)) ENGINE=InnoDB", tbl))
+	r.NoError(err)
+
+	_, err = sourceDB.Exec(fmt.Sprintf("alter table `%s` add column v int(11)", tbl))
+	r.NoError(err)
+
+	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	r.NoError(err)
+
+	<-server.Input.Done()
+
+	server.Close()
+}

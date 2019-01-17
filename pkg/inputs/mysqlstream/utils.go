@@ -24,22 +24,31 @@ func extractSchemaNameFromDDLQueryEvent(p *parser.Parser, ev *replication.QueryE
 		log.Fatalf("sql parser error: %v", err.Error())
 	}
 
+	node = stmt
+
 	switch v := stmt.(type) {
 	case *ast.CreateDatabaseStmt:
-		return v.Name, "", v
+		db = v.Name
 	case *ast.DropDatabaseStmt:
-		return v.Name, "", v
+		db = v.Name
 	case *ast.CreateTableStmt:
-		return v.Table.Schema.String(), v.Table.Name.String(), v
+		db = v.Table.Schema.String()
+		table = v.Table.Name.String()
 	case *ast.DropTableStmt:
 		if len(v.Tables) > 1 {
 			log.Fatalf("only support single drop table right now: %v", string(ev.Query))
 		}
-		return v.Tables[0].Schema.String(), v.Tables[0].Name.String(), v
+		db = v.Tables[0].Schema.String()
+		table = v.Tables[0].Name.String()
 	case *ast.AlterTableStmt:
-		return v.Table.Schema.String(), v.Table.Name.String(), v
+		db = v.Table.Schema.String()
+		table = v.Table.Name.String()
 	case *ast.TruncateTableStmt:
-		return v.Table.Schema.String(), v.Table.Name.String(), v
+		db = v.Table.Schema.String()
+		table = v.Table.Name.String()
 	}
-	return string(ev.Schema), "", stmt
+	if db == "" {
+		db = string(ev.Schema)
+	}
+	return
 }
