@@ -46,9 +46,15 @@ func GetSchemaFromDB(db *sql.DB, dbName string) (Schema, error) {
 
 			table, err := GetTableDefFromDB(db, dbName, t)
 			if err != nil {
-				if errors.Cause(err).(*mysql.MySQLError).Number == 1146 {
-					log.Error(err)
-				} else {
+				e := errors.Cause(err)
+				switch e := e.(type) {
+				case *mysql.MySQLError:
+					if e.Number == 1146 {
+						log.Error(err)
+					} else {
+						tableDefErr = err
+					}
+				default:
 					tableDefErr = err
 				}
 				return
