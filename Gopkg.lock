@@ -409,7 +409,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:20b0d5f100d9373f4cffc2914dde36b6cd4120b5c0af74e59a4cbed0268e18d1"
+  digest = "1:831dac4c385f9f8a42776fc5e8830f85c13102c6e3ffb1c16f4a72835aad6175"
   name = "github.com/pingcap/parser"
   packages = [
     ".",
@@ -424,11 +424,11 @@
     "types",
   ]
   pruneopts = "T"
-  revision = "fdccc3290b115557ceee44e21578b58005666fbf"
+  revision = "5958b6fcdb2d33614d9b2ab99f76b5c1c422b39f"
 
 [[projects]]
   branch = "master"
-  digest = "1:6b42b67c9210b35d20ffc4b937f2aa9d66d1625503e68119ed0490af632aa9c5"
+  digest = "1:11b4759e9d86f9cbc37a5e048f41e325493cd56b76c7fa590793cd43d172d033"
   name = "github.com/pingcap/tidb"
   packages = [
     "sessionctx/stmtctx",
@@ -440,7 +440,7 @@
     "util/memory",
   ]
   pruneopts = "T"
-  revision = "32cfaf1dcc74fe627d67facebc92150b84b3deaf"
+  revision = "54b6de0880f0f9a3158065a04e3d6483da611f62"
 
 [[projects]]
   branch = "master"
@@ -809,6 +809,7 @@
     "github.com/pingcap/errors",
     "github.com/pingcap/parser",
     "github.com/pingcap/parser/ast",
+    "github.com/pingcap/parser/format",
     "github.com/pingcap/parser/model",
     "github.com/pingcap/tidb/types/parser_driver",
     "github.com/prometheus/client_golang/prometheus",
