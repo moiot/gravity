@@ -614,6 +614,88 @@ func TestTagDDL(t *testing.T) {
 	r.Equal(sql.ErrNoRows, err)
 }
 
+func TestDDL(t *testing.T) {
+	r := require.New(t)
+
+	sourceDBName := strings.ToLower(t.Name()) + "_source"
+	targetDBName := strings.ToLower(t.Name()) + "_target"
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	pipelineConfig := config.PipelineConfigV3{
+		PipelineName: sourceDBName,
+		Version:      config.PipelineConfigV3Version,
+		InputPlugin: config.InputConfig{
+			Type: "mysql",
+			Mode: config.Stream,
+			Config: map[string]interface{}{
+				"source": map[string]interface{}{
+					"host":     sourceDBConfig.Host,
+					"username": sourceDBConfig.Username,
+					"password": sourceDBConfig.Password,
+					"port":     sourceDBConfig.Port,
+				},
+			},
+		},
+		OutputPlugin: config.GenericConfig{
+			Type: "mysql",
+			Config: map[string]interface{}{
+				"target": map[string]interface{}{
+					"host":     targetDBConfig.Host,
+					"username": targetDBConfig.Username,
+					"password": targetDBConfig.Password,
+					"port":     targetDBConfig.Port,
+				},
+				"enable-ddl": true,
+				"routes": []map[string]interface{}{
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "*",
+						"target-schema": targetDBName,
+					},
+				},
+			},
+		},
+	}
+
+	server, err := app.NewServer(pipelineConfig)
+	r.NoError(err)
+
+	r.NoError(server.Start())
+
+	_, err = sourceDB.Exec("use " + sourceDBName)
+	r.NoError(err)
+
+	ddls := []string{
+		`CREATE TABLE t5 (
+  id bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键id',
+  thirdparty tinyint(2) NOT NULL DEFAULT '0' COMMENT '第三方编号',
+  PRIMARY KEY (id),
+  KEY thirdparty (thirdparty)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='第三方调用记录';`,
+
+		`alter table t5 add column ii int(11)`,
+	}
+
+	for _, ddl := range ddls {
+		_, err = sourceDB.Exec(ddl)
+		r.NoError(err)
+	}
+
+	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	r.NoError(err)
+
+	<-server.Input.Done()
+
+	server.Close()
+}
+
 func TestDDLNoRoute(t *testing.T) {
 	r := require.New(t)
 
