@@ -153,7 +153,12 @@ type MySQLTablePositionState struct {
 }
 
 func (tablePositionState *MySQLTablePositionState) Get() interface{} {
-	return tablePositionState
+	s := tablePositionState.GetRaw()
+	ret := MySQLTablePositionState{}
+	if err := myJson.UnmarshalFromString(s, &ret); err != nil {
+		log.Fatalf("[MySQLTablePositionState.Get] err: %s", err)
+	}
+	return ret
 }
 
 func (tablePositionState *MySQLTablePositionState) GetRaw() string {
@@ -288,7 +293,16 @@ func (p *PipelineGravityMySQLPosition) String() string {
 }
 
 func (p *PipelineGravityMySQLPosition) Get() interface{} {
-	return *p
+	ret := PipelineGravityMySQLPosition{}
+	if p.CurrentPosition != nil {
+		pos := *p.CurrentPosition
+		ret.CurrentPosition = &pos
+	}
+	if p.StartPosition != nil {
+		pos := *p.StartPosition
+		ret.StartPosition = &pos
+	}
+	return ret
 }
 
 func (p *PipelineGravityMySQLPosition) GetRaw() string {
