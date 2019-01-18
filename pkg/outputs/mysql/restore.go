@@ -7,7 +7,7 @@ import (
 	"github.com/pingcap/parser/ast"
 )
 
-var expCreateTable = regexp.MustCompile("(?im).+?(\\([\\s\\S]*)")
+var expCreateTable = regexp.MustCompile("(?mi)^CREATE\\sTABLE(?:\\sIF\\sNOT\\sEXISTS)?\\s\\x60?.*?\\x60?\\.?\\x60?[^\\x60\\.]+?\\x60?(\\s[\\s\\S]*)")
 var expAlterTable = regexp.MustCompile("(?im)^ALTER\\sTABLE\\s.*?`?.*?`?\\.?`?[^`.]+?`?\\s([\\s\\S]*)")
 
 func RestoreCreateTblStmt(n *ast.CreateTableStmt) string {
@@ -18,7 +18,6 @@ func RestoreCreateTblStmt(n *ast.CreateTableStmt) string {
 		ctx.WriteKeyWord("IF NOT EXISTS ")
 	}
 	_ = n.Table.Restore(ctx)
-	ctx.WritePlain(" ")
 
 	raw := n.Text()
 	ctx.WritePlain(expCreateTable.FindStringSubmatch(raw)[1])

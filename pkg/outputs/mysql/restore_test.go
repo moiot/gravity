@@ -36,6 +36,11 @@ func TestRestoreCreateTblStmt(t *testing.T) {
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='第三方调用记录'`,
 		},
+		{
+			name:   "like",
+			input:  "create table tn4 like tn3",
+			expect: "CREATE TABLE `tn4` like tn3",
+		},
 	}
 
 	r := require.New(t)
