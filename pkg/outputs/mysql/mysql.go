@@ -2,6 +2,9 @@ package mysql
 
 import (
 	"database/sql"
+	"strings"
+
+	"github.com/pingcap/parser/format"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -159,15 +162,15 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					return nil
 				}
 
-				shadow := *node
-				shadow.Table.Name = model.CIStr{
+				copy := *node
+				copy.Table.Name = model.CIStr{
 					O: targetTable,
 				}
-				shadow.Table.Schema = model.CIStr{
+				copy.Table.Schema = model.CIStr{
 					O: targetSchema,
 				}
-				shadow.IfNotExists = true
-				stmt := RestoreCreateTblStmt(&shadow)
+				copy.IfNotExists = true
+				stmt := restore(&copy)
 				err := output.executeDDL(targetSchema, stmt)
 				if err != nil {
 					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
@@ -179,14 +182,14 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
 					return nil
 				}
-				shadow := *node
-				shadow.Table.Name = model.CIStr{
+				copy := *node
+				copy.Table.Name = model.CIStr{
 					O: targetTable,
 				}
-				shadow.Table.Schema = model.CIStr{
+				copy.Table.Schema = model.CIStr{
 					O: targetSchema,
 				}
-				stmt := RestoreAlterTblStmt(&shadow)
+				stmt := restore(&copy)
 				err := output.executeDDL(targetSchema, stmt)
 				if err != nil {
 					if e := err.(*mysqldriver.MySQLError); e.Number == 1060 {
@@ -247,6 +250,16 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 	}
 
 	return nil
+}
+
+func restore(node ast.Node) string {
+	writer := &strings.Builder{}
+	ctx := format.NewRestoreCtx(format.DefaultRestoreFlags, writer)
+	err := node.Restore(ctx)
+	if err != nil {
+		log.Fatalf("error restore ddl %s, err: %s", node.Text(), err)
+	}
+	return writer.String()
 }
 
 func splitMsgBatchWithDelete(msgBatch []*core.Msg) [][]*core.Msg {
