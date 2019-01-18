@@ -7,8 +7,8 @@ import (
 	"github.com/pingcap/parser/ast"
 )
 
-var expCreateTable = regexp.MustCompile(".+?(\\(.*)")
-var expAlterTable = regexp.MustCompile("(?i)^ALTER\\sTABLE\\s.*?`?.*?`?\\.?`?[^`.]+?`?\\s(.*)")
+var expCreateTable = regexp.MustCompile("(?im).+?(\\([\\s\\S]*)")
+var expAlterTable = regexp.MustCompile("(?im)^ALTER\\sTABLE\\s.*?`?.*?`?\\.?`?[^`.]+?`?\\s([\\s\\S]*)")
 
 func RestoreCreateTblStmt(n *ast.CreateTableStmt) string {
 	writer := &strings.Builder{}
