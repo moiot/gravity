@@ -673,14 +673,16 @@ func TestDDL(t *testing.T) {
 	r.NoError(err)
 
 	ddls := []string{
-		`CREATE TABLE t5 (
+		`CREATE TABLE tn3 (
   id bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键id',
   thirdparty tinyint(2) NOT NULL DEFAULT '0' COMMENT '第三方编号',
   PRIMARY KEY (id),
   KEY thirdparty (thirdparty)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='第三方调用记录';`,
 
-		`alter table t5 add column ii int(11)`,
+		`alter table tn3 add column ii int(11)`,
+
+		"CREATE TABLE IF NOT EXISTS tn4 like tn3",
 	}
 
 	for _, ddl := range ddls {

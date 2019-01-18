@@ -168,7 +168,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				}
 				shadow.IfNotExists = true
 				stmt := RestoreCreateTblStmt(&shadow)
-				err := output.executeDDL(stmt)
+				err := output.executeDDL(targetSchema, stmt)
 				if err != nil {
 					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
 				}
@@ -187,7 +187,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					O: targetSchema,
 				}
 				stmt := RestoreAlterTblStmt(&shadow)
-				err := output.executeDDL(stmt)
+				err := output.executeDDL(targetSchema, stmt)
 				if err != nil {
 					if e := err.(*mysqldriver.MySQLError); e.Number == 1060 {
 						log.Errorf("[output-mysql] ignore duplicate column. ddl: %s. err: %s", stmt, e)
@@ -281,8 +281,31 @@ func splitMsgBatchWithDelete(msgBatch []*core.Msg) [][]*core.Msg {
 	return batches
 }
 
-func (output *MySQLOutput) executeDDL(stmt string) error {
+func (output *MySQLOutput) executeDDL(targetSchema, stmt string) error {
 	stmt = consts.DDLTag + stmt
-	_, err := output.db.Exec(stmt)
-	return err
+	if targetSchema != "" {
+		tx, err := output.db.Begin()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		_, err = tx.Exec("use `" + targetSchema + "`")
+		if err != nil {
+			_ = tx.Rollback()
+			return errors.Trace(err)
+		}
+		_, err = tx.Exec(stmt)
+		if err != nil {
+			_ = tx.Rollback()
+			return errors.Trace(err)
+		}
+		err = tx.Commit()
+		if err != nil {
+			return errors.Trace(err)
+		}
+	} else {
+		_, err := output.db.Exec(stmt)
+		return errors.Trace(err)
+	}
+
+	return nil
 }
