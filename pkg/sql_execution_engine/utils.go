@@ -134,7 +134,7 @@ func ValidateSchema(msg *core.Msg, tableDef *schema_store.Table) error {
 	columnLenInTarget := len(tableDef.Columns)
 
 	if columnLenInMsg != columnLenInTarget {
-		return errors.Errorf("columnLenInMsg %d columnLenInTarget %d not equal", columnLenInMsg, columnLenInTarget)
+		return errors.Errorf("%s.%s: columnLenInMsg %d columnLenInTarget %d not equal", tableDef.Schema, tableDef.Name, columnLenInMsg, columnLenInTarget)
 	}
 
 	return nil
