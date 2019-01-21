@@ -48,13 +48,11 @@ run-dev:
 
 build:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity cmd/gravity/main.go
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -race -o bin/gravity-race cmd/gravity/main.go
 	#$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/padder cmd/padder/main.go
 
 
 build-linux:
 	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-linux-amd64 cmd/gravity/main.go
-	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -race -o bin/gravity-race-linux-amd64 cmd/gravity/main.go
 
 check:
 	@echo "gofmt"
