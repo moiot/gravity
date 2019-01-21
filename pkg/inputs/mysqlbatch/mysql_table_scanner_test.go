@@ -355,7 +355,7 @@ func TestFindInBatch(t *testing.T) {
 			r.NoError(err)
 
 			q := make(chan *TableWork, 1)
-			q <- &TableWork{TableDef: tableDefs[0], TableConfig: &tableConfigs[0]}
+			q <- &TableWork{TableDef: tableDefs[0], TableConfig: &tableConfigs[0], ScanColumn: c.scanColumn}
 			close(q)
 
 			tableScanner := NewTableScanner(
