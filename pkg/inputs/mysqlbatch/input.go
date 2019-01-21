@@ -194,7 +194,7 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter) error {
 		scanColumns[i] = column
 	}
 	if len(allErrors) > 0 {
-		return errors.Errorf("failed detect %d tables scan column")
+		return errors.Errorf("failed detect %d tables scan column", len(allErrors))
 	}
 
 	tableQueue := make(chan *TableWork, len(tableDefs))
