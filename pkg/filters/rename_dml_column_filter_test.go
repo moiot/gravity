@@ -25,7 +25,6 @@ func TestRenameDmlColumnFilter_Configure(t *testing.T) {
 	r := require.New(t)
 	cfg, err := newFilterConfigFromJson(`
 {
-	"type": "rename-dml-column",
 	"match-schema": "test",
 	"match-table": "test_table",
 	"from": ["a", "b"],
@@ -44,7 +43,6 @@ func TestRenameDmlColumnFilter_Filter(t *testing.T) {
 
 	f, err := newRenameDmlColumnFilterFromJson(`
 {
-	"type": "rename-dml-column",
 	"match-schema": "test",
 	"match-table": "test_table",
 	"from": ["a", "b"],

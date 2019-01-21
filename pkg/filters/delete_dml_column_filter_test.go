@@ -27,7 +27,6 @@ func TestDeleteDmlColumnFilter_Configure(t *testing.T) {
 
 	_, err := newFilterConfigFromJson(`
 {
-	"type": "delete-dml-column",
 	"match-schema": "test",
 	"match-table": "test_table",
 	"columns": ["a", "b"]
@@ -42,7 +41,6 @@ func TestDeleteDmlColumnFilter_Filter(t *testing.T) {
 
 	f, err := newDeleteDmlColumnFilter(`
 {
-	"type": "delete-dml-column",
 	"match-schema": "test",
 	"match-table": "test_table",
 	"columns": ["b", "a", "d"]
