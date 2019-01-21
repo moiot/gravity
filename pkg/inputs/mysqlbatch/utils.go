@@ -8,7 +8,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/schema_store"
-	"github.com/moiot/gravity/pkg/utils"
 )
 
 // GetTables returns a list of table definition based on the schema, table name patterns
@@ -40,8 +39,8 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 				log.Fatalf("failed to scan, err: %v", err)
 			}
 
-			for _, tablePattern := range tableConfigs[i].Table {
-				if utils.Glob(tablePattern, tableName) {
+			for _, tableExp := range tableConfigs[i].tableExps {
+				if tableExp.Match([]byte(tableName)) {
 					tableDef, ok := schema[tableName]
 					if !ok {
 						log.Fatalf("table def not found, schema: %v, table: %v", schemaName, tableName)
