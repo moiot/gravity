@@ -430,7 +430,7 @@ func TestInitTablePosition(t *testing.T) {
 			context.Background(),
 		)
 
-		err = tableScanner.InitTablePosition(tableDefs[0], &tableConfigs[0])
+		err = tableScanner.InitTablePosition(tableDefs[0], &tableConfigs[0], "id")
 		assert.NotNil(t, err)
 		assert.EqualValues(t, errors.Cause(ErrTableEmpty), err)
 	})
