@@ -165,11 +165,13 @@ func main() {
 
 func healthzHandler(server *app.Server) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if server.Scheduler.Healthy() {
-			w.WriteHeader(http.StatusOK)
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		w.WriteHeader(http.StatusOK)
+
+		// if server.Scheduler.Healthy() {
+		// 	w.WriteHeader(http.StatusOK)
+		// } else {
+		// 	w.WriteHeader(http.StatusInternalServerError)
+		// }
 	}
 }
 
