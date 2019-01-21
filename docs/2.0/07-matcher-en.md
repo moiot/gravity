@@ -7,5 +7,5 @@ match-schema = "test"
 match-table = "test_table_*"
 match-dml-op = "delete" # rejects ddl
 match-dml-op = ["insert", "update", "delete"] 
-match-ddl-regex = "(?i)^DROP\sTABLE" # rejects dml
+match-ddl-regex = '(?i)^DROP\sTABLE' # rejects dml
 
