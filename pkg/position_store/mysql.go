@@ -82,17 +82,22 @@ func (p MySQLTablePosition) MapString() (map[string]string, error) {
 			pMapString["type"] = SQLNullTime
 		}
 	default:
-		return nil, errors.Errorf("unknown type: %v", reflect.TypeOf(v))
+		return nil, errors.Errorf("unknown type: %v, column: %v", reflect.TypeOf(v), p.Column)
 	}
 	return pMapString, nil
 }
 
 func (p MySQLTablePosition) MarshalJSON() ([]byte, error) {
-	if m, err := p.MapString(); err != nil {
+	m, err := p.MapString()
+	if err != nil {
 		return nil, errors.Trace(err)
-	} else {
-		return myJson.Marshal(m)
 	}
+
+	b, err := myJson.Marshal(m)
+	if err != nil {
+		return nil, errors.Annotatef(err, "failed to marshal column: %v, type: %v, value: %v", p.Column, p.Type, p.Value)
+	}
+	return b, nil
 }
 
 func (p *MySQLTablePosition) UnmarshalJSON(value []byte) error {
@@ -139,7 +144,7 @@ func (p *MySQLTablePosition) UnmarshalJSON(value []byte) error {
 		}
 		p.Value = t
 	default:
-		return errors.Errorf("unknown type: %v", p.Type)
+		return errors.Errorf("unknown type: %v, column: %v", p.Type, p.Column)
 	}
 	return nil
 }
@@ -164,7 +169,7 @@ func (tablePositionState *MySQLTablePositionState) Get() interface{} {
 func (tablePositionState *MySQLTablePositionState) GetRaw() string {
 	ret, err := tablePositionState.ToJSON()
 	if err != nil {
-		log.Fatalf("[MySQLTablePositionState.GetRaw] error ToJSON. %#v. err: %s", tablePositionState, err)
+		log.Fatalf("[MySQLTablePositionState.GetRaw] error ToJSON. %#v. err: %v", tablePositionState, errors.ErrorStack(err))
 	}
 	return ret
 }
@@ -190,7 +195,8 @@ func (tablePositionState *MySQLTablePositionState) Stage() config.InputMode {
 func (tablePositionState *MySQLTablePositionState) ToJSON() (string, error) {
 	tablePositionState.Lock()
 	defer tablePositionState.Unlock()
-	return myJson.MarshalToString(tablePositionState)
+	s, err := myJson.MarshalToString(tablePositionState)
+	return s, errors.Trace(err)
 }
 
 func (tablePositionState *MySQLTablePositionState) GetStartBinlogPos() (utils.MySQLBinlogPosition, bool) {
