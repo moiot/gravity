@@ -669,23 +669,34 @@ func TestDDL(t *testing.T) {
 
 	r.NoError(server.Start())
 
-	_, err = sourceDB.Exec("use " + sourceDBName)
-	r.NoError(err)
-
 	ddls := []string{
-		`CREATE TABLE t5 (
+		`CREATE TABLE tn3 (
   id bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键id',
   thirdparty tinyint(2) NOT NULL DEFAULT '0' COMMENT '第三方编号',
   PRIMARY KEY (id),
   KEY thirdparty (thirdparty)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='第三方调用记录';`,
 
-		`alter table t5 add column ii int(11)`,
+		`alter table tn3 add column ii int(11)`,
+
+		"CREATE TABLE tn4 like tn3",
+
+		"CREATE TABLE IF NOT EXISTS tn4 like tn3",
+
+		"create table `abc`(`id` int(11),  PRIMARY KEY (`id`)) ENGINE=InnoDB",
 	}
 
 	for _, ddl := range ddls {
-		_, err = sourceDB.Exec(ddl)
+		tx, err := sourceDB.Begin()
 		r.NoError(err)
+
+		_, err = tx.Exec("use " + sourceDBName)
+		r.NoError(err)
+
+		_, err = tx.Exec(ddl)
+		r.NoError(err)
+
+		r.NoError(tx.Commit())
 	}
 
 	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
@@ -745,14 +756,24 @@ func TestDDLNoRoute(t *testing.T) {
 	r.NoError(server.Start())
 
 	tbl := "abc"
-	_, err = sourceDB.Exec("use " + sourceDBName)
-	r.NoError(err)
+	ddls := []string{
+		fmt.Sprintf("create table `%s`(`id` int(11),  PRIMARY KEY (`id`)) ENGINE=InnoDB", tbl),
 
-	_, err = sourceDB.Exec(fmt.Sprintf("create table `%s`(`id` int(11),  PRIMARY KEY (`id`)) ENGINE=InnoDB", tbl))
-	r.NoError(err)
+		fmt.Sprintf("alter table `%s` add column v int(11)", tbl),
+	}
 
-	_, err = sourceDB.Exec(fmt.Sprintf("alter table `%s` add column v int(11)", tbl))
-	r.NoError(err)
+	for _, ddl := range ddls {
+		tx, err := sourceDB.Begin()
+		r.NoError(err)
+
+		_, err = tx.Exec("use " + sourceDBName)
+		r.NoError(err)
+
+		_, err = tx.Exec(ddl)
+		r.NoError(err)
+
+		r.NoError(tx.Commit())
+	}
 
 	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
 	r.NoError(err)

@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
+	. "github.com/pingcap/parser/format"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/opcode"
 )
@@ -157,7 +158,7 @@ func (n *BinaryOperationExpr) Restore(ctx *RestoreCtx) error {
 	if err := n.L.Restore(ctx); err != nil {
 		return errors.Annotate(err, "An error occurred when restore BinaryOperationExpr.L")
 	}
-	if err := n.Op.Restore(ctx.In); err != nil {
+	if err := n.Op.Restore(ctx); err != nil {
 		return errors.Annotate(err, "An error occurred when restore BinaryOperationExpr.Op")
 	}
 	if err := n.R.Restore(ctx); err != nil {
@@ -346,7 +347,12 @@ type SubqueryExpr struct {
 
 // Restore implements Node interface.
 func (n *SubqueryExpr) Restore(ctx *RestoreCtx) error {
-	return errors.New("Not implemented")
+	ctx.WritePlain("(")
+	if err := n.Query.Restore(ctx); err != nil {
+		return errors.Annotate(err, "An error occurred while restore SubqueryExpr.Query")
+	}
+	ctx.WritePlain(")")
+	return nil
 }
 
 // Format the ExprNode into a Writer.
@@ -387,7 +393,21 @@ type CompareSubqueryExpr struct {
 
 // Restore implements Node interface.
 func (n *CompareSubqueryExpr) Restore(ctx *RestoreCtx) error {
-	return errors.New("Not implemented")
+	if err := n.L.Restore(ctx); err != nil {
+		return errors.Annotate(err, "An error occurred while restore CompareSubqueryExpr.L")
+	}
+	if err := n.Op.Restore(ctx); err != nil {
+		return errors.Annotate(err, "An error occurred while restore CompareSubqueryExpr.Op")
+	}
+	if n.All {
+		ctx.WriteKeyWord("ALL ")
+	} else {
+		ctx.WriteKeyWord("ANY ")
+	}
+	if err := n.R.Restore(ctx); err != nil {
+		return errors.Annotate(err, "An error occurred while restore CompareSubqueryExpr.R")
+	}
+	return nil
 }
 
 // Format the ExprNode into a Writer.
@@ -568,7 +588,15 @@ type ExistsSubqueryExpr struct {
 
 // Restore implements Node interface.
 func (n *ExistsSubqueryExpr) Restore(ctx *RestoreCtx) error {
-	return errors.New("Not implemented")
+	if n.Not {
+		ctx.WriteKeyWord("NOT EXISTS ")
+	} else {
+		ctx.WriteKeyWord("EXISTS ")
+	}
+	if err := n.Sel.Restore(ctx); err != nil {
+		return errors.Annotate(err, "An error occurred while restore ExistsSubqueryExpr.Sel")
+	}
+	return nil
 }
 
 // Format the ExprNode into a Writer.
@@ -606,7 +634,31 @@ type PatternInExpr struct {
 
 // Restore implements Node interface.
 func (n *PatternInExpr) Restore(ctx *RestoreCtx) error {
-	return errors.New("Not implemented")
+	if err := n.Expr.Restore(ctx); err != nil {
+		return errors.Annotate(err, "An error occurred while restore PatternInExpr.Expr")
+	}
+	if n.Not {
+		ctx.WriteKeyWord(" NOT IN ")
+	} else {
+		ctx.WriteKeyWord(" IN ")
+	}
+	if n.Sel != nil {
+		if err := n.Sel.Restore(ctx); err != nil {
+			return errors.Annotate(err, "An error occurred while restore PatternInExpr.Sel")
+		}
+	} else {
+		ctx.WritePlain("(")
+		for i, expr := range n.List {
+			if i != 0 {
+				ctx.WritePlain(",")
+			}
+			if err := expr.Restore(ctx); err != nil {
+				return errors.Annotatef(err, "An error occurred while restore PatternInExpr.List[%d]", i)
+			}
+		}
+		ctx.WritePlain(")")
+	}
+	return nil
 }
 
 // Format the ExprNode into a Writer.
@@ -618,10 +670,10 @@ func (n *PatternInExpr) Format(w io.Writer) {
 		fmt.Fprint(w, " IN (")
 	}
 	for i, expr := range n.List {
-		expr.Format(w)
-		if i != len(n.List)-1 {
+		if i != 0 {
 			fmt.Fprint(w, ",")
 		}
+		expr.Format(w)
 	}
 	fmt.Fprint(w, ")")
 }
@@ -793,6 +845,12 @@ func (n *PatternLikeExpr) Restore(ctx *RestoreCtx) error {
 		return errors.Annotate(err, "An error occurred while restore PatternLikeExpr.Pattern")
 	}
 
+	escape := string(n.Escape)
+	if escape != "\\" {
+		ctx.WriteKeyWord(" ESCAPE ")
+		ctx.WriteString(escape)
+
+	}
 	return nil
 }
 
@@ -898,7 +956,8 @@ type PositionExpr struct {
 
 // Restore implements Node interface.
 func (n *PositionExpr) Restore(ctx *RestoreCtx) error {
-	return errors.New("Not implemented")
+	ctx.WritePlainf("%d", n.N)
+	return nil
 }
 
 // Format the ExprNode into a Writer.
@@ -1046,7 +1105,7 @@ type UnaryOperationExpr struct {
 
 // Restore implements Node interface.
 func (n *UnaryOperationExpr) Restore(ctx *RestoreCtx) error {
-	if err := n.Op.Restore(ctx.In); err != nil {
+	if err := n.Op.Restore(ctx); err != nil {
 		return errors.Trace(err)
 	}
 	if err := n.V.Restore(ctx); err != nil {
@@ -1134,7 +1193,29 @@ type VariableExpr struct {
 
 // Restore implements Node interface.
 func (n *VariableExpr) Restore(ctx *RestoreCtx) error {
-	return errors.New("Not implemented")
+	if n.IsSystem {
+		ctx.WritePlain("@@")
+		if n.ExplicitScope {
+			if n.IsGlobal {
+				ctx.WriteKeyWord("GLOBAL")
+			} else {
+				ctx.WriteKeyWord("SESSION")
+			}
+			ctx.WritePlain(".")
+		}
+	} else {
+		ctx.WritePlain("@")
+	}
+	ctx.WriteName(n.Name)
+
+	if n.Value != nil {
+		ctx.WritePlain(":=")
+		if err := n.Value.Restore(ctx); err != nil {
+			return errors.Annotate(err, "An error occurred while restore VariableExpr.Value")
+		}
+	}
+
+	return nil
 }
 
 // Format the ExprNode into a Writer.

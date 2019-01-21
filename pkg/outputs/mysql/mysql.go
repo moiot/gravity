@@ -2,6 +2,9 @@ package mysql
 
 import (
 	"database/sql"
+	"strings"
+
+	"github.com/pingcap/parser/format"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -159,16 +162,16 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					return nil
 				}
 
-				shadow := *node
-				shadow.Table.Name = model.CIStr{
+				copy := *node
+				copy.Table.Name = model.CIStr{
 					O: targetTable,
 				}
-				shadow.Table.Schema = model.CIStr{
+				copy.Table.Schema = model.CIStr{
 					O: targetSchema,
 				}
-				shadow.IfNotExists = true
-				stmt := RestoreCreateTblStmt(&shadow)
-				err := output.executeDDL(stmt)
+				copy.IfNotExists = true
+				stmt := restore(&copy)
+				err := output.executeDDL(targetSchema, stmt)
 				if err != nil {
 					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
 				}
@@ -179,15 +182,15 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
 					return nil
 				}
-				shadow := *node
-				shadow.Table.Name = model.CIStr{
+				copy := *node
+				copy.Table.Name = model.CIStr{
 					O: targetTable,
 				}
-				shadow.Table.Schema = model.CIStr{
+				copy.Table.Schema = model.CIStr{
 					O: targetSchema,
 				}
-				stmt := RestoreAlterTblStmt(&shadow)
-				err := output.executeDDL(stmt)
+				stmt := restore(&copy)
+				err := output.executeDDL(targetSchema, stmt)
 				if err != nil {
 					if e := err.(*mysqldriver.MySQLError); e.Number == 1060 {
 						log.Errorf("[output-mysql] ignore duplicate column. ddl: %s. err: %s", stmt, e)
@@ -249,6 +252,16 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 	return nil
 }
 
+func restore(node ast.Node) string {
+	writer := &strings.Builder{}
+	ctx := format.NewRestoreCtx(format.DefaultRestoreFlags, writer)
+	err := node.Restore(ctx)
+	if err != nil {
+		log.Fatalf("error restore ddl %s, err: %s", node.Text(), err)
+	}
+	return writer.String()
+}
+
 func splitMsgBatchWithDelete(msgBatch []*core.Msg) [][]*core.Msg {
 	if len(msgBatch) == 0 {
 		return [][]*core.Msg{}
@@ -281,8 +294,31 @@ func splitMsgBatchWithDelete(msgBatch []*core.Msg) [][]*core.Msg {
 	return batches
 }
 
-func (output *MySQLOutput) executeDDL(stmt string) error {
+func (output *MySQLOutput) executeDDL(targetSchema, stmt string) error {
 	stmt = consts.DDLTag + stmt
-	_, err := output.db.Exec(stmt)
-	return err
+	if targetSchema != "" {
+		tx, err := output.db.Begin()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		_, err = tx.Exec("use `" + targetSchema + "`")
+		if err != nil {
+			_ = tx.Rollback()
+			return errors.Trace(err)
+		}
+		_, err = tx.Exec(stmt)
+		if err != nil {
+			_ = tx.Rollback()
+			return errors.Trace(err)
+		}
+		err = tx.Commit()
+		if err != nil {
+			return errors.Trace(err)
+		}
+	} else {
+		_, err := output.db.Exec(stmt)
+		return errors.Trace(err)
+	}
+
+	return nil
 }
