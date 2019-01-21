@@ -184,12 +184,17 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter) error {
 
 	// Detect any potential error before any work is done, so that we can check the error early.
 	scanColumns := make([]string, len(tableDefs))
+	var allErrors []error
 	for i, t := range tableDefs {
 		column, err := DetectScanColumn(plugin.scanDB, t.Schema, t.Name, plugin.cfg.MaxFullDumpCount)
 		if err != nil {
-			return errors.Annotatef(err, "schema: %v, table: %v failed to detect scan column", t.Schema, t.Name)
+			log.Errorf("failed to detect scan column, schema: %v, table: %v", t.Schema, t.Name)
+			allErrors = append(allErrors, err)
 		}
 		scanColumns[i] = column
+	}
+	if len(allErrors) > 0 {
+		return errors.Errorf("failed detect %d tables scan column")
 	}
 
 	tableQueue := make(chan *TableWork, len(tableDefs))
