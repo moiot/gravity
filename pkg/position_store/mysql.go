@@ -82,7 +82,7 @@ func (p MySQLTablePosition) MapString() (map[string]string, error) {
 			pMapString["type"] = SQLNullTime
 		}
 	default:
-		return nil, errors.Errorf("[MapString] unknown type: %v, column: %v", reflect.TypeOf(v), p.Column)
+		return nil, errors.Errorf("[MapString] unknown type: %v, column: %v", reflect.TypeOf(v).String(), p.Column)
 	}
 	return pMapString, nil
 }
