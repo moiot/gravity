@@ -117,8 +117,8 @@ func (tableScanner *TableScanner) InitTablePosition(tableDef *schema_store.Table
 		scanColumn = column
 
 		if scanColumn == "*" {
-			maxPos := position_store.MySQLTablePosition{Column: scanColumn}
-			minPos := position_store.MySQLTablePosition{Column: scanColumn}
+			maxPos := position_store.MySQLTablePosition{Column: scanColumn, Type: position_store.PlainInt, Value: 0}
+			minPos := position_store.MySQLTablePosition{Column: scanColumn, Type: position_store.PlainInt, Value: 0}
 			tableScanner.positionStore.PutMaxMin(utils.TableIdentity(tableDef.Schema, tableDef.Name), maxPos, minPos)
 		} else {
 			max, min := FindMaxMinValueFromDB(tableScanner.db, tableDef.Schema, tableDef.Name, scanColumn)
