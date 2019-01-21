@@ -87,6 +87,7 @@ type mysqlFullInput struct {
 type TableWork struct {
 	TableDef    *schema_store.Table
 	TableConfig *TableConfig
+	ScanColumn  string
 }
 
 func init() {
@@ -165,9 +166,19 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter) error {
 		plugin.startBinlogPos = pos
 	}
 
+	// Detect any potential error before any work is done, so that we can check the error early.
+	scanColumns := make([]string, len(tableDefs))
+	for i, t := range tableDefs {
+		column, err := DetectScanColumn(plugin.scanDB, t.Schema, t.Name, plugin.cfg.MaxFullDumpCount)
+		if err != nil {
+			return errors.Annotatef(err, "schema: %v, table: %v failed to detect scan column", t.Schema, t.Name)
+		}
+		scanColumns[i] = column
+	}
+
 	tableQueue := make(chan *TableWork, len(tableDefs))
 	for i := 0; i < len(tableDefs); i++ {
-		work := TableWork{TableDef: tableDefs[i], TableConfig: &tableConfigs[i]}
+		work := TableWork{TableDef: tableDefs[i], TableConfig: &tableConfigs[i], ScanColumn: scanColumns[i]}
 		tableQueue <- &work
 	}
 	close(tableQueue)
