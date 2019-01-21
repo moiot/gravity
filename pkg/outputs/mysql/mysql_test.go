@@ -1,8 +1,14 @@
 package mysql
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
 
+	"github.com/pingcap/parser/format"
+
+	"github.com/pingcap/parser"
+	_ "github.com/pingcap/tidb/types/parser_driver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -92,4 +98,15 @@ func TestSplitBatch(t *testing.T) {
 	for i, c := range cases {
 		assert.EqualValuesf(c.out, splitMsgBatchWithDelete(c.in), "index", i)
 	}
+}
+
+func TestDDL(t *testing.T) {
+	s := `create table t(dt datetime(6) not null default current_timestamp(6) on update current_timestamp(6))`
+	p := parser.New()
+	stmt, err := p.ParseOneStmt(s, "", "")
+	require.NoError(t, err)
+	b := bytes.NewBufferString("")
+	ctx := format.NewRestoreCtx(format.DefaultRestoreFlags, b)
+	require.NoError(t, stmt.Restore(ctx))
+	fmt.Println(b.String())
 }
