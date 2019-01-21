@@ -9,8 +9,8 @@ Filter defines the column mutation operations on the Input message. It is config
 
 Currently, DRC supports the following Filter plugins:
 
-- `reject`: Ignores specific source messages.
-- `accept`: Only accept specific source messages.
+- `reject`: A blacklist filter that rejects specific messages.
+- `accept`: A whitelist filter that only accept specific messages.
 - `delete-dml-column`: Deletes specific columns in the source DML messages.
 - `rename-dml-column`: Renames specific columns in the source DML messages.
 
@@ -40,7 +40,7 @@ For the above configuration, all the `delete` `DML` message with `schema` set to
 
 ## `accept` configuration
 
-The `reject` Filter rejects specific Input messages. Then these messages will not be the next Filter or Output.
+The accept is a whitelist filter that accepts matched input messages.
 
 ```toml
 [[filters]]
