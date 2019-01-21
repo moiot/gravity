@@ -82,7 +82,7 @@ func (p MySQLTablePosition) MapString() (map[string]string, error) {
 			pMapString["type"] = SQLNullTime
 		}
 	default:
-		return nil, errors.Errorf("unknown type: %v, column: %v", reflect.TypeOf(v), p.Column)
+		return nil, errors.Errorf("[MapString] unknown type: %v, column: %v", reflect.TypeOf(v), p.Column)
 	}
 	return pMapString, nil
 }
@@ -95,7 +95,7 @@ func (p MySQLTablePosition) MarshalJSON() ([]byte, error) {
 
 	b, err := myJson.Marshal(m)
 	if err != nil {
-		return nil, errors.Annotatef(err, "failed to marshal column: %v, type: %v, value: %v", p.Column, p.Type, p.Value)
+		return nil, errors.Annotatef(err, "[MarshalJSON] failed to marshal column: %v, type: %v, value: %v", p.Column, p.Type, p.Value)
 	}
 	return b, nil
 }
@@ -144,7 +144,7 @@ func (p *MySQLTablePosition) UnmarshalJSON(value []byte) error {
 		}
 		p.Value = t
 	default:
-		return errors.Errorf("unknown type: %v, column: %v", p.Type, p.Column)
+		return errors.Errorf("[UnmarshalJSON] unknown type: %v, column: %v", p.Type, p.Column)
 	}
 	return nil
 }
