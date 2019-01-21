@@ -17,7 +17,6 @@ func TestRejectFilter(t *testing.T) {
 		{
 			Type: "reject",
 			Config: map[string]interface{}{
-				"type":         "reject",
 				"match-schema": "test_db",
 				"match-table":  "test_table_1",
 			},
