@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	Unknown       = "*"
 	PlainString   = "string"
 	PlainInt      = "int"
 	PlainBytes    = "bytes"

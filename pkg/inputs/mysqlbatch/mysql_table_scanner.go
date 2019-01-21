@@ -371,7 +371,7 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 
 	for i := range allData {
 		rowPtrs := allData[i]
-		msg := NewMsg(rowPtrs, columnTypes, tableDef, nil, position_store.MySQLTablePosition{})
+		msg := NewMsg(rowPtrs, columnTypes, tableDef, nil, position_store.MySQLTablePosition{Column: "*", Type: position_store.PlainInt, Value: i})
 		if err := tableScanner.emitter.Emit(msg); err != nil {
 			log.Fatalf("[tableScanner] failed to emit: %v", errors.ErrorStack(err))
 		}
