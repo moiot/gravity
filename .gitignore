@@ -12,7 +12,7 @@ master_config.toml
 *_dev.toml
 *_dev.json
 
-gravity/config_dev
+config_dev
 nuclear/config_dev
 scanner/config_dev
 
