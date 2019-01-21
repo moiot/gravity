@@ -400,7 +400,7 @@ func TestInitTablePosition(t *testing.T) {
 				{
 					Schema: testDBName,
 					// mysql_test.TestTableName
-					Table: []string{"test_table$"},
+					Table: []string{"test_table"},
 				},
 			},
 			NrScanner:           1,

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/moiot/gravity/pkg/utils"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/schema_store"
@@ -39,8 +41,8 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 				log.Fatalf("failed to scan, err: %v", err)
 			}
 
-			for _, tableExp := range tableConfigs[i].tableExps {
-				if tableExp.Match([]byte(tableName)) {
+			for _, tableExp := range tableConfigs[i].Table {
+				if utils.Glob(tableExp, tableName) {
 					tableDef, ok := schema[tableName]
 					if !ok {
 						log.Fatalf("table def not found, schema: %v, table: %v", schemaName, tableName)

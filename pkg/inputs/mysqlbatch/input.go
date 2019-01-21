@@ -3,7 +3,6 @@ package mysqlbatch
 import (
 	"context"
 	"database/sql"
-	"regexp"
 	"sync"
 	"time"
 
@@ -21,10 +20,9 @@ import (
 
 type TableConfig struct {
 	Schema string `mapstructure:"schema" toml:"schema" json:"schema"`
-	// Table is an array of string, each string is a regular expression
+	// Table is an array of string, each string is a glob expression
 	// that describes the table name
-	Table     []string `mapstructure:"table" toml:"table" json:"table"`
-	tableExps []*regexp.Regexp
+	Table []string `mapstructure:"table" toml:"table" json:"table"`
 }
 
 type PluginConfig struct {
@@ -59,18 +57,6 @@ func (cfg *PluginConfig) ValidateAndSetDefault() error {
 
 	if cfg.MaxFullDumpCount <= 0 {
 		cfg.MaxFullDumpCount = 100000
-	}
-
-	// make sure table is a valid regular expression
-	for i, tableConfig := range cfg.TableConfigs {
-		cfg.TableConfigs[i].tableExps = make([]*regexp.Regexp, len(tableConfig.Table))
-		for j, t := range tableConfig.Table {
-			exp, err := regexp.Compile(t)
-			if err != nil {
-				return errors.Annotatef(err, "%s is not a valid regular expression", t)
-			}
-			cfg.TableConfigs[i].tableExps[j] = exp
-		}
 	}
 
 	return nil
