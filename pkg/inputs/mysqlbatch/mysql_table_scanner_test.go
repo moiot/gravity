@@ -173,9 +173,10 @@ func TestFindInBatch(t *testing.T) {
 		dbCfg := mysql_test.SourceDBConfig()
 
 		testCases := []struct {
-			name     string
-			seedFunc func(db *sql.DB)
-			cfg      PluginConfig
+			name       string
+			seedFunc   func(db *sql.DB)
+			cfg        PluginConfig
+			scanColumn string
 		}{
 			{
 				"no record in table",
@@ -192,6 +193,7 @@ func TestFindInBatch(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
+				"id",
 			},
 			{
 				"sends one msg when source table have only one recor",
@@ -214,6 +216,7 @@ func TestFindInBatch(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
+				"id",
 			},
 			{
 				"terminates when scan column is int",
@@ -237,6 +240,7 @@ func TestFindInBatch(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
+				"id",
 			},
 			{
 				"terminates when scan column is string",
@@ -266,6 +270,7 @@ func TestFindInBatch(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
+				"email",
 			},
 			{
 				"terminates when scan column is time",
@@ -292,6 +297,7 @@ func TestFindInBatch(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
+				"ts",
 			},
 			{
 				"terminates when do a full scan",
@@ -317,6 +323,7 @@ func TestFindInBatch(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
+				"*",
 			},
 		}
 
