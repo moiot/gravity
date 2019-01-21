@@ -34,21 +34,21 @@ var (
 		Subsystem: "gravity",
 		Name:      "table_insert_rows_counter",
 		Help:      "table insert rows counter",
-	}, []string{metrics.PipelineTag, "db", "table"})
+	}, []string{metrics.PipelineTag, "db"})
 
 	GravityTableUpdateCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "drc_v2",
 		Subsystem: "gravity",
 		Name:      "table_update_rows_counter",
 		Help:      "table update rows counter",
-	}, []string{metrics.PipelineTag, "db", "table"})
+	}, []string{metrics.PipelineTag, "db"})
 
 	GravityTableDeleteCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "drc_v2",
 		Subsystem: "gravity",
 		Name:      "table_delete_rows_counter",
 		Help:      "table delete rows counter",
-	}, []string{metrics.PipelineTag, "db", "table"})
+	}, []string{metrics.PipelineTag, "db"})
 
 	GravityTableRowsEventSize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "drc_v2",
@@ -319,7 +319,7 @@ func (tailer *BinlogTailer) Start() error {
 
 				switch e.Header.EventType {
 				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-					GravityTableInsertCounter.WithLabelValues(tailer.pipelineName, schemaName, tableName).Add(1)
+					GravityTableInsertCounter.WithLabelValues(tailer.pipelineName, schemaName).Add(1)
 
 					log.Debugf("[binlog_tailer] Insert rows %s.%s.", schemaName, tableName)
 
@@ -339,7 +339,7 @@ func (tailer *BinlogTailer) Start() error {
 						tailer.AppendMsgTxnBuffer(m)
 					}
 				case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-					GravityTableUpdateCounter.WithLabelValues(tailer.pipelineName, schemaName, tableName).Add(1)
+					GravityTableUpdateCounter.WithLabelValues(tailer.pipelineName, schemaName).Add(1)
 
 					if isBinlogChecker {
 						log.Debug(".")
@@ -361,7 +361,7 @@ func (tailer *BinlogTailer) Start() error {
 						tailer.AppendMsgTxnBuffer(m)
 					}
 				case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-					GravityTableDeleteCounter.WithLabelValues(tailer.pipelineName, schemaName, tableName).Add(1)
+					GravityTableDeleteCounter.WithLabelValues(tailer.pipelineName, schemaName).Add(1)
 
 					msgs, err := NewDeleteMsgs(
 						tailer.cfg.Source.Host,
