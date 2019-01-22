@@ -37,7 +37,7 @@ type mongoInputPlugin struct {
 	mongoSession  *mgo.Session
 	oplogTailer   *OplogTailer
 	oplogChecker  *OplogChecker
-	positionStore position_store.PositionStore
+	positionStore position_store.PositionCache
 
 	closeOnce sync.Once
 }
@@ -62,7 +62,7 @@ func (plugin *mongoInputPlugin) Configure(pipelineName string, data map[string]i
 	return nil
 }
 
-func (plugin *mongoInputPlugin) NewPositionStore() (position_store.PositionStore, error) {
+func (plugin *mongoInputPlugin) NewPositionStore() (position_store.PositionCache, error) {
 	positionStore, err := position_store.NewMongoPositionStore(plugin.pipelineName, plugin.cfg.Source, plugin.cfg.StartPosition)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -120,7 +120,7 @@ func (plugin *mongoInputPlugin) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *mongoInputPlugin) PositionStore() position_store.PositionStore {
+func (plugin *mongoInputPlugin) PositionStore() position_store.PositionCache {
 	return plugin.positionStore
 }
 

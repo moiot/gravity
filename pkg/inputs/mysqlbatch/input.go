@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moiot/gravity/pkg/inputs/mysqlstream"
+
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
 	log "github.com/sirupsen/logrus"
@@ -76,7 +78,7 @@ type mysqlFullInput struct {
 
 	throttle *time.Ticker
 
-	positionStore position_store.PositionStore
+	positionStore position_store.PositionCache
 
 	tableScanners []*TableScanner
 
@@ -226,7 +228,7 @@ func (plugin *mysqlFullInput) Stage() config.InputMode {
 	return config.Batch
 }
 
-func (plugin *mysqlFullInput) NewPositionStore() (position_store.PositionStore, error) {
+func (plugin *mysqlFullInput) NewPositionStore() (position_store.PositionCache, error) {
 
 	positionStore, err := position_store.NewMySQLTableDBPositionStore(
 		plugin.pipelineName,
@@ -241,7 +243,7 @@ func (plugin *mysqlFullInput) NewPositionStore() (position_store.PositionStore, 
 	return positionStore, nil
 }
 
-func (plugin *mysqlFullInput) PositionStore() position_store.PositionStore {
+func (plugin *mysqlFullInput) PositionStore() position_store.PositionCache {
 	return plugin.positionStore
 }
 
@@ -297,7 +299,7 @@ func (plugin *mysqlFullInput) waitFinish() {
 
 	if plugin.ctx.Err() == nil {
 		log.Infof("[plugin.waitFinish] table scanners done")
-		position := position_store.PipelineGravityMySQLPosition{
+		position := mysqlstream.BinlogPositions{
 			CurrentPosition: &utils.MySQLBinlogPosition{},
 			StartPosition:   &utils.MySQLBinlogPosition{},
 		}

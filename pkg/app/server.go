@@ -22,7 +22,7 @@ type Server struct {
 	filters       []core.IFilter
 	Emitter       core.Emitter
 	Scheduler     core.Scheduler
-	PositionStore position_store.PositionStore
+	PositionStore *position_store.PositionCache
 	Output        core.Output
 
 	// When Input is done, server will be closed, when config changed, server will also be closed;
@@ -107,7 +107,7 @@ func NewServer(pipelineConfig config.PipelineConfigV3) (*Server, error) {
 	}
 
 	// position store
-	if p, err := server.Input.NewPositionStore(); err != nil {
+	if p, err := server.Input.NewPositionCache(); err != nil {
 		return nil, errors.Trace(err)
 	} else {
 		server.PositionStore = p

@@ -40,11 +40,11 @@ func (plugin *dumpInput) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *dumpInput) NewPositionStore() (position_store.PositionStore, error) {
+func (plugin *dumpInput) NewPositionStore() (position_store.PositionCache, error) {
 	return nil, nil
 }
 
-func (plugin *dumpInput) PositionStore() position_store.PositionStore {
+func (plugin *dumpInput) PositionStore() position_store.PositionCache {
 	return nil
 }
 

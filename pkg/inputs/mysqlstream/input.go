@@ -66,7 +66,7 @@ type mysqlInputPlugin struct {
 	binlogTailer  *BinlogTailer
 
 	sourceSchemaStore schema_store.SchemaStore
-	positionStore     position_store.PositionStore
+	positionCache     *position_store.PositionCache
 
 	closeOnce sync.Once
 }
@@ -122,25 +122,6 @@ func (plugin *mysqlInputPlugin) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *mysqlInputPlugin) NewPositionStore() (position_store.PositionStore, error) {
-	positionStore, err := position_store.NewMySQLBinlogDBPositionStore(
-		plugin.pipelineName,
-		plugin.probeDBConfig,
-		plugin.probeSQLAnnotation,
-		plugin.cfg.StartPosition,
-	)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	plugin.positionStore = positionStore
-	return positionStore, nil
-}
-
-func (plugin *mysqlInputPlugin) PositionStore() position_store.PositionStore {
-	return plugin.positionStore
-}
-
 func (plugin *mysqlInputPlugin) SendDeadSignal() error {
 	return mysql_test.SendDeadSignal(plugin.binlogTailer.sourceDB, plugin.binlogTailer.gravityServerID)
 }
@@ -153,7 +134,7 @@ func (plugin *mysqlInputPlugin) Done() chan position_store.Position {
 	c := make(chan position_store.Position)
 	go func() {
 		plugin.binlogTailer.Wait()
-		c <- plugin.positionStore.Position()
+		c <- plugin.positionCache.Get()
 		close(c)
 	}()
 	return c
@@ -172,6 +153,28 @@ func (plugin *mysqlInputPlugin) Start(emitter core.Emitter) error {
 	}
 	plugin.sourceSchemaStore = sourceSchemaStore
 
+	// position cache
+	positionRepo, err := position_store.NewMySQLRepo(
+		plugin.pipelineName,
+		plugin.probeDBConfig,
+		plugin.probeSQLAnnotation)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	positionCache, err := position_store.NewPositionCache(
+		plugin.pipelineName,
+		positionRepo,
+	)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	plugin.positionCache = positionCache
+
+	if err := InitPositionCache(positionCache, plugin.cfg.StartPosition); err != nil {
+		return errors.Trace(err)
+	}
+
 	// binlog checker
 	plugin.binlogChecker, err = binlog_checker.NewBinlogChecker(
 		plugin.pipelineName,
@@ -186,6 +189,10 @@ func (plugin *mysqlInputPlugin) Start(emitter core.Emitter) error {
 		return errors.Trace(err)
 	}
 
+	// Init position cache with position repo, and compare start-position in repo with start-position in spec.
+	// If the two position is not the same, then set current position to start-position in spec.
+	//
+
 	// binlog tailer
 	gravityServerID := utils.GenerateRandomServerID()
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
@@ -193,7 +200,7 @@ func (plugin *mysqlInputPlugin) Start(emitter core.Emitter) error {
 		plugin.pipelineName,
 		plugin.cfg,
 		gravityServerID,
-		plugin.positionStore.(position_store.MySQLPositionStore),
+		positionCache,
 		sourceSchemaStore,
 		sourceDB,
 		emitter,

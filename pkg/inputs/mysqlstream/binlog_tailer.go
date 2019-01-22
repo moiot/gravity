@@ -81,7 +81,7 @@ type BinlogTailer struct {
 
 	sourceTimeZone string
 
-	positionStore     position_store.MySQLPositionStore
+	positionCache     *position_store.PositionCache
 	sourceSchemaStore schema_store.SchemaStore
 	binlogChecker     binlog_checker.BinlogChecker
 
@@ -99,7 +99,7 @@ func NewBinlogTailer(
 	pipelineName string,
 	cfg *MySQLBinlogInputPluginConfig,
 	gravityServerID uint32,
-	positionStore position_store.MySQLPositionStore,
+	positionCache *position_store.PositionCache,
 	sourceSchemaStore schema_store.SchemaStore,
 	sourceDB *sql.DB,
 	emitter core.Emitter,
@@ -108,7 +108,7 @@ func NewBinlogTailer(
 ) (*BinlogTailer, error) {
 
 	if pipelineName == "" {
-		return nil, errors.Errorf("[binlog_tailer] pipeline name is empty")
+		return nil, errors.Errorf("[binlogTailer] pipeline name is empty")
 	}
 
 	c, cancel := context.WithCancel(context.Background())
@@ -123,7 +123,7 @@ func NewBinlogTailer(
 		cancel:                  cancel,
 		binlogSyncer:            utils.NewBinlogSyncer(gravityServerID, cfg.Source),
 		emitter:                 emitter,
-		positionStore:           positionStore,
+		positionCache:           positionCache,
 		sourceSchemaStore:       sourceSchemaStore,
 		binlogChecker:           binlogChecker,
 		done:                    make(chan struct{}),
@@ -135,15 +135,20 @@ func NewBinlogTailer(
 
 func (tailer *BinlogTailer) Start() error {
 
-	log.Infof("[binlog_tailer] start")
+	log.Infof("[binlogTailer] start")
 
 	if err := utils.CheckBinlogFormat(tailer.sourceDB); err != nil {
 		return errors.Trace(err)
 	}
 
-	// streamer needs positionStore to load the GTID set
-	pos := tailer.positionStore.Get()
-	streamer, err := tailer.getBinlogStreamer(pos.BinlogGTID)
+	// streamer needs positionCache to load the GTID set
+	position := tailer.positionCache.Get()
+	binlogPositions, err := Deserialize(position.Value)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	streamer, err := tailer.getBinlogStreamer(binlogPositions.CurrentPosition.BinlogGTID)
 
 	if err != nil {
 		return errors.Trace(err)
@@ -153,7 +158,7 @@ func (tailer *BinlogTailer) Start() error {
 		tryReSync = true
 	)
 
-	currentPos, currentGS, err := initBinlogPositionFromStore(tailer.positionStore)
+	currentPosition, err := tailer.getCurrentPosition()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -174,7 +179,10 @@ func (tailer *BinlogTailer) Start() error {
 			// cancel()
 
 			if err == context.Canceled {
-				log.Infof("[binlog_tailer] quit for context canceled, currentBinlogGTIDSet: %v, currentBinlogFilePosition: %v", currentGS.String(), currentPos.String())
+				log.Infof("[binlogTailer] quit for context canceled, currentBinlogGTIDSet: %v, currentBinlogFileName: %v, currentBinlogFilePosition: %v",
+					currentPosition.BinlogGTID,
+					currentPosition.BinLogFileName,
+					currentPosition.BinLogFilePos)
 				return
 			}
 
@@ -182,10 +190,15 @@ func (tailer *BinlogTailer) Start() error {
 			// the timeout for streamer event is longer than binlog checker interval.
 			// If the timeout happens, then we need to try to reopen the binlog syncer.
 			if err == context.DeadlineExceeded {
-				log.Info("BinlogSyncerTimeout try to reopen")
-				streamer, err = tailer.reopenBinlogSyncer(tailer.positionStore.Get().BinlogGTID)
+				log.Info("[binlogTailer] BinlogSyncerTimeout try to reopen")
+				gtid, err := tailer.getCurrentGTID()
 				if err != nil {
-					log.Fatalf("[binlog_tailer] failed reopenBinlogSyncer: %v", errors.ErrorStack(err))
+					log.Fatalf("[binlogTailer] failed to deserialize position, err: %v", errors.ErrorStack(err))
+				}
+
+				streamer, err = tailer.reopenBinlogSyncer(gtid)
+				if err != nil {
+					log.Fatalf("[binlogTailer] failed reopenBinlogSyncer: %v", errors.ErrorStack(err))
 				}
 				continue
 			}
@@ -196,9 +209,13 @@ func (tailer *BinlogTailer) Start() error {
 					time.Sleep(RetryTimeout)
 
 					db := utils.NewMySQLDB(tailer.sourceDB)
-					p, err := fixGTID(db, tailer.positionStore.Get())
+					currentPosition, err := tailer.getCurrentPosition()
 					if err != nil {
-						log.Fatalf("[binlog_tailer] failed retrySyncGTIDs: %v", errors.ErrorStack(err))
+						log.Fatalf("[binlogTailer] failed getCurrentPosition, err: %v", errors.ErrorStack(err))
+					}
+					p, err := fixGTID(db, *currentPosition)
+					if err != nil {
+						log.Fatalf("[binlogTailer] failed retrySyncGTIDs: %v", errors.ErrorStack(err))
 					}
 
 					log.Infof("retrySyncGTIDs done")
@@ -207,29 +224,31 @@ func (tailer *BinlogTailer) Start() error {
 						log.Fatalf("failed to emit barrier msg: %v", errors.ErrorStack(err))
 					}
 					<-barrierMsg.Done
-					tailer.positionStore.FSync()
+					if err := tailer.positionCache.Flush(); err != nil {
+						log.Fatalf("[binlogTailer] failed to flush position cache, err: %v", errors.ErrorStack(err))
+					}
 
 					tryReSync = false
 
 					// reopen streamer with new position
 					streamer, err = tailer.reopenBinlogSyncer(p.BinlogGTID)
 					if err != nil {
-						log.Fatalf("[binlog_tailer] failed reopenBinlogSyncer")
+						log.Fatalf("[binlogTailer] failed reopenBinlogSyncer")
 					}
 
-					currentPos, currentGS, err = position_store.DeserializeMySQLBinlogPosition(*p)
+					currentPosition, err = tailer.getCurrentPosition()
 					if err != nil {
-						log.Fatalf("[binlog_tailer] failed to parse binlog, err: %v", errors.ErrorStack(err))
+						log.Fatalf("[binlogTailer] failed to getCurrentPosition, err: %v", errors.ErrorStack(err))
 					}
 					continue
 				}
 
 				if tailer.closed {
-					log.Infof("[binlog_tailer] tailer closed")
+					log.Infof("[binlogTailer] tailer closed")
 					return
 				}
 
-				log.Fatalf("[binlog_tailer] unexpected err: %v", errors.ErrorStack(err))
+				log.Fatalf("[binlogTailer] unexpected err: %v", errors.ErrorStack(err))
 			}
 
 			tryReSync = true
@@ -244,9 +263,10 @@ func (tailer *BinlogTailer) Start() error {
 
 				// If the currentPos returned from source db is less than the position
 				// we have in position store, we skip it.
+				currentPos := gomysql.Position{Name: currentPosition.BinLogFileName, Pos: currentPosition.BinLogFilePos}
 				if utils.CompareBinlogPos(sourcePosition, currentPos, 0) <= 0 {
 					log.Infof(
-						"[binlog_tailer] skip rotate event: source binlog Name %v, source binlog Pos: %v; store Name: %v, store Pos: %v",
+						"[binlogTailer] skip rotate event: source binlog Name %v, source binlog Pos: %v; store Name: %v, store Pos: %v",
 						sourcePosition.Name,
 						sourcePosition.Pos,
 						currentPos.Name,
@@ -255,7 +275,7 @@ func (tailer *BinlogTailer) Start() error {
 					continue
 				}
 				currentPos = sourcePosition
-				log.Infof("[binlog_tailer] rotate binlog to %v", sourcePosition)
+				log.Infof("[binlogTailer] rotate binlog to %v", sourcePosition)
 			case *replication.RowsEvent:
 
 				schemaName, tableName := string(ev.Table.Schema), string(ev.Table.Table)
@@ -266,13 +286,13 @@ func (tailer *BinlogTailer) Start() error {
 				// it is only used for test purpose right now.
 				isDeadSignal := mysql_test.IsDeadSignal(schemaName, tableName)
 				if isDeadSignal && IsEventBelongsToMyself(ev, tailer.gravityServerID) {
-					log.Infof("[binlog_tailer] dead signal for myself, exit")
+					log.Infof("[binlogTailer] dead signal for myself, exit")
 					return
 				}
 
 				// skip dead signal for others
 				if isDeadSignal {
-					log.Infof("[binlog_tailer] dead signal for others, continue")
+					log.Infof("[binlogTailer] dead signal for others, continue")
 					continue
 				}
 
@@ -283,10 +303,10 @@ func (tailer *BinlogTailer) Start() error {
 					if eventType == replication.UPDATE_ROWS_EVENTv0 || eventType == replication.UPDATE_ROWS_EVENTv1 || eventType == replication.UPDATE_ROWS_EVENTv2 {
 						checkerRow, err := binlog_checker.ParseMySQLRowEvent(ev)
 						if err != nil {
-							log.Fatalf("[binlog_tailer] failed to parse mysql row event: %v", errors.ErrorStack(err))
+							log.Fatalf("[binlogTailer] failed to parse mysql row event: %v", errors.ErrorStack(err))
 						}
 						if !tailer.binlogChecker.IsEventBelongsToMySelf(checkerRow) {
-							log.Debugf("[binlog_tailer] heartbeat for others")
+							log.Debugf("[binlogTailer] heartbeat for others")
 							continue
 						}
 						tailer.binlogChecker.MarkActive(checkerRow)
@@ -295,7 +315,7 @@ func (tailer *BinlogTailer) Start() error {
 
 				// skip binlog position event
 				if position_store.IsPositionStoreEvent(schemaName, tableName) {
-					log.Debugf("[binlog_tailer] skip position event")
+					log.Debugf("[binlogTailer] skip position event")
 					continue
 				}
 
@@ -309,19 +329,19 @@ func (tailer *BinlogTailer) Start() error {
 
 				schema, err := tailer.sourceSchemaStore.GetSchema(schemaName)
 				if err != nil {
-					log.Fatalf("[binlog_tailer] failed GetSchema %v. err: %v.", schemaName, errors.ErrorStack(err))
+					log.Fatalf("[binlogTailer] failed GetSchema %v. err: %v.", schemaName, errors.ErrorStack(err))
 				}
 
 				tableDef := schema[tableName]
 				if tableDef == nil {
-					log.Fatalf("[binlog_tailer] failed to get table def, schemaName: %v, tableName: %v", schemaName, tableName)
+					log.Fatalf("[binlogTailer] failed to get table def, schemaName: %v, tableName: %v", schemaName, tableName)
 				}
 
 				switch e.Header.EventType {
 				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
 					GravityTableInsertCounter.WithLabelValues(tailer.pipelineName, schemaName).Add(1)
 
-					log.Debugf("[binlog_tailer] Insert rows %s.%s.", schemaName, tableName)
+					log.Debugf("[binlogTailer] Insert rows %s.%s.", schemaName, tableName)
 
 					msgs, err := NewInsertMsgs(
 						tailer.cfg.Source.Host,
@@ -332,7 +352,7 @@ func (tailer *BinlogTailer) Start() error {
 						tableDef,
 					)
 					if err != nil {
-						log.Fatalf("[binlog_tailer] insert m failed %v", errors.ErrorStack(err))
+						log.Fatalf("[binlogTailer] insert m failed %v", errors.ErrorStack(err))
 					}
 
 					for _, m := range msgs {
@@ -344,7 +364,7 @@ func (tailer *BinlogTailer) Start() error {
 					if isBinlogChecker {
 						log.Debug(".")
 					} else {
-						log.Debugf("[binlog_tailer] Update rows with: schemaName: %v, tableName: %v", schemaName, tableName)
+						log.Debugf("[binlogTailer] Update rows with: schemaName: %v, tableName: %v", schemaName, tableName)
 					}
 
 					msgs, err := NewUpdateMsgs(
@@ -355,7 +375,7 @@ func (tailer *BinlogTailer) Start() error {
 						ev,
 						tableDef)
 					if err != nil {
-						log.Fatalf("[binlog_tailer] failed to genUpdateJobs %v", errors.ErrorStack(err))
+						log.Fatalf("[binlogTailer] failed to genUpdateJobs %v", errors.ErrorStack(err))
 					}
 					for _, m := range msgs {
 						tailer.AppendMsgTxnBuffer(m)
@@ -371,7 +391,7 @@ func (tailer *BinlogTailer) Start() error {
 						ev,
 						tableDef)
 					if err != nil {
-						log.Fatalf("[binlog_tailer] failed to generate delete m: %v", errors.ErrorStack(err))
+						log.Fatalf("[binlogTailer] failed to generate delete m: %v", errors.ErrorStack(err))
 					}
 					for _, m := range msgs {
 						tailer.AppendMsgTxnBuffer(m)
@@ -416,7 +436,9 @@ func (tailer *BinlogTailer) Start() error {
 					log.Fatalf("failed to emit barrier msg: %v", errors.ErrorStack(err))
 				}
 				<-barrierMsg.Done
-				tailer.positionStore.FSync()
+				if err := tailer.positionCache.Flush(); err != nil {
+					log.Fatalf("[binlogTailer] failed to flush position cache, err: %v", errors.ErrorStack(err))
+				}
 
 				// emit ddl msg
 				ddlMsg := NewDDLMsg(tailer.AfterMsgCommit, dbName, table, ast, ddlSQL, int64(e.Header.Timestamp), position_store.SerializeMySQLBinlogPosition(currentPos, currentGS))
@@ -424,9 +446,11 @@ func (tailer *BinlogTailer) Start() error {
 					log.Fatalf("failed to emit ddl msg: %v", errors.ErrorStack(err))
 				}
 				<-ddlMsg.Done
-				tailer.positionStore.FSync()
+				if err := tailer.positionCache.Flush(); err != nil {
+					log.Fatalf("[binlogTailer] failed to flush position cache, err: %v", errors.ErrorStack(err))
+				}
 
-				log.Infof("[binlog_tailer] ddl done with gtid: %v", ev.GSet.String())
+				log.Infof("[binlogTailer] ddl done with gtid: %v", ev.GSet.String())
 			case *replication.GTIDEvent:
 				// GTID stands for Global Transaction IDentifier
 				// It is composed of two parts:
@@ -452,20 +476,26 @@ func (tailer *BinlogTailer) Start() error {
 				//
 
 				// This is the start of a txn.
-				currentPos.Pos = e.Header.LogPos
+				currentPosition.BinLogFilePos = e.Header.LogPos
 
 				u, err := uuid.FromBytes(ev.SID)
 				if err != nil {
-					log.Fatalf("[binlog_tailer] failed at GTIDEvent %v", errors.ErrorStack(err))
+					log.Fatalf("[binlogTailer] failed at GTIDEvent %v", errors.ErrorStack(err))
 				}
-				gtidString := fmt.Sprintf("%s:1-%d", u.String(), ev.GNO)
-				// log.Infof("[binlog_tailer] GTID event: %v", gtidString)
-				currentUUIDSet, err := gomysql.ParseUUIDSet(gtidString)
+				eventGTIDString := fmt.Sprintf("%s:1-%d", u.String(), ev.GNO)
+				eventUUIDSet, err := gomysql.ParseUUIDSet(eventGTIDString)
 				if err != nil {
-					log.Fatalf("[binlog_tailer] failed at ParseUUIDSet %v", errors.ErrorStack(err))
+					log.Fatalf("[binlogTailer] failed at ParseUUIDSet %v", errors.ErrorStack(err))
 				}
 
-				currentGS.AddSet(currentUUIDSet)
+				currentGTIDSet, err := gomysql.ParseMysqlGTIDSet(currentPosition.BinlogGTID)
+				if err != nil {
+					log.Fatalf("[binlogTailer] failed at ParseMysqlGTIDSet %v", errors.ErrorStack(err))
+				}
+				s := currentGTIDSet.(*gomysql.MysqlGTIDSet)
+				s.AddSet(eventUUIDSet)
+
+				currentPosition.BinlogGTID = s.String()
 
 				metrics.GravityBinlogGTIDGaugeVec.WithLabelValues(tailer.pipelineName, "gravity").Set(float64(ev.GNO))
 				GravityTableRowsEventSize.
@@ -484,9 +514,9 @@ func (tailer *BinlogTailer) Start() error {
 				//  XID: 243
 				//  GTIDSet: 58ff439a-c2e2-11e6-bdc7-125c95d674c1:1-2225062
 				//
-				m := NewXIDMsg(int64(e.Header.Timestamp), tailer.AfterMsgCommit, position_store.SerializeMySQLBinlogPosition(currentPos, currentGS))
+				m := NewXIDMsg(int64(e.Header.Timestamp), tailer.AfterMsgCommit, *currentPosition)
 				if err != nil {
-					log.Fatalf("[binlog_tailer] failed: %v", errors.ErrorStack(err))
+					log.Fatalf("[binlogTailer] failed: %v", errors.ErrorStack(err))
 				}
 
 				tailer.AppendMsgTxnBuffer(m)
@@ -501,7 +531,24 @@ func (tailer *BinlogTailer) Start() error {
 func (tailer *BinlogTailer) AfterMsgCommit(msg *core.Msg) error {
 	ctx := msg.InputContext.(inputContext)
 	if ctx.op == xid || ctx.op == ddl {
-		tailer.positionStore.Put(ctx.position)
+
+		startPosition, currentPosition, err := tailer.getBinlogPositions()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		*currentPosition = ctx.position
+
+		v, err := Serialize(&BinlogPositions{StartPosition: startPosition, CurrentPosition: currentPosition})
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		position := position_store.Position{
+			Name:  tailer.pipelineName,
+			Stage: config.Stream,
+			Value: v,
+		}
+		tailer.positionCache.Put(position)
 	}
 
 	return nil
@@ -552,7 +599,7 @@ func (tailer *BinlogTailer) FlushMsgTxnBuffer() {
 	for _, msg := range tailer.msgTxnBuffer {
 		if utils.IsInternalTraffic(msg.Database, msg.Table) {
 			isBiDirectionalTxn = true
-			log.Debugf("[binlog_tailer] bidirectional transaction will be ignored")
+			log.Debugf("[binlogTailer] bidirectional transaction will be ignored")
 			break
 		}
 	}
@@ -588,7 +635,7 @@ func (tailer *BinlogTailer) ClearMsgTxnBuffer() {
 
 func (tailer *BinlogTailer) getBinlogStreamer(gtid string) (*replication.BinlogStreamer, error) {
 
-	log.Infof("[binlog_tailer] getBinlogStreamer gtid: %v", gtid)
+	log.Infof("[binlogTailer] getBinlogStreamer gtid: %v", gtid)
 
 	gs, err := gomysql.ParseMysqlGTIDSet(gtid)
 	if err != nil {
@@ -605,6 +652,46 @@ func (tailer *BinlogTailer) reopenBinlogSyncer(gtidString string) (*replication.
 	tailer.binlogSyncer.Close()
 	tailer.binlogSyncer = utils.NewBinlogSyncer(tailer.gravityServerID, tailer.cfg.Source)
 	return tailer.getBinlogStreamer(gtidString)
+}
+
+func (tailer *BinlogTailer) getCurrentGTID() (string, error) {
+	currentPosition, err := tailer.getCurrentPosition()
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return currentPosition.BinlogGTID, nil
+}
+
+func (tailer *BinlogTailer) getCurrentPosition() (*utils.MySQLBinlogPosition, error) {
+	position := tailer.positionCache.Get()
+	positions, err := Deserialize(position.Value)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if positions.CurrentPosition != nil {
+		return nil, errors.Errorf("empty currentPosition")
+	}
+
+	return positions.CurrentPosition, nil
+}
+
+func (tailer *BinlogTailer) getBinlogPositions() (*utils.MySQLBinlogPosition, *utils.MySQLBinlogPosition, error) {
+	position := tailer.positionCache.Get()
+	positions, err := Deserialize(position.Value)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+
+	if positions.CurrentPosition != nil {
+		return nil, nil, errors.Errorf("empty currentPosition")
+	}
+
+	if positions.StartPosition != nil {
+		return nil, nil, errors.Errorf("empty start position")
+	}
+
+	return positions.StartPosition, positions.CurrentPosition, nil
 }
 
 func fixGTID(db utils.MySQLStatusGetter, binlogPosition utils.MySQLBinlogPosition) (*utils.MySQLBinlogPosition, error) {
@@ -653,25 +740,4 @@ func fixGTID(db utils.MySQLStatusGetter, binlogPosition utils.MySQLBinlogPositio
 	log.Infof("[fixGTID] cleaned positionConfig: %v, gs: %v, gsString: %v", positionConfig, gs.Sets, gs.String())
 	return &positionConfig, nil
 
-}
-
-func initBinlogPositionFromStore(store position_store.MySQLPositionStore) (curPos gomysql.Position, curGS gomysql.MysqlGTIDSet, err error) {
-
-	binlogPosition := store.Get()
-
-	curPos, curGS, err = position_store.DeserializeMySQLBinlogPosition(binlogPosition)
-	if err != nil {
-		return curPos, curGS, errors.Trace(err)
-	}
-
-	return curPos, curGS, nil
-}
-
-func cloneGTIDSet(gs gomysql.MysqlGTIDSet) (gomysql.MysqlGTIDSet, error) {
-	clonedGS, err := gomysql.ParseMysqlGTIDSet(gs.String())
-	if err != nil {
-		return gomysql.MysqlGTIDSet{}, errors.Trace(err)
-	}
-
-	return *clonedGS.(*gomysql.MysqlGTIDSet), nil
 }

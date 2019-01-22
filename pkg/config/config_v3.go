@@ -1,6 +1,10 @@
 package config
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/juju/errors"
+)
 
 const PipelineConfigV3Version = "1.0"
 
@@ -32,12 +36,21 @@ func (c *PipelineConfigV3) DeepCopy() PipelineConfigV3 {
 }
 
 const (
+	Unknown     InputMode = "unknown"
 	Batch       InputMode = "batch"
 	Stream      InputMode = "stream"
 	Replication InputMode = "replication" // scan + binlog
 )
 
 type InputMode string
+
+func (mode InputMode) Valid() error {
+	if mode == Batch || mode == Stream || mode == Replication {
+		return nil
+	} else {
+		return errors.Errorf("invalid mode: %v", mode)
+	}
+}
 
 type InputConfig struct {
 	Type   string                 `yaml:"type"  json:"type"  toml:"type"`

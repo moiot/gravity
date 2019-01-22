@@ -47,7 +47,6 @@ func (tableScanner *TableScanner) Start() error {
 			select {
 			case work, ok := <-tableScanner.tableWorkC:
 				if !ok {
-					log.Infof("[TableScanner] queue closed, exit")
 					return
 				}
 
@@ -360,6 +359,8 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 		}
 	}
 
+	log.Infof("[tableScanner] dump table: %s", streamKey)
+
 	columnTypes, err := GetTableColumnTypes(db, tableDef.Schema, tableDef.Name)
 	if err != nil {
 		log.Fatalf("[FindAll] failed to get columnType: %v", errors.ErrorStack(err))
@@ -374,15 +375,14 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 
 	for i := range allData {
 		rowPtrs := allData[i]
-		msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, position_store.MySQLTablePosition{Column: "*", Type: position_store.PlainInt, Value: i})
+		msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, position_store.MySQLTablePosition{Column: "*", Type: position_store.PlainInt, Value: i + 1})
 		if err := tableScanner.emitter.Emit(msg); err != nil {
-			log.Fatalf("[tableScanner] failed to emit: %v", errors.ErrorStack(err))
+			log.Fatalf("[FindAll] failed to emit: %v", errors.ErrorStack(err))
 		}
 	}
 
 	// set the current and max position to be the same
-	//  we haven't flush the position here, just to make it simple.
-	// TODO add interface to flush position
+	// TODO add method to flush position
 	p := position_store.MySQLTablePosition{Column: "*", Type: position_store.PlainInt, Value: len(allData)}
 
 	tableScanner.positionStore.PutCurrent(
@@ -391,9 +391,17 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 
 	tableScanner.positionStore.PutMaxMin(
 		utils.TableIdentity(tableDef.Schema, tableDef.Name),
-		position_store.MySQLTablePosition{Column: "*", Type: position_store.PlainInt, Value: 0},
-		p)
+		p,
+		position_store.MySQLTablePosition{Column: "*", Type: position_store.PlainInt, Value: 0})
 
+	log.Infof("[FindAll] finished dump table: %v", streamKey)
+
+	// close the stream
+	// msg := NewCloseInputStreamMsg(tableDef)
+	// if err := tableScanner.emitter.Emit(msg); err != nil {
+	// 	log.Fatalf("[FindAll] failed to emit close stream msg: %v", errors.ErrorStack(err))
+	// }
+	log.Infof("[FindAll] sent close input stream msg")
 }
 
 func (tableScanner *TableScanner) AfterMsgCommit(msg *core.Msg) error {

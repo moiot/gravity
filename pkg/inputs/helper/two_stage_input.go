@@ -82,11 +82,11 @@ func (i *TwoStageInputPlugin) Identity() uint32 {
 	}
 }
 
-func (i *TwoStageInputPlugin) NewPositionStore() (position_store.PositionStore, error) {
+func (i *TwoStageInputPlugin) NewPositionStore() (position_store.PositionCache, error) {
 	s := twoStagePositionStore{}
 	s.current = &atomic.Value{}
 
-	fullPositionStore, err := i.full.NewPositionStore()
+	fullPositionStore, err := i.full.NewPositionCache()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -95,7 +95,7 @@ func (i *TwoStageInputPlugin) NewPositionStore() (position_store.PositionStore, 
 	stage := fullPositionStore.Stage()
 
 	if stage == config.Stream {
-		if incrementalPositionStore, err := i.incremental.NewPositionStore(); err != nil {
+		if incrementalPositionStore, err := i.incremental.NewPositionCache(); err != nil {
 			return nil, errors.Trace(err)
 		} else {
 			s.incremental = incrementalPositionStore
@@ -108,7 +108,7 @@ func (i *TwoStageInputPlugin) NewPositionStore() (position_store.PositionStore, 
 	return &s, nil
 }
 
-func (i *TwoStageInputPlugin) PositionStore() position_store.PositionStore {
+func (i *TwoStageInputPlugin) PositionStore() position_store.PositionCache {
 	return i.positionStore
 }
 
@@ -159,7 +159,7 @@ func (i *TwoStageInputPlugin) Start(emitter core.Emitter) error {
 			pos.Stage = config.Stream
 
 			// setup incremental position store first
-			incPositionStore, err := i.incremental.NewPositionStore()
+			incPositionStore, err := i.incremental.NewPositionCache()
 			if err != nil {
 				log.Fatalf("[TwoStageInputPlugin] failed to create incrmental position store: %v", errors.ErrorStack(err))
 			}
@@ -198,8 +198,8 @@ func (i *TwoStageInputPlugin) Close() {
 }
 
 type twoStagePositionStore struct {
-	incremental position_store.PositionStore
-	full        position_store.PositionStore
+	incremental position_store.PositionCache
+	full        position_store.PositionCache
 	current     *atomic.Value
 }
 

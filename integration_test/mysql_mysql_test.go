@@ -220,6 +220,97 @@ func TestMySQLBatch(t *testing.T) {
 	r.NoError(generator.TestChecksum())
 }
 
+func TestMySQLBatchWithDump(t *testing.T) {
+	r := require.New(t)
+
+	sourceDBName := strings.ToLower(t.Name()) + "_source"
+	targetDBName := strings.ToLower(t.Name()) + "_target"
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	// Table without primary key, unique index
+	table := "t"
+	_, err := sourceDB.Exec(fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s.%s (
+  id int(11) unsigned NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8`, sourceDBName, table))
+	r.NoError(err)
+
+	for i := 0; i < 100; i++ {
+		_, err = sourceDB.Exec(fmt.Sprintf("INSERT INTO %s.%s (id) VALUES (?)", sourceDBName, table), i)
+		r.NoError(err)
+	}
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	tableConfigs := []map[string]interface{}{
+		{
+			"schema": sourceDBName,
+			"table":  []string{table},
+		},
+	}
+
+	pipelineConfig := config.PipelineConfigV2{
+		PipelineName: sourceDBName,
+		InputPlugins: map[string]interface{}{
+			"mysql": map[string]interface{}{
+				"source": map[string]interface{}{
+					"host":     sourceDBConfig.Host,
+					"username": sourceDBConfig.Username,
+					"password": sourceDBConfig.Password,
+					"port":     sourceDBConfig.Port,
+				},
+				"table-configs": tableConfigs,
+				"mode":          "batch",
+			},
+		},
+		OutputPlugins: map[string]interface{}{
+			"mysql": map[string]interface{}{
+				"target": map[string]interface{}{
+					"host":     targetDBConfig.Host,
+					"username": targetDBConfig.Username,
+					"password": targetDBConfig.Password,
+					"port":     targetDBConfig.Port,
+				},
+
+				"routes": []map[string]interface{}{
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "*",
+						"target-schema": targetDBName,
+					},
+				},
+				"enable-ddl": true,
+			},
+		},
+	}
+
+	server, err := app.NewServer(pipelineConfig.ToV3())
+	r.NoError(err)
+
+	r.NoError(server.Start())
+
+	<-server.Input.Done()
+
+	// wait for some time to see if server is healthy
+	sliding_window.DefaultHealthyThreshold = 1
+	time.Sleep(5)
+
+	r.True(server.Scheduler.Healthy())
+
+	server.Close()
+
+	var targetCount int
+	row := targetDB.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s.%s", targetDBName, table))
+
+	err = row.Scan(&targetCount)
+	r.NoError(err)
+	r.Equal(100, targetCount)
+}
+
 func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 	r := require.New(t)
 

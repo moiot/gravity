@@ -1,10 +1,10 @@
-package position_store
+package mysqlbatch
 
 import (
 	"database/sql"
+	"github.com/json-iterator/go"
 	"reflect"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -28,17 +28,19 @@ const (
 	SQLRawBytes   = "sqlRawBytes"
 )
 
+var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
+
 func isPositionEquals(p1 *utils.MySQLBinlogPosition, p2 *utils.MySQLBinlogPosition) bool {
 	return p1.BinlogGTID == p2.BinlogGTID
 }
 
-type MySQLTablePosition struct {
+type TablePosition struct {
 	Value  interface{} `toml:"value" json:"value,omitempty"`
 	Type   string      `toml:"type" json:"type"`
 	Column string      `toml:"column" json:"column"`
 }
 
-func (p MySQLTablePosition) MapString() (map[string]string, error) {
+func (p TablePosition) MapString() (map[string]string, error) {
 	pMapString := make(map[string]string)
 	pMapString["column"] = p.Column
 
@@ -88,7 +90,7 @@ func (p MySQLTablePosition) MapString() (map[string]string, error) {
 	return pMapString, nil
 }
 
-func (p MySQLTablePosition) MarshalJSON() ([]byte, error) {
+func (p TablePosition) MarshalJSON() ([]byte, error) {
 	m, err := p.MapString()
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -101,7 +103,7 @@ func (p MySQLTablePosition) MarshalJSON() ([]byte, error) {
 	return b, nil
 }
 
-func (p *MySQLTablePosition) UnmarshalJSON(value []byte) error {
+func (p *TablePosition) UnmarshalJSON(value []byte) error {
 	pMapString := make(map[string]string)
 
 	if err := myJson.Unmarshal(value, &pMapString); err != nil {
@@ -150,57 +152,56 @@ func (p *MySQLTablePosition) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-type MySQLTablePositionState struct {
-	sync.Mutex `toml:"-" json:"-"`
-	Start      *utils.MySQLBinlogPosition    `toml:"start-binlog" json:"start-binlog"`
-	Min        map[string]MySQLTablePosition `toml:"min" json:"min"`
-	Max        map[string]MySQLTablePosition `toml:"max" json:"max"`
-	Current    map[string]MySQLTablePosition `toml:"current" json:"current"`
+type BatchPositions struct {
+	Start      *utils.MySQLBinlogPosition `toml:"start-binlog" json:"start-binlog"`
+	Min        map[string]TablePosition   `toml:"min" json:"min"`
+	Max        map[string]TablePosition   `toml:"max" json:"max"`
+	Current    map[string]TablePosition   `toml:"current" json:"current"`
 }
 
-func (tablePositionState *MySQLTablePositionState) Get() interface{} {
+func (tablePositionState *BatchPositions) Get() interface{} {
 	s := tablePositionState.GetRaw()
-	ret := MySQLTablePositionState{}
+	ret := BatchPositions{}
 	if err := myJson.UnmarshalFromString(s, &ret); err != nil {
-		log.Fatalf("[MySQLTablePositionState.Get] err: %s", err)
+		log.Fatalf("[BatchPositions.Get] err: %s", err)
 	}
 	return ret
 }
 
-func (tablePositionState *MySQLTablePositionState) GetRaw() string {
+func (tablePositionState *BatchPositions) GetRaw() string {
 	ret, err := tablePositionState.ToJSON()
 	if err != nil {
-		log.Fatalf("[MySQLTablePositionState.GetRaw] error ToJSON. %#v. err: %v", tablePositionState, errors.ErrorStack(err))
+		log.Fatalf("[BatchPositions.GetRaw] error ToJSON. %#v. err: %v", tablePositionState, errors.ErrorStack(err))
 	}
 	return ret
 }
 
-func (tablePositionState *MySQLTablePositionState) PutRaw(pos string) {
+func (tablePositionState *BatchPositions) PutRaw(pos string) {
 	if pos == "" {
-		*tablePositionState = MySQLTablePositionState{}
+		*tablePositionState = BatchPositions{}
 	} else {
 		if err := myJson.UnmarshalFromString(pos, tablePositionState); err != nil {
-			log.Fatalf("[MySQLTablePositionState.PutRaw] error put %s. err: %s", pos, err)
+			log.Fatalf("[BatchPositions.PutRaw] error put %s. err: %s", pos, err)
 		}
 	}
 }
 
-func (tablePositionState *MySQLTablePositionState) Put(pos interface{}) {
-	*tablePositionState = pos.(MySQLTablePositionState)
+func (tablePositionState *BatchPositions) Put(pos interface{}) {
+	*tablePositionState = pos.(BatchPositions)
 }
 
-func (tablePositionState *MySQLTablePositionState) Stage() config.InputMode {
+func (tablePositionState *BatchPositions) Stage() config.InputMode {
 	return config.Batch
 }
 
-func (tablePositionState *MySQLTablePositionState) ToJSON() (string, error) {
+func (tablePositionState *BatchPositions) ToJSON() (string, error) {
 	tablePositionState.Lock()
 	defer tablePositionState.Unlock()
 	s, err := myJson.MarshalToString(tablePositionState)
 	return s, errors.Trace(err)
 }
 
-func (tablePositionState *MySQLTablePositionState) GetStartBinlogPos() (utils.MySQLBinlogPosition, bool) {
+func (tablePositionState *BatchPositions) GetStartBinlogPos() (utils.MySQLBinlogPosition, bool) {
 	tablePositionState.Lock()
 	defer tablePositionState.Unlock()
 
@@ -211,19 +212,20 @@ func (tablePositionState *MySQLTablePositionState) GetStartBinlogPos() (utils.My
 	return *tablePositionState.Start, true
 }
 
-func (tablePositionState *MySQLTablePositionState) PutStartBinlogPos(p utils.MySQLBinlogPosition) {
+func (tablePositionState *BatchPositions) PutStartBinlogPos(p utils.MySQLBinlogPosition) {
 	tablePositionState.Lock()
 	defer tablePositionState.Unlock()
 
 	tablePositionState.Start = &p
 }
 
-func (tablePositionState *MySQLTablePositionState) GetMaxMin(sourceName string) (MySQLTablePosition, MySQLTablePosition, bool) {
+func (tablePositionState *BatchPositions) GetMaxMin(sourceName string) (TablePosition, TablePosition, bool) {
+	log.Infof("[tablePositionState] GetMaxMin")
 	tablePositionState.Lock()
 	defer tablePositionState.Unlock()
 
 	if tablePositionState.Min == nil || tablePositionState.Max == nil {
-		return MySQLTablePosition{}, MySQLTablePosition{}, false
+		return TablePosition{}, TablePosition{}, false
 	}
 
 	max, okMax := tablePositionState.Max[sourceName]
@@ -232,41 +234,41 @@ func (tablePositionState *MySQLTablePositionState) GetMaxMin(sourceName string) 
 	return max, min, okMax && okMin
 }
 
-func (tablePositionState *MySQLTablePositionState) PutMaxMin(sourceName string, max MySQLTablePosition, min MySQLTablePosition) {
+func (tablePositionState *BatchPositions) PutMaxMin(sourceName string, max TablePosition, min TablePosition) {
 	tablePositionState.Lock()
 	defer tablePositionState.Unlock()
 
 	if tablePositionState.Min == nil {
-		tablePositionState.Min = make(map[string]MySQLTablePosition)
+		tablePositionState.Min = make(map[string]TablePosition)
 	}
 
 	if tablePositionState.Max == nil {
-		tablePositionState.Max = make(map[string]MySQLTablePosition)
+		tablePositionState.Max = make(map[string]TablePosition)
 	}
 	tablePositionState.Max[sourceName] = max
 	tablePositionState.Min[sourceName] = min
 }
 
-func (tablePositionState *MySQLTablePositionState) GetCurrent(sourceName string) (MySQLTablePosition, bool) {
+func (tablePositionState *BatchPositions) GetCurrent(sourceName string) (TablePosition, bool) {
 	tablePositionState.Lock()
 	defer tablePositionState.Unlock()
 
 	if tablePositionState.Current == nil {
-		return MySQLTablePosition{}, false
+		return TablePosition{}, false
 	}
 
 	p, ok := tablePositionState.Current[sourceName]
 	return p, ok
 }
 
-func (tablePositionState *MySQLTablePositionState) PutCurrent(sourceName string, pos MySQLTablePosition) {
+func (tablePositionState *BatchPositions) PutCurrent(sourceName string, pos TablePosition) {
 	tablePositionState.Lock()
 	defer tablePositionState.Unlock()
 
 	// log.Infof("[LoopInBatch] PutCurrent: sourceName: %v %v", sourceName, pos)
 
 	if tablePositionState.Current == nil {
-		tablePositionState.Current = make(map[string]MySQLTablePosition)
+		tablePositionState.Current = make(map[string]TablePosition)
 	}
 
 	tablePositionState.Current[sourceName] = pos
@@ -290,43 +292,3 @@ func DeserializeMySQLBinlogPosition(p utils.MySQLBinlogPosition) (gomysql.Positi
 	return gomysql.Position{Name: p.BinLogFileName, Pos: p.BinLogFilePos}, mysqlGTIDSet, nil
 }
 
-type PipelineGravityMySQLPosition struct {
-	CurrentPosition *utils.MySQLBinlogPosition `json:"current_position"`
-	StartPosition   *utils.MySQLBinlogPosition `json:"start_position"`
-}
-
-func (p *PipelineGravityMySQLPosition) String() string {
-	return p.GetRaw()
-}
-
-func (p *PipelineGravityMySQLPosition) Get() interface{} {
-	ret := PipelineGravityMySQLPosition{}
-	if p.CurrentPosition != nil {
-		pos := *p.CurrentPosition
-		ret.CurrentPosition = &pos
-	}
-	if p.StartPosition != nil {
-		pos := *p.StartPosition
-		ret.StartPosition = &pos
-	}
-	return ret
-}
-
-func (p *PipelineGravityMySQLPosition) GetRaw() string {
-	s, _ := myJson.MarshalToString(p)
-	return s
-}
-
-func (p *PipelineGravityMySQLPosition) Put(pos interface{}) {
-	*p = pos.(PipelineGravityMySQLPosition)
-}
-
-func (p *PipelineGravityMySQLPosition) PutRaw(pos string) {
-	if err := myJson.UnmarshalFromString(pos, p); err != nil {
-		log.Fatalf("[PipelineGravityMySQLPosition.PutRaw] %s", err)
-	}
-}
-
-func (p *PipelineGravityMySQLPosition) Stage() config.InputMode {
-	return config.Stream
-}

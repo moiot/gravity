@@ -40,7 +40,7 @@ type tidbInput struct {
 	cancel context.CancelFunc
 
 	binlogTailer  *BinlogTailer
-	store         position_store.PositionStore
+	store         position_store.PositionCache
 	binlogChecker binlog_checker.BinlogChecker
 }
 
@@ -125,7 +125,7 @@ func (plugin *tidbInput) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *tidbInput) PositionStore() position_store.PositionStore {
+func (plugin *tidbInput) PositionStore() position_store.PositionCache {
 	return plugin.store
 }
 

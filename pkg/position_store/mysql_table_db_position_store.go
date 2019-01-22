@@ -3,6 +3,7 @@ package position_store
 import (
 	"github.com/juju/errors"
 	"github.com/moiot/gravity/pkg/utils"
+	log "github.com/sirupsen/logrus"
 )
 
 type mysqlTableDBPositionStore struct {
@@ -22,6 +23,7 @@ func (s *mysqlTableDBPositionStore) PutStartBinlogPos(position utils.MySQLBinlog
 }
 
 func (s *mysqlTableDBPositionStore) GetMaxMin(sourceName string) (max MySQLTablePosition, min MySQLTablePosition, ok bool) {
+	log.Infof("[mysqlTableDBPositionStore] GetMaxMin")
 	return s.position().GetMaxMin(sourceName)
 }
 

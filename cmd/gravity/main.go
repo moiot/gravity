@@ -71,10 +71,9 @@ func main() {
 	}
 
 	if cfg.ClearPosition {
-		positionStore := server.Input.PositionStore()
-		pos := positionStore.Position()
-		positionStore.Clear()
-		log.Infof("position cleared: %s", pos)
+		if err := server.PositionStore.Clear(); err != nil {
+			log.Errorf("failed to clear position, err: %v", errors.ErrorStack(err))
+		}
 		return
 	}
 
@@ -166,32 +165,26 @@ func main() {
 func healthzHandler(server *app.Server) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-
-		// if server.Scheduler.Healthy() {
-		// 	w.WriteHeader(http.StatusOK)
-		// } else {
-		// 	w.WriteHeader(http.StatusInternalServerError)
-		// }
+		if server.Scheduler.Healthy() {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	}
 }
 
 func statusHandler(server *app.Server, name, hash string) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		pos, err := myJson.MarshalToString(server.Input.PositionStore().Position().Raw)
-		if err != nil {
-			log.Error(err)
-			http.Error(writer, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		position := server.PositionStore.Get()
 		var state = core.ReportStageIncremental
-		if server.Input.Stage() == config.Batch {
+		if position.Stage == config.Batch {
 			state = core.ReportStageFull
 		}
 
 		ret := core.TaskReportStatus{
 			Name:       name,
 			ConfigHash: hash,
-			Position:   pos,
+			Position:   position.Value,
 			Stage:      state,
 			Version:    utils.Version,
 		}
@@ -217,7 +210,11 @@ func resetHandler(server *app.Server, pipelineConfig config.PipelineConfigV3) fu
 			http.Error(writer, fmt.Sprintf("fail to new server, err: %s", err), 500)
 			return
 		}
-		server.Input.PositionStore().Clear()
+		if err := server.PositionStore.Clear(); err != nil {
+			log.Errorf("[reset] failed to clear position, err: %v", errors.ErrorStack(err))
+			http.Error(writer, fmt.Sprintf("failed to clear position, err: %v", errors.ErrorStack(err)), 500)
+			return
+		}
 
 		server, err = app.NewServer(pipelineConfig)
 		if err != nil {

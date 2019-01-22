@@ -3,6 +3,8 @@ package position_store
 import (
 	"time"
 
+	"github.com/moiot/gravity/pkg/inputs/mysqlstream"
+
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 
@@ -18,7 +20,7 @@ type mysqlBinlogDBPositionStore struct {
 }
 
 func (s *mysqlBinlogDBPositionStore) Start() error {
-	savedPosition := s.position.(*PipelineGravityMySQLPosition)
+	savedPosition := s.position.(*mysqlstream.BinlogPositions)
 
 	// If the start position in the spec is different than the start position last saved,
 	// we use the start position in the spec and override it.
@@ -51,7 +53,7 @@ func (s *mysqlBinlogDBPositionStore) Start() error {
 }
 
 func (s *mysqlBinlogDBPositionStore) Get() utils.MySQLBinlogPosition {
-	posPtr := s.dbPositionStore.Position().Raw.(PipelineGravityMySQLPosition).CurrentPosition
+	posPtr := s.dbPositionStore.Position().Raw.(mysqlstream.BinlogPositions).CurrentPosition
 	if posPtr != nil {
 		return *posPtr
 	} else {
@@ -60,7 +62,7 @@ func (s *mysqlBinlogDBPositionStore) Get() utils.MySQLBinlogPosition {
 }
 
 func (s *mysqlBinlogDBPositionStore) Put(position utils.MySQLBinlogPosition) {
-	prev := s.dbPositionStore.Position().Raw.(PipelineGravityMySQLPosition)
+	prev := s.dbPositionStore.Position().Raw.(mysqlstream.BinlogPositions)
 	if prev.CurrentPosition == nil {
 		prev.CurrentPosition = &utils.MySQLBinlogPosition{}
 	}
@@ -86,7 +88,7 @@ func NewMySQLBinlogDBPositionStore(pipelineName string, dbConfig *utils.DBConfig
 		return nil, errors.Trace(err)
 	}
 
-	wrapper, err := newDBPositionStore(pipelineName, dbConn, annotation, &PipelineGravityMySQLPosition{
+	wrapper, err := newDBPositionStore(pipelineName, dbConn, annotation, &mysqlstream.BinlogPositions{
 		StartPosition:   &utils.MySQLBinlogPosition{},
 		CurrentPosition: &utils.MySQLBinlogPosition{},
 	})
