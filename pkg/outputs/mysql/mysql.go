@@ -176,6 +176,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
 				}
 				log.Info("[output-mysql] executed ddl: ", stmt)
+				output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
 
 			case *ast.AlterTableStmt:
 				if !matched {
