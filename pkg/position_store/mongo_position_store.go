@@ -4,6 +4,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moiot/gravity/pkg/inputs/mongooplog"
+
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/mgo.v2"
@@ -89,13 +91,6 @@ func (store *mongoPositionStore) Start() error {
 	return nil
 }
 
-type positionEntity struct {
-	Name          string `bson:"name"`
-	Stage         string `bson:"stage"`
-	MongoPosition `bson:",inline"`
-	LastUpdate    string `bson:"last_update"`
-}
-
 func (store *mongoPositionStore) savePosition() {
 	store.Lock()
 	defer store.Unlock()
@@ -127,7 +122,7 @@ func (store *mongoPositionStore) savePosition() {
 func (store *mongoPositionStore) loadPosition() {
 	collection := store.session.DB(mongoPositionDB).C(mongoPositionCollection)
 	err := retry.Do(func() error {
-		pos := positionEntity{}
+		pos := mongooplog.positionEntity{}
 		err := collection.Find(bson.M{"name": store.name}).One(&pos)
 		if err == mgo.ErrNotFound {
 			log.Infof("[mongoPositionStore.loadPosition] position for %s is empty", store.name)

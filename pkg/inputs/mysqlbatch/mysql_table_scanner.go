@@ -27,7 +27,7 @@ type TableScanner struct {
 	pipelineName  string
 	tableWorkC    chan *TableWork
 	cfg           *PluginConfig
-	positionStore position_store.MySQLTablePositionStore
+	positionCache *position_store.PositionCache
 	db            *sql.DB
 	emitter       core.Emitter
 	throttle      *time.Ticker
@@ -63,8 +63,11 @@ func (tableScanner *TableScanner) Start() error {
 				} else if err != nil {
 					log.Fatalf("[TableScanner] InitTablePosition failed: %v", errors.ErrorStack(err))
 				}
-				max, min, ok := tableScanner.positionStore.GetMaxMin(utils.TableIdentity(work.TableDef.Schema, work.TableDef.Name))
-				log.Infof("positionStore.GetMaxMin: max value type: %v, max %v; min value type: %v, min %v", reflect.TypeOf(max.Value), max, reflect.TypeOf(min.Value), min)
+				max, min, ok, err := GetMaxMin(tableScanner.positionCache, utils.TableIdentity(work.TableDef.Schema, work.TableDef.Name))
+				if err != nil {
+					log.Fatalf("[TableScanner] InitTablePosition failed: %v", errors.ErrorStack(err))
+				}
+				log.Infof("positionCache.GetMaxMin: max value type: %v, max %v; min value type: %v, min %v", reflect.TypeOf(max.Value), max, reflect.TypeOf(min.Value), min)
 				scanColumn := max.Column
 				if !ok {
 					log.Fatalf("[table_scanner] failed to find max min")
@@ -76,8 +79,8 @@ func (tableScanner *TableScanner) Start() error {
 					tableScanner.LoopInBatch(
 						tableScanner.db, work.TableDef,
 						work.TableConfig, scanColumn,
-						max,
-						min,
+						*max,
+						*min,
 						tableScanner.cfg.TableScanBatch)
 
 					if tableScanner.ctx.Err() == nil {
@@ -101,18 +104,24 @@ func (tableScanner *TableScanner) Start() error {
 }
 
 func (tableScanner *TableScanner) InitTablePosition(tableDef *schema_store.Table, tableConfig *TableConfig, scanColumn string) error {
-	_, _, ok := tableScanner.positionStore.GetMaxMin(utils.TableIdentity(tableDef.Schema, tableDef.Name))
-	if !ok {
+	_, _, exists, err := GetMaxMin(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name))
+	if err != nil {
+		log.Fatalf("[tableScanner] failed to GetMaxMin: %v", errors.ErrorStack(err))
+	}
+
+	if !exists {
 		log.Infof("[InitTablePosition] init table position")
 
 		var scanType string
 		if scanColumn == "*" {
-			maxPos := position_store.MySQLTablePosition{Column: scanColumn, Type: position_store.PlainInt, Value: 1}
-			minPos := position_store.MySQLTablePosition{Column: scanColumn, Type: position_store.PlainInt, Value: 0}
-			tableScanner.positionStore.PutMaxMin(utils.TableIdentity(tableDef.Schema, tableDef.Name), maxPos, minPos)
+			maxPos := TablePosition{Column: scanColumn, Type: PlainInt, Value: 1}
+			minPos := TablePosition{Column: scanColumn, Type: PlainInt, Value: 0}
+			if err := PutMaxMin(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &maxPos, &minPos); err != nil {
+				return errors.Trace(err)
+			}
 		} else {
 			max, min := FindMaxMinValueFromDB(tableScanner.db, tableDef.Schema, tableDef.Name, scanColumn)
-			maxPos := position_store.MySQLTablePosition{Value: max, Type: scanType, Column: scanColumn}
+			maxPos := TablePosition{Value: max, Type: scanType, Column: scanColumn}
 			empty, err := tableScanner.validateTableEmpty(maxPos)
 			if err != nil {
 				return errors.Trace(err)
@@ -120,16 +129,19 @@ func (tableScanner *TableScanner) InitTablePosition(tableDef *schema_store.Table
 			if empty {
 				return ErrTableEmpty
 			}
-			minPos := position_store.MySQLTablePosition{Value: min, Type: scanType, Column: scanColumn}
-			tableScanner.positionStore.PutMaxMin(utils.TableIdentity(tableDef.Schema, tableDef.Name), maxPos, minPos)
+			minPos := TablePosition{Value: min, Type: scanType, Column: scanColumn}
+			if err := PutMaxMin(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &maxPos, &minPos); err != nil {
+				return errors.Trace(err)
+			}
 			log.Infof("[InitTablePosition] PutMaxMin: max value type: %v, max: %v; min value type: %v, min: %v", reflect.TypeOf(maxPos.Value), maxPos, reflect.TypeOf(minPos.Value), minPos)
 		}
 		log.Infof("[InitTablePosition] schema: %v, table: %v, scanColumn: %v", tableDef.Schema, tableDef.Name, scanColumn)
+
 	}
 	return nil
 }
 
-func (tableScanner *TableScanner) validateTableEmpty(pos position_store.MySQLTablePosition) (bool, error) {
+func (tableScanner *TableScanner) validateTableEmpty(pos TablePosition) (bool, error) {
 	mapStr, err := pos.MapString()
 	if err != nil {
 		return false, errors.Trace(err)
@@ -206,7 +218,7 @@ func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColu
 // LoopInBatch will iterate the table by sql like this:
 // SELECT * FROM a WHERE some_key > some_value LIMIT 10000
 // It will get the min, max value of the column and iterate batch by batch
-func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store.Table, tableConfig *TableConfig, scanColumn string, max position_store.MySQLTablePosition, min position_store.MySQLTablePosition, batch int) {
+func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store.Table, tableConfig *TableConfig, scanColumn string, max TablePosition, min TablePosition, batch int) {
 	pipelineName := tableScanner.pipelineName
 
 	if batch <= 0 {
@@ -222,11 +234,17 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 	maxReached := false
 	var statement string
 
-	currentMinPos, ok := tableScanner.positionStore.GetCurrent(utils.TableIdentity(tableDef.Schema, tableDef.Name))
-	if !ok {
-		tableScanner.positionStore.PutCurrent(utils.TableIdentity(tableDef.Schema, tableDef.Name), min)
-		currentMinPos = min
+	currentMinPos, exists, err := GetCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name))
+	if err != nil {
+		log.Fatalf("[LoopInBatch] failed to get current pos: %v", errors.ErrorStack(err))
 	}
+	if !exists {
+		if err := PutCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &min); err != nil {
+			log.Fatalf("[LoopInBatch] failed to put current pos: %v", errors.ErrorStack(err))
+		}
+		currentMinPos = &min
+	}
+
 	log.Infof("[LoopInBatch] prepare current: %v", currentMinPos)
 
 	currentMinValue := currentMinPos.Value
@@ -304,7 +322,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 		for i := 0; i < rowIdx; i++ {
 			rowPtrs := rowsBatchDataPtrs[i]
 			posV := mysql.NormalizeSQLType(reflect.ValueOf(rowPtrs[scanIdx]).Elem().Interface())
-			position := position_store.MySQLTablePosition{Value: posV, Column: scanColumn}
+			position := TablePosition{Value: posV, Column: scanColumn}
 
 			msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, position)
 
@@ -350,8 +368,15 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 	streamKey := utils.TableIdentity(tableDef.Schema, tableDef.Name)
 
 	// do not re-scan table that has already dumped
-	current, currentExists := tableScanner.positionStore.GetCurrent(streamKey)
-	max, _, maxExists := tableScanner.positionStore.GetMaxMin(streamKey)
+	current, currentExists, err := GetCurrentPos(tableScanner.positionCache, streamKey)
+	if err != nil {
+		log.Fatalf("[FindAll] failed to get current pos: %v", errors.ErrorStack(err))
+	}
+
+	max, _, maxExists, err := GetMaxMin(tableScanner.positionCache, streamKey)
+	if err != nil {
+		log.Fatalf("[FindAll] failed to get max min: %v", errors.ErrorStack(err))
+	}
 	if currentExists && maxExists {
 		if reflect.DeepEqual(max.Value, current.Value) {
 			log.Infof("[FindAll] table: %v already dumped", streamKey)
@@ -375,7 +400,7 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 
 	for i := range allData {
 		rowPtrs := allData[i]
-		msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, position_store.MySQLTablePosition{Column: "*", Type: position_store.PlainInt, Value: i + 1})
+		msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, TablePosition{Column: "*", Type: PlainInt, Value: i + 1})
 		if err := tableScanner.emitter.Emit(msg); err != nil {
 			log.Fatalf("[FindAll] failed to emit: %v", errors.ErrorStack(err))
 		}
@@ -383,16 +408,19 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 
 	// set the current and max position to be the same
 	// TODO add method to flush position
-	p := position_store.MySQLTablePosition{Column: "*", Type: position_store.PlainInt, Value: len(allData)}
+	p := TablePosition{Column: "*", Type: PlainInt, Value: len(allData)}
 
-	tableScanner.positionStore.PutCurrent(
-		utils.TableIdentity(tableDef.Schema, tableDef.Name),
-		p)
+	if err := PutCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &p); err != nil {
+		log.Fatalf("[FindAll] failed to put current pos: %v", errors.ErrorStack(err))
+	}
 
-	tableScanner.positionStore.PutMaxMin(
+	if err := PutMaxMin(
+		tableScanner.positionCache,
 		utils.TableIdentity(tableDef.Schema, tableDef.Name),
-		p,
-		position_store.MySQLTablePosition{Column: "*", Type: position_store.PlainInt, Value: 0})
+		&p,
+		&TablePosition{Column: "*", Type: PlainInt, Value: 0}); err != nil {
+		log.Fatalf("[FindAll] failed to put max min: %v", errors.ErrorStack(err))
+	}
 
 	log.Infof("[FindAll] finished dump table: %v", streamKey)
 
@@ -405,12 +433,14 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 }
 
 func (tableScanner *TableScanner) AfterMsgCommit(msg *core.Msg) error {
-	p, ok := msg.InputContext.(position_store.MySQLTablePosition)
+	p, ok := msg.InputContext.(TablePosition)
 	if !ok {
 		return errors.Errorf("type invalid")
 	}
 
-	tableScanner.positionStore.PutCurrent(*msg.InputStreamKey, p)
+	if err := PutCurrentPos(tableScanner.positionCache, *msg.InputStreamKey, &p); err != nil {
+		return errors.Trace(err)
+	}
 
 	return nil
 }
@@ -472,7 +502,7 @@ func NewTableScanner(
 	pipelineName string,
 	tableWorkC chan *TableWork,
 	db *sql.DB,
-	positionStore position_store.MySQLTablePositionStore,
+	positionCache *position_store.PositionCache,
 	emitter core.Emitter,
 	throttle *time.Ticker,
 	schemaStore schema_store.SchemaStore,
@@ -483,7 +513,7 @@ func NewTableScanner(
 		pipelineName:  pipelineName,
 		tableWorkC:    tableWorkC,
 		db:            db,
-		positionStore: positionStore,
+		positionCache: positionCache,
 		emitter:       emitter,
 		throttle:      throttle,
 		schemaStore:   schemaStore,

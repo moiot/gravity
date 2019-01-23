@@ -2,17 +2,17 @@ package mysqlbatch
 
 import (
 	"database/sql"
-	"github.com/json-iterator/go"
 	"reflect"
 	"strconv"
 	"time"
 
+	"github.com/json-iterator/go"
+	"github.com/moiot/gravity/pkg/position_store"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
-	gomysql "github.com/siddontang/go-mysql/mysql"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/utils"
 )
 
@@ -153,142 +153,266 @@ func (p *TablePosition) UnmarshalJSON(value []byte) error {
 }
 
 type BatchPositions struct {
-	Start      *utils.MySQLBinlogPosition `toml:"start-binlog" json:"start-binlog"`
-	Min        map[string]TablePosition   `toml:"min" json:"min"`
-	Max        map[string]TablePosition   `toml:"max" json:"max"`
-	Current    map[string]TablePosition   `toml:"current" json:"current"`
+	Start   *utils.MySQLBinlogPosition `toml:"start-binlog" json:"start-binlog"`
+	Min     map[string]TablePosition   `toml:"min" json:"min"`
+	Max     map[string]TablePosition   `toml:"max" json:"max"`
+	Current map[string]TablePosition   `toml:"current" json:"current"`
 }
 
-func (tablePositionState *BatchPositions) Get() interface{} {
-	s := tablePositionState.GetRaw()
-	ret := BatchPositions{}
-	if err := myJson.UnmarshalFromString(s, &ret); err != nil {
-		log.Fatalf("[BatchPositions.Get] err: %s", err)
-	}
-	return ret
-}
-
-func (tablePositionState *BatchPositions) GetRaw() string {
-	ret, err := tablePositionState.ToJSON()
+func Serialize(positions *BatchPositions) (string, error) {
+	s, err := myJson.MarshalToString(positions)
 	if err != nil {
-		log.Fatalf("[BatchPositions.GetRaw] error ToJSON. %#v. err: %v", tablePositionState, errors.ErrorStack(err))
+		return "", errors.Trace(err)
 	}
-	return ret
+	return s, nil
 }
 
-func (tablePositionState *BatchPositions) PutRaw(pos string) {
-	if pos == "" {
-		*tablePositionState = BatchPositions{}
-	} else {
-		if err := myJson.UnmarshalFromString(pos, tablePositionState); err != nil {
-			log.Fatalf("[BatchPositions.PutRaw] error put %s. err: %s", pos, err)
+func Deserialize(value string) (*BatchPositions, error) {
+	positions := BatchPositions{}
+	if err := myJson.UnmarshalFromString(value, &positions); err != nil {
+		return nil, errors.Trace(err)
+	}
+	return &positions, nil
+}
+
+func InitPositionCache(cache *position_store.PositionCache, sourceDB *sql.DB) error {
+	position := cache.Get()
+	batchPositions, err := Deserialize(position.Value)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if batchPositions.Start != nil {
+		dbUtil := utils.NewMySQLDB(sourceDB)
+		binlogFilePos, gtid, err := dbUtil.GetMasterStatus()
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		startPosition := utils.MySQLBinlogPosition{
+			BinLogFileName: binlogFilePos.Name,
+			BinLogFilePos:  binlogFilePos.Pos,
+			BinlogGTID:     gtid.String(),
+		}
+		batchPositions.Start = &startPosition
+
+		v, err := Serialize(batchPositions)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		position.Value = v
+		cache.Put(position)
+		if err := cache.Flush(); err != nil {
+			return errors.Trace(err)
 		}
 	}
+	return nil
 }
 
-func (tablePositionState *BatchPositions) Put(pos interface{}) {
-	*tablePositionState = pos.(BatchPositions)
-}
-
-func (tablePositionState *BatchPositions) Stage() config.InputMode {
-	return config.Batch
-}
-
-func (tablePositionState *BatchPositions) ToJSON() (string, error) {
-	tablePositionState.Lock()
-	defer tablePositionState.Unlock()
-	s, err := myJson.MarshalToString(tablePositionState)
-	return s, errors.Trace(err)
-}
-
-func (tablePositionState *BatchPositions) GetStartBinlogPos() (utils.MySQLBinlogPosition, bool) {
-	tablePositionState.Lock()
-	defer tablePositionState.Unlock()
-
-	if tablePositionState.Start == nil {
-		return utils.MySQLBinlogPosition{}, false
-	}
-
-	return *tablePositionState.Start, true
-}
-
-func (tablePositionState *BatchPositions) PutStartBinlogPos(p utils.MySQLBinlogPosition) {
-	tablePositionState.Lock()
-	defer tablePositionState.Unlock()
-
-	tablePositionState.Start = &p
-}
-
-func (tablePositionState *BatchPositions) GetMaxMin(sourceName string) (TablePosition, TablePosition, bool) {
-	log.Infof("[tablePositionState] GetMaxMin")
-	tablePositionState.Lock()
-	defer tablePositionState.Unlock()
-
-	if tablePositionState.Min == nil || tablePositionState.Max == nil {
-		return TablePosition{}, TablePosition{}, false
-	}
-
-	max, okMax := tablePositionState.Max[sourceName]
-
-	min, okMin := tablePositionState.Min[sourceName]
-	return max, min, okMax && okMin
-}
-
-func (tablePositionState *BatchPositions) PutMaxMin(sourceName string, max TablePosition, min TablePosition) {
-	tablePositionState.Lock()
-	defer tablePositionState.Unlock()
-
-	if tablePositionState.Min == nil {
-		tablePositionState.Min = make(map[string]TablePosition)
-	}
-
-	if tablePositionState.Max == nil {
-		tablePositionState.Max = make(map[string]TablePosition)
-	}
-	tablePositionState.Max[sourceName] = max
-	tablePositionState.Min[sourceName] = min
-}
-
-func (tablePositionState *BatchPositions) GetCurrent(sourceName string) (TablePosition, bool) {
-	tablePositionState.Lock()
-	defer tablePositionState.Unlock()
-
-	if tablePositionState.Current == nil {
-		return TablePosition{}, false
-	}
-
-	p, ok := tablePositionState.Current[sourceName]
-	return p, ok
-}
-
-func (tablePositionState *BatchPositions) PutCurrent(sourceName string, pos TablePosition) {
-	tablePositionState.Lock()
-	defer tablePositionState.Unlock()
-
-	// log.Infof("[LoopInBatch] PutCurrent: sourceName: %v %v", sourceName, pos)
-
-	if tablePositionState.Current == nil {
-		tablePositionState.Current = make(map[string]TablePosition)
-	}
-
-	tablePositionState.Current[sourceName] = pos
-}
-
-func SerializeMySQLBinlogPosition(pos gomysql.Position, gtidSet gomysql.MysqlGTIDSet) utils.MySQLBinlogPosition {
-	p := utils.MySQLBinlogPosition{}
-	p.BinLogFileName = pos.Name
-	p.BinLogFilePos = pos.Pos
-	p.BinlogGTID = gtidSet.String()
-	return p
-}
-
-func DeserializeMySQLBinlogPosition(p utils.MySQLBinlogPosition) (gomysql.Position, gomysql.MysqlGTIDSet, error) {
-	gtidSet, err := gomysql.ParseMysqlGTIDSet(p.BinlogGTID)
+func GetStartBinlog(cache *position_store.PositionCache) (*utils.MySQLBinlogPosition, error) {
+	position := cache.Get()
+	batchPositions, err := Deserialize(position.Value)
 	if err != nil {
-		return gomysql.Position{}, gomysql.MysqlGTIDSet{}, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
-	mysqlGTIDSet := *gtidSet.(*gomysql.MysqlGTIDSet)
-	return gomysql.Position{Name: p.BinLogFileName, Pos: p.BinLogFilePos}, mysqlGTIDSet, nil
+	return batchPositions.Start, nil
 }
 
+func GetCurrentPos(cache *position_store.PositionCache, fullTableName string) (*TablePosition, bool, error) {
+	position := cache.Get()
+	batchPositions, err := Deserialize(position.Value)
+	if err != nil {
+		return nil, false, errors.Trace(err)
+	}
+
+	current, ok := batchPositions.Current[fullTableName]
+	if !ok {
+		return nil, false, nil
+	}
+	return &current, true, nil
+}
+
+func PutCurrentPos(cache *position_store.PositionCache, fullTableName string, pos *TablePosition) error {
+	position := cache.Get()
+	batchPositions, err := Deserialize(position.Value)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	batchPositions.Current[fullTableName] = *pos
+	v, err := Serialize(batchPositions)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	position.Value = v
+	cache.Put(position)
+	return nil
+}
+
+func GetMaxMin(cache *position_store.PositionCache, fullTableName string) (*TablePosition, *TablePosition, bool, error) {
+	position := cache.Get()
+	batchPositions, err := Deserialize(position.Value)
+	if err != nil {
+		return nil, nil, false, errors.Trace(err)
+	}
+
+	max, ok := batchPositions.Max[fullTableName]
+	if !ok {
+		return nil, nil, false, nil
+	}
+
+	min, ok := batchPositions.Min[fullTableName]
+	if !ok {
+		return nil, nil, false, nil
+	}
+
+	return &max, &min, true, nil
+}
+
+func PutMaxMin(cache *position_store.PositionCache, fullTableName string, max *TablePosition, min *TablePosition) error {
+	position := cache.Get()
+	batchPositions, err := Deserialize(position.Value)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	batchPositions.Max[fullTableName] = *max
+	batchPositions.Min[fullTableName] = *min
+
+	cache.Put(position)
+	return nil
+}
+
+// func (tablePositionState *BatchPositions) Get() interface{} {
+// 	s := tablePositionState.GetRaw()
+// 	ret := BatchPositions{}
+// 	if err := myJson.UnmarshalFromString(s, &ret); err != nil {
+// 		log.Fatalf("[BatchPositions.Get] err: %s", err)
+// 	}
+// 	return ret
+// }
+//
+// func (tablePositionState *BatchPositions) GetRaw() string {
+// 	ret, err := tablePositionState.ToJSON()
+// 	if err != nil {
+// 		log.Fatalf("[BatchPositions.GetRaw] error ToJSON. %#v. err: %v", tablePositionState, errors.ErrorStack(err))
+// 	}
+// 	return ret
+// }
+//
+// func (tablePositionState *BatchPositions) PutRaw(pos string) {
+// 	if pos == "" {
+// 		*tablePositionState = BatchPositions{}
+// 	} else {
+// 		if err := myJson.UnmarshalFromString(pos, tablePositionState); err != nil {
+// 			log.Fatalf("[BatchPositions.PutRaw] error put %s. err: %s", pos, err)
+// 		}
+// 	}
+// }
+//
+// func (tablePositionState *BatchPositions) Put(pos interface{}) {
+// 	*tablePositionState = pos.(BatchPositions)
+// }
+//
+// func (tablePositionState *BatchPositions) Stage() config.InputMode {
+// 	return config.Batch
+// }
+//
+// func (tablePositionState *BatchPositions) ToJSON() (string, error) {
+// 	tablePositionState.Lock()
+// 	defer tablePositionState.Unlock()
+// 	s, err := myJson.MarshalToString(tablePositionState)
+// 	return s, errors.Trace(err)
+// }
+//
+// func (tablePositionState *BatchPositions) GetStartBinlogPos() (utils.MySQLBinlogPosition, bool) {
+// 	tablePositionState.Lock()
+// 	defer tablePositionState.Unlock()
+//
+// 	if tablePositionState.Start == nil {
+// 		return utils.MySQLBinlogPosition{}, false
+// 	}
+//
+// 	return *tablePositionState.Start, true
+// }
+//
+// func (tablePositionState *BatchPositions) PutStartBinlogPos(p utils.MySQLBinlogPosition) {
+// 	tablePositionState.Lock()
+// 	defer tablePositionState.Unlock()
+//
+// 	tablePositionState.Start = &p
+// }
+//
+// func (tablePositionState *BatchPositions) GetMaxMin(sourceName string) (TablePosition, TablePosition, bool) {
+// 	log.Infof("[tablePositionState] GetMaxMin")
+// 	tablePositionState.Lock()
+// 	defer tablePositionState.Unlock()
+//
+// 	if tablePositionState.Min == nil || tablePositionState.Max == nil {
+// 		return TablePosition{}, TablePosition{}, false
+// 	}
+//
+// 	max, okMax := tablePositionState.Max[sourceName]
+//
+// 	min, okMin := tablePositionState.Min[sourceName]
+// 	return max, min, okMax && okMin
+// }
+//
+// func (tablePositionState *BatchPositions) PutMaxMin(sourceName string, max TablePosition, min TablePosition) {
+// 	tablePositionState.Lock()
+// 	defer tablePositionState.Unlock()
+//
+// 	if tablePositionState.Min == nil {
+// 		tablePositionState.Min = make(map[string]TablePosition)
+// 	}
+//
+// 	if tablePositionState.Max == nil {
+// 		tablePositionState.Max = make(map[string]TablePosition)
+// 	}
+// 	tablePositionState.Max[sourceName] = max
+// 	tablePositionState.Min[sourceName] = min
+// }
+//
+// func (tablePositionState *BatchPositions) GetCurrent(sourceName string) (TablePosition, bool) {
+// 	tablePositionState.Lock()
+// 	defer tablePositionState.Unlock()
+//
+// 	if tablePositionState.Current == nil {
+// 		return TablePosition{}, false
+// 	}
+//
+// 	p, ok := tablePositionState.Current[sourceName]
+// 	return p, ok
+// }
+//
+// func (tablePositionState *BatchPositions) PutCurrent(sourceName string, pos TablePosition) {
+// 	tablePositionState.Lock()
+// 	defer tablePositionState.Unlock()
+//
+// 	// log.Infof("[LoopInBatch] PutCurrent: sourceName: %v %v", sourceName, pos)
+//
+// 	if tablePositionState.Current == nil {
+// 		tablePositionState.Current = make(map[string]TablePosition)
+// 	}
+//
+// 	tablePositionState.Current[sourceName] = pos
+// }
+//
+// func SerializeMySQLBinlogPosition(pos gomysql.Position, gtidSet gomysql.MysqlGTIDSet) utils.MySQLBinlogPosition {
+// 	p := utils.MySQLBinlogPosition{}
+// 	p.BinLogFileName = pos.Name
+// 	p.BinLogFilePos = pos.Pos
+// 	p.BinlogGTID = gtidSet.String()
+// 	return p
+// }
+//
+// func DeserializeMySQLBinlogPosition(p utils.MySQLBinlogPosition) (gomysql.Position, gomysql.MysqlGTIDSet, error) {
+// 	gtidSet, err := gomysql.ParseMysqlGTIDSet(p.BinlogGTID)
+// 	if err != nil {
+// 		return gomysql.Position{}, gomysql.MysqlGTIDSet{}, errors.Trace(err)
+// 	}
+//
+// 	mysqlGTIDSet := *gtidSet.(*gomysql.MysqlGTIDSet)
+// 	return gomysql.Position{Name: p.BinLogFileName, Pos: p.BinLogFilePos}, mysqlGTIDSet, nil
+// }

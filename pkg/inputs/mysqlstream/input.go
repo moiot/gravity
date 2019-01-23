@@ -3,9 +3,10 @@ package mysqlstream
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"sync"
 	"time"
+
+	"github.com/moiot/gravity/pkg/inputs/helper"
 
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
@@ -30,17 +31,12 @@ var (
 
 const inputStreamKey = "mysqlstream"
 
-type SourceProbeCfg struct {
-	SourceMySQL *utils.DBConfig `mapstructure:"mysql"json:"mysql"`
-	Annotation  string          `mapstructure:"annotation"json:"annotation"`
-}
-
 type MySQLBinlogInputPluginConfig struct {
 	Source                  *utils.DBConfig            `mapstructure:"source" toml:"source" json:"source"`
 	IgnoreBiDirectionalData bool                       `mapstructure:"ignore-bidirectional-data" toml:"ignore-bidirectional-data" json:"ignore-bidirectional-data"`
 	StartPosition           *utils.MySQLBinlogPosition `mapstructure:"start-position" toml:"start-position" json:"start-position"`
 
-	SourceProbeCfg *SourceProbeCfg `mapstructure:"source-probe-config"json:"source-probe-config"`
+	SourceProbeCfg *helper.SourceProbeCfg `mapstructure:"source-probe-config"json:"source-probe-config"`
 
 	//
 	// internal configurations that is not exposed to users
@@ -89,26 +85,7 @@ func (plugin *mysqlInputPlugin) Configure(pipelineName string, configInput map[s
 	}
 
 	// probe connection settings
-	var probeDBConfig *utils.DBConfig
-	var probeSQLAnnotation string
-	if pluginConfig.SourceProbeCfg != nil {
-		if pluginConfig.SourceProbeCfg.SourceMySQL != nil {
-			probeDBConfig = pluginConfig.SourceProbeCfg.SourceMySQL
-		} else {
-			probeDBConfig = pluginConfig.Source
-		}
-		probeSQLAnnotation = pluginConfig.SourceProbeCfg.Annotation
-	} else {
-		probeDBConfig = pluginConfig.Source
-	}
-
-	if probeSQLAnnotation != "" {
-		probeSQLAnnotation = fmt.Sprintf("/*%s*/", probeSQLAnnotation)
-	}
-
-	plugin.probeDBConfig = probeDBConfig
-	plugin.probeSQLAnnotation = probeSQLAnnotation
-
+	plugin.probeDBConfig, plugin.probeSQLAnnotation = helper.GetProbCfg(plugin.cfg.SourceProbeCfg, plugin.cfg.Source)
 	plugin.cfg = &pluginConfig
 
 	return nil

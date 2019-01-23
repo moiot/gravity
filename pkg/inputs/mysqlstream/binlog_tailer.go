@@ -158,7 +158,7 @@ func (tailer *BinlogTailer) Start() error {
 		tryReSync = true
 	)
 
-	currentPosition, err := tailer.getCurrentPosition()
+	currentPosition, err := GetCurrentPosition(tailer.positionCache)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -191,7 +191,7 @@ func (tailer *BinlogTailer) Start() error {
 			// If the timeout happens, then we need to try to reopen the binlog syncer.
 			if err == context.DeadlineExceeded {
 				log.Info("[binlogTailer] BinlogSyncerTimeout try to reopen")
-				gtid, err := tailer.getCurrentGTID()
+				gtid, err := GetCurrentGTID(tailer.positionCache)
 				if err != nil {
 					log.Fatalf("[binlogTailer] failed to deserialize position, err: %v", errors.ErrorStack(err))
 				}
@@ -209,7 +209,7 @@ func (tailer *BinlogTailer) Start() error {
 					time.Sleep(RetryTimeout)
 
 					db := utils.NewMySQLDB(tailer.sourceDB)
-					currentPosition, err := tailer.getCurrentPosition()
+					currentPosition, err := GetCurrentPosition(tailer.positionCache)
 					if err != nil {
 						log.Fatalf("[binlogTailer] failed getCurrentPosition, err: %v", errors.ErrorStack(err))
 					}
@@ -236,7 +236,7 @@ func (tailer *BinlogTailer) Start() error {
 						log.Fatalf("[binlogTailer] failed reopenBinlogSyncer")
 					}
 
-					currentPosition, err = tailer.getCurrentPosition()
+					currentPosition, err = GetCurrentPosition(tailer.positionCache)
 					if err != nil {
 						log.Fatalf("[binlogTailer] failed to getCurrentPosition, err: %v", errors.ErrorStack(err))
 					}
@@ -441,7 +441,14 @@ func (tailer *BinlogTailer) Start() error {
 				}
 
 				// emit ddl msg
-				ddlMsg := NewDDLMsg(tailer.AfterMsgCommit, dbName, table, ast, ddlSQL, int64(e.Header.Timestamp), position_store.SerializeMySQLBinlogPosition(currentPos, currentGS))
+				ddlMsg := NewDDLMsg(
+					tailer.AfterMsgCommit,
+					dbName,
+					table,
+					ast,
+					ddlSQL,
+					int64(e.Header.Timestamp),
+					*currentPosition)
 				if err := tailer.emitter.Emit(ddlMsg); err != nil {
 					log.Fatalf("failed to emit ddl msg: %v", errors.ErrorStack(err))
 				}
@@ -532,7 +539,7 @@ func (tailer *BinlogTailer) AfterMsgCommit(msg *core.Msg) error {
 	ctx := msg.InputContext.(inputContext)
 	if ctx.op == xid || ctx.op == ddl {
 
-		startPosition, currentPosition, err := tailer.getBinlogPositions()
+		startPosition, currentPosition, err := GetBinlogPositions(tailer.positionCache)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -654,50 +661,10 @@ func (tailer *BinlogTailer) reopenBinlogSyncer(gtidString string) (*replication.
 	return tailer.getBinlogStreamer(gtidString)
 }
 
-func (tailer *BinlogTailer) getCurrentGTID() (string, error) {
-	currentPosition, err := tailer.getCurrentPosition()
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	return currentPosition.BinlogGTID, nil
-}
-
-func (tailer *BinlogTailer) getCurrentPosition() (*utils.MySQLBinlogPosition, error) {
-	position := tailer.positionCache.Get()
-	positions, err := Deserialize(position.Value)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	if positions.CurrentPosition != nil {
-		return nil, errors.Errorf("empty currentPosition")
-	}
-
-	return positions.CurrentPosition, nil
-}
-
-func (tailer *BinlogTailer) getBinlogPositions() (*utils.MySQLBinlogPosition, *utils.MySQLBinlogPosition, error) {
-	position := tailer.positionCache.Get()
-	positions, err := Deserialize(position.Value)
-	if err != nil {
-		return nil, nil, errors.Trace(err)
-	}
-
-	if positions.CurrentPosition != nil {
-		return nil, nil, errors.Errorf("empty currentPosition")
-	}
-
-	if positions.StartPosition != nil {
-		return nil, nil, errors.Errorf("empty start position")
-	}
-
-	return positions.StartPosition, positions.CurrentPosition, nil
-}
-
 func fixGTID(db utils.MySQLStatusGetter, binlogPosition utils.MySQLBinlogPosition) (*utils.MySQLBinlogPosition, error) {
 	log.Infof("[fixGTID] gtid: %v", binlogPosition.BinlogGTID)
 
-	pos, gs, err := position_store.DeserializeMySQLBinlogPosition(binlogPosition)
+	pos, gs, err := ToGoMySQLPosition(binlogPosition)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -736,7 +703,11 @@ func fixGTID(db utils.MySQLStatusGetter, binlogPosition utils.MySQLBinlogPositio
 		}
 	}
 
-	positionConfig := position_store.SerializeMySQLBinlogPosition(pos, gs)
+	positionConfig := utils.MySQLBinlogPosition{
+		BinLogFileName: pos.Name,
+		BinLogFilePos:  pos.Pos,
+		BinlogGTID:     gs.String(),
+	}
 	log.Infof("[fixGTID] cleaned positionConfig: %v, gs: %v, gsString: %v", positionConfig, gs.Sets, gs.String())
 	return &positionConfig, nil
 
