@@ -155,6 +155,10 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 
 		switch msg.Type {
 		case core.MsgDDL:
+			if msg.DdlMsg.AST == nil {
+				log.Info("[output-mysql] ignore unsupported ddl: ", msg.DdlMsg.Statement)
+				return nil
+			}
 			switch node := msg.DdlMsg.AST.(type) {
 			case *ast.CreateTableStmt:
 				if !matched {

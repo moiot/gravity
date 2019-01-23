@@ -89,7 +89,7 @@ func (s *dbPositionStore) savePosition() {
 	}
 
 	s.updateTime = time.Now()
-	log.Infof("[dbPositionStore.savePosition] succeed: %s, %s", s.stage, posString)
+	log.Debugf("[dbPositionStore.savePosition] succeed: %s, %s", s.stage, posString)
 }
 
 func (s *dbPositionStore) loadPosition() {
