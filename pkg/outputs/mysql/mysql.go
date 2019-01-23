@@ -193,7 +193,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				stmt := restore(&copy)
 				err := output.executeDDL(targetSchema, stmt)
 				if err != nil {
-					if e := err.(*mysqldriver.MySQLError); e.Number == 1060 {
+					if e := errors.Cause(err).(*mysqldriver.MySQLError); e.Number == 1060 {
 						log.Errorf("[output-mysql] ignore duplicate column. ddl: %s. err: %s", stmt, e)
 					} else {
 						log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
