@@ -204,7 +204,7 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 					}
 
 					metrics.WorkerPoolMsgExecLatency.
-						WithLabelValues(scheduler.pipelineName, workerIndex).
+						WithLabelValues(scheduler.pipelineName).
 						Observe(time.Since(execStartTime).Seconds())
 
 					// synchronous output should ack msg here.
@@ -220,7 +220,7 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 					}
 
 					metrics.WorkerPoolMsgExecLatency.
-						WithLabelValues(scheduler.pipelineName, workerIndex).
+						WithLabelValues(scheduler.pipelineName).
 						Observe(time.Since(execStartTime).Seconds())
 				}
 

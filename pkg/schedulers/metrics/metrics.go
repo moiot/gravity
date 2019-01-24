@@ -33,7 +33,7 @@ var (
 		Subsystem: "scheduler_worker_pool",
 		Name:      "msg_exec_latency",
 		Help:      "latency of process a job",
-	}, []string{metrics.PipelineTag, "idx"})
+	}, []string{metrics.PipelineTag})
 
 	//
 	// batch scheduler specific metrics

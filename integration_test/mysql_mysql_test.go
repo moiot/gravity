@@ -5,13 +5,17 @@ import (
 	"database/sql"
 	"fmt"
 	"math/rand"
-	"net/http"
 	_ "net/http/pprof"
 	"strings"
 	"testing"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/moiot/gravity/pkg/inputs/mysqlstream"
+	"github.com/moiot/gravity/pkg/outputs/mysql"
+	"github.com/moiot/gravity/pkg/sql_execution_engine"
+
+	"github.com/moiot/gravity/pkg/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/moiot/gravity/pkg/app"
@@ -29,15 +33,11 @@ func init() {
 		panic(err)
 	}
 	_ = db.Close()
-	go func() {
-		err = http.ListenAndServe(":8080", nil)
-		if err != nil {
-			log.Println("http error", err)
-		}
-	}()
 }
 
 func TestMySQLToMySQLStream(t *testing.T) {
+	t.Parallel()
+
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -131,6 +131,8 @@ func TestMySQLToMySQLStream(t *testing.T) {
 }
 
 func TestMySQLBatch(t *testing.T) {
+	t.Parallel()
+
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -221,6 +223,8 @@ func TestMySQLBatch(t *testing.T) {
 }
 
 func TestMySQLBatchWithInsertIgnore(t *testing.T) {
+	t.Parallel()
+
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -316,6 +320,8 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 }
 
 func TestMySQLToMySQLReplication(t *testing.T) {
+	t.Parallel()
+
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -431,6 +437,8 @@ func waitFullComplete(i core.Input) {
 }
 
 func TestMySQLToMySQLPositionReset(t *testing.T) {
+	t.Parallel()
+
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -542,7 +550,101 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 	r.NoError(generator.TestChecksum())
 }
 
+func TestMySQLToMyBidirection(t *testing.T) {
+	t.Parallel()
+
+	r := require.New(t)
+
+	sourceDBName := strings.ToLower(t.Name()) + "_source"
+	targetDBName := strings.ToLower(t.Name()) + "_target"
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	serverCfg := config.PipelineConfigV3{
+		PipelineName: sourceDBName,
+		Version:      config.PipelineConfigV3Version,
+		InputPlugin: config.InputConfig{
+			Type: "mysql",
+			Mode: config.Stream,
+			Config: struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+				IgnoreBiDirectionalData: true,
+				Source:                  sourceDBConfig,
+			}),
+		},
+		OutputPlugin: config.GenericConfig{
+			Type: "mysql",
+			Config: struct2Map(mysql.MySQLPluginConfig{
+				DBConfig:  targetDBConfig,
+				EnableDDL: true,
+				Routes: []map[string]interface{}{
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "*",
+						"target-schema": targetDBName,
+					},
+				},
+				EngineConfig: &config.GenericConfig{
+					Type: sql_execution_engine.MySQLReplaceEngine,
+					Config: struct2Map(sql_execution_engine.MysqlReplaceEngineConfig{
+						TagInternalTxn: true,
+					}),
+				},
+			}),
+		},
+	}
+	// start the server
+	server, err := app.NewServer(serverCfg)
+	r.NoError(err)
+
+	r.NoError(server.Start())
+
+	_, err = sourceDB.Exec(fmt.Sprintf("create table `%s`.t(id int(11), primary key(id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ", sourceDBName))
+	r.NoError(err)
+
+	tx, err := sourceDB.Begin()
+	r.NoError(err)
+	_, err = tx.Exec(utils.GenerateTxnTagSQL(sourceDBName))
+	r.NoError(err)
+	_, err = tx.Exec(fmt.Sprintf("insert into `%s`.t(id) values (1)", sourceDBName))
+	r.NoError(err)
+	err = tx.Commit()
+	r.NoError(err)
+
+	_, err = sourceDB.Exec(fmt.Sprintf("insert into `%s`.t(id) values (2)", sourceDBName))
+	r.NoError(err)
+
+	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	r.NoError(err)
+
+	server.Input.Wait()
+	server.Close()
+
+	rows, err := targetDB.Query(fmt.Sprintf("select id from `%s`.t", targetDBName))
+	r.NoError(err)
+	defer rows.Close()
+
+	ids := make([]int, 0, 1)
+	for rows.Next() {
+		var id int
+		err = rows.Scan(&id)
+		r.NoError(err)
+		ids = append(ids, id)
+	}
+	r.NoError(rows.Err())
+
+	r.Equal(1, len(ids))
+	r.Equal(2, ids[0])
+}
+
 func TestTagDDL(t *testing.T) {
+	t.Parallel()
+
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -615,6 +717,8 @@ func TestTagDDL(t *testing.T) {
 }
 
 func TestDDL(t *testing.T) {
+	t.Parallel()
+
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
