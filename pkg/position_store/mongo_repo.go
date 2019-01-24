@@ -36,5 +36,15 @@ func (repo *mongoPositionRepo) Put(pipelineName string, position Position) error
 }
 
 func NewMongoRepo(session *mgo.Session) (PositionRepo, error) {
+	session.SetMode(mgo.Primary, true)
+	collection := session.DB(mongoPositionDB).C(mongoPositionCollection)
+	err := collection.EnsureIndex(mgo.Index{
+		Key:    []string{"name"},
+		Unique: true,
+	})
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
 	return &mongoPositionRepo{session: session}, nil
 }
