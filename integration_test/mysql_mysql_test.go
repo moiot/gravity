@@ -10,20 +10,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/moiot/gravity/pkg/inputs/mysqlstream"
-	"github.com/moiot/gravity/pkg/outputs/mysql"
-	"github.com/moiot/gravity/pkg/sql_execution_engine"
-
-	"github.com/moiot/gravity/pkg/utils"
-
 	"github.com/stretchr/testify/require"
 
 	"github.com/moiot/gravity/pkg/app"
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/inputs/mysqlstream"
 	"github.com/moiot/gravity/pkg/mysql_test"
+	"github.com/moiot/gravity/pkg/outputs/mysql"
 	"github.com/moiot/gravity/pkg/sliding_window"
+	"github.com/moiot/gravity/pkg/sql_execution_engine"
+	"github.com/moiot/gravity/pkg/utils"
 )
 
 func init() {
@@ -548,6 +546,10 @@ func TestMySQLToMyBidirection(t *testing.T) {
 
 	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
 	defer sourceDB.Close()
+
+	err := utils.InitInternalTxnTags(sourceDB)
+	r.NoError(err)
+
 	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
 	defer targetDB.Close()
 
