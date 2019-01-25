@@ -37,10 +37,22 @@ type staticSlidingWindow struct {
 
 	wgForClose sync.WaitGroup
 
+	// lastEnqueueProcessTime is the time when the last event
+	// enqueued into sliding window
 	lastEnqueueProcessTime int64
-	lastCommitProcessTime  int64
-	lastEnqueueEventTime   int64
-	lastCommitEventTime    int64
+
+	// lastCommitProcessTime is the time when the last event
+	// enqueued into sliding window
+	lastCommitProcessTime int64
+
+	// lastEnqueueEventTime is the time when the last even
+	// t happens at the source, for example,
+	// mysql binlog have this timestamp in binlog protocol.
+	lastEnqueueEventTime int64
+
+	// lastCommitEventTime is the time when the last event
+	// happens at the source, for example, mysql binlog timestamp.
+	lastCommitEventTime int64
 
 	processHistogram prometheus.Observer
 	eventHistogram   prometheus.Observer
@@ -189,7 +201,11 @@ func (w *staticSlidingWindow) start() {
 
 func (w *staticSlidingWindow) reportWatermarkDelay() {
 	watermark := w.Watermark()
+
+	// ProcessTime can be seen as the duration that event are in the queue.
 	w.processHistogram.Observe(time.Since(watermark.ProcessTime).Seconds())
+
+	// EventTime can be seen as the end to end duration of event process time.
 	w.eventHistogram.Observe(time.Since(watermark.EventTime).Seconds())
 }
 
