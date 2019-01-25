@@ -36,8 +36,6 @@ func init() {
 }
 
 func TestMySQLToMySQLStream(t *testing.T) {
-	t.Parallel()
-
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -131,8 +129,6 @@ func TestMySQLToMySQLStream(t *testing.T) {
 }
 
 func TestMySQLBatch(t *testing.T) {
-	t.Parallel()
-
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -223,8 +219,6 @@ func TestMySQLBatch(t *testing.T) {
 }
 
 func TestMySQLBatchWithInsertIgnore(t *testing.T) {
-	t.Parallel()
-
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -320,8 +314,6 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 }
 
 func TestMySQLToMySQLReplication(t *testing.T) {
-	t.Parallel()
-
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -437,8 +429,6 @@ func waitFullComplete(i core.Input) {
 }
 
 func TestMySQLToMySQLPositionReset(t *testing.T) {
-	t.Parallel()
-
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -551,8 +541,6 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 }
 
 func TestMySQLToMyBidirection(t *testing.T) {
-	t.Parallel()
-
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -643,8 +631,6 @@ func TestMySQLToMyBidirection(t *testing.T) {
 }
 
 func TestTagDDL(t *testing.T) {
-	t.Parallel()
-
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -717,8 +703,6 @@ func TestTagDDL(t *testing.T) {
 }
 
 func TestDDL(t *testing.T) {
-	t.Parallel()
-
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
