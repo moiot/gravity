@@ -37,20 +37,20 @@ type staticSlidingWindow struct {
 
 	wgForClose sync.WaitGroup
 
-	// lastEnqueueProcessTime is the time when the event
+	// lastEnqueueProcessTime is the time when the last event
 	// enqueued into sliding window
 	lastEnqueueProcessTime int64
 
-	// lastCommitProcessTime is the time when the next event
+	// lastCommitProcessTime is the time when the last event
 	// enqueued into sliding window
 	lastCommitProcessTime int64
 
-	// lastEnqueueEventTime is the time when the even
+	// lastEnqueueEventTime is the time when the last even
 	// t happens at the source, for example,
 	// mysql binlog have this timestamp in binlog protocol.
 	lastEnqueueEventTime int64
 
-	// lastCommitEventTime is the time when the next event
+	// lastCommitEventTime is the time when the last event
 	// happens at the source, for example, mysql binlog timestamp.
 	lastCommitEventTime int64
 
