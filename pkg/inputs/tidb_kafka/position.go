@@ -2,6 +2,7 @@ package tidb_kafka
 
 import (
 	"database/sql"
+	"github.com/moiot/gravity/pkg/position_store"
 	"strings"
 	"time"
 
@@ -39,8 +40,17 @@ CREATE TABLE IF NOT EXISTS %s.%s (
 `, consts.GravityDBName, offsetStoreTable)
 
 type KafkaOffsetStoreFactory struct {
-	config *config.SourceProbeCfg
+	positionRepo position_store.PositionRepo
 }
+
+
+type KafkaPositionValue struct {
+	ConsumerGroup string `json:"consumer-group"'`
+	Topic string `json:"topic"`
+	Partition int `json:"kafka-partition"`
+	Offset int `json:"offset"`
+}
+
 
 func (f *KafkaOffsetStoreFactory) GenOffsetStore(c *sarama_cluster.Consumer) sarama_cluster.OffsetStore {
 	// create db if needed
@@ -66,9 +76,9 @@ func (f *KafkaOffsetStoreFactory) GenOffsetStore(c *sarama_cluster.Consumer) sar
 	return &DBOffsetStore{db}
 }
 
-func NewKafkaOffsetStoreFactory(config *config.SourceProbeCfg) *KafkaOffsetStoreFactory {
+func NewKafkaOffsetStoreFactory(positionRepo position_store.PositionRepo) *KafkaOffsetStoreFactory {
 	return &KafkaOffsetStoreFactory{
-		config: config,
+		positionRepo: positionRepo,
 	}
 }
 

@@ -26,16 +26,16 @@ type OplogTailer struct {
 	uniqueSourceName string
 	oplogChecker     *OplogChecker
 	// mqMsgType         protocol.JobMsgType
-	emitter        core.Emitter
-	ctx            context.Context
-	cancel         context.CancelFunc
-	idx            int
-	session        *mgo.Session
-	gtmConfig      *config.GtmConfig
-	opCtx          *gtm.OpCtx
-	sourceHost     string
-	timestampStore position_store.MongoPositionStore
-	stopped        bool
+	emitter       core.Emitter
+	ctx           context.Context
+	cancel        context.CancelFunc
+	idx           int
+	session       *mgo.Session
+	gtmConfig     *config.GtmConfig
+	opCtx         *gtm.OpCtx
+	sourceHost    string
+	positionCache *position_store.PositionCache
+	stopped       bool
 }
 
 type isMasterResult struct {
@@ -98,14 +98,21 @@ func (tailer *OplogTailer) Run() {
 
 	log.Infof("[oplog_tailer] isMaster: %v", result)
 
-	t := tailer.timestampStore.Get()
+	positionValue, err := GetPosition(tailer.positionCache)
+	if err != nil {
+		log.Fatalf("[oplogTailer] failed to get position: %v", errors.Trace(err))
+	}
+
 	after := func(session *mgo.Session, options *gtm.Options) bson.MongoTimestamp {
-		ts := tailer.timestampStore.Get()
-		return bson.MongoTimestamp(ts)
+		positionValue, err := GetPosition(tailer.positionCache)
+		if err != nil {
+			log.Fatalf("[oplogTailer] failed to get position: %v", errors.Trace(err))
+		}
+		return bson.MongoTimestamp(*positionValue.CurrentPosition)
 	}
 
 	// If timestamp is 0, we start from the LastOpTimestamp
-	if t == 0 {
+	if *positionValue.CurrentPosition == 0 {
 		log.Infof("[oplog_tailer] start from the latest timestamp")
 		after = nil
 	} else {
@@ -213,7 +220,9 @@ func (tailer *OplogTailer) AfterMsgCommit(msg *core.Msg) error {
 		return errors.Errorf("invalid InputContext")
 	}
 
-	tailer.timestampStore.Put(position)
+	if err := PutCurrentPosition(tailer.positionCache, &position); err != nil {
+		return errors.Trace(err)
+	}
 	return nil
 }
 
@@ -258,15 +267,15 @@ type OplogTailerOpt struct {
 	pipelineName     string
 	uniqueSourceName string
 	// mqMsgType        protocol.JobMsgType
-	gtmConfig      *config.GtmConfig
-	session        *mgo.Session
-	oplogChecker   *OplogChecker
-	sourceHost     string
-	timestampStore position_store.MongoPositionStore
-	emitter        core.Emitter
-	logger         log.Logger
-	idx            int
-	ctx            context.Context
+	gtmConfig     *config.GtmConfig
+	session       *mgo.Session
+	oplogChecker  *OplogChecker
+	sourceHost    string
+	positionCache *position_store.PositionCache
+	emitter       core.Emitter
+	logger        log.Logger
+	idx           int
+	ctx           context.Context
 }
 
 func NewOplogTailer(opts *OplogTailerOpt) *OplogTailer {
@@ -283,7 +292,7 @@ func NewOplogTailer(opts *OplogTailerOpt) *OplogTailer {
 		emitter:          opts.emitter,
 		idx:              opts.idx,
 		sourceHost:       opts.sourceHost,
-		timestampStore:   opts.timestampStore,
+		positionCache:    opts.positionCache,
 	}
 	tailer.ctx, tailer.cancel = context.WithCancel(opts.ctx)
 	log.Infof("[oplog_tailer] tailer created")

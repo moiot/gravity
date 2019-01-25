@@ -8,6 +8,12 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+const (
+	oldPositionDB           = "drc"
+	mongoPositionDB         = "_gravity"
+	mongoPositionCollection = "gravity_positions"
+)
+
 type mongoPositionRepo struct {
 	session *mgo.Session
 }
@@ -35,7 +41,7 @@ func (repo *mongoPositionRepo) Put(pipelineName string, position Position) error
 	return errors.Trace(err)
 }
 
-func NewMongoRepo(session *mgo.Session) (PositionRepo, error) {
+func NewMongoPositionRepo(session *mgo.Session) (PositionRepo, error) {
 	session.SetMode(mgo.Primary, true)
 	collection := session.DB(mongoPositionDB).C(mongoPositionCollection)
 	err := collection.EnsureIndex(mgo.Index{
