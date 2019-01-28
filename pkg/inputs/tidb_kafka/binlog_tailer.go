@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_store"
+
 	"github.com/Shopify/sarama"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
@@ -272,6 +274,7 @@ func NewBinlogTailer(
 ) (*BinlogTailer, error) {
 
 	srcKafkaCfg := config.SourceKafka
+	positionRepo, err := position_store.NewMySQLRepo()
 	osf := NewKafkaOffsetStoreFactory(config.OffsetStoreConfig)
 	kafkaConfig := sarama_cluster.NewConfig()
 	kafkaConfig.Version = kafka.MsgVersion

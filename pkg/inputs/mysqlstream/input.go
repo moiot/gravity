@@ -62,7 +62,9 @@ type mysqlInputPlugin struct {
 	binlogTailer  *BinlogTailer
 
 	sourceSchemaStore schema_store.SchemaStore
-	positionCache     *position_store.PositionCache
+
+	positionRepo  position_store.PositionRepo
+	positionCache *position_store.PositionCache
 
 	closeOnce sync.Once
 }
@@ -117,6 +119,32 @@ func (plugin *mysqlInputPlugin) Done() chan position_store.Position {
 	return c
 }
 
+func (plugin *mysqlInputPlugin) NewPositionCache() error {
+	// position cache
+	positionRepo, err := position_store.NewMySQLRepo(
+		plugin.pipelineName,
+		plugin.probeDBConfig,
+		plugin.probeSQLAnnotation)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	plugin.positionRepo = positionRepo
+
+	positionCache, err := position_store.NewPositionCache(
+		plugin.pipelineName,
+		plugin.positionRepo,
+	)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	plugin.positionCache = positionCache
+
+	if err := InitPositionCache(positionCache, plugin.cfg.StartPosition); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
 func (plugin *mysqlInputPlugin) Start(emitter core.Emitter) error {
 	sourceDB, err := utils.CreateDBConnection(plugin.cfg.Source)
 	if err != nil {
@@ -129,28 +157,6 @@ func (plugin *mysqlInputPlugin) Start(emitter core.Emitter) error {
 		return errors.Trace(err)
 	}
 	plugin.sourceSchemaStore = sourceSchemaStore
-
-	// position cache
-	positionRepo, err := position_store.NewMySQLRepo(
-		plugin.pipelineName,
-		plugin.probeDBConfig,
-		plugin.probeSQLAnnotation)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	positionCache, err := position_store.NewPositionCache(
-		plugin.pipelineName,
-		positionRepo,
-	)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	plugin.positionCache = positionCache
-
-	if err := InitPositionCache(positionCache, plugin.cfg.StartPosition); err != nil {
-		return errors.Trace(err)
-	}
 
 	// binlog checker
 	plugin.binlogChecker, err = binlog_checker.NewBinlogChecker(
@@ -177,7 +183,7 @@ func (plugin *mysqlInputPlugin) Start(emitter core.Emitter) error {
 		plugin.pipelineName,
 		plugin.cfg,
 		gravityServerID,
-		positionCache,
+		plugin.positionCache,
 		sourceSchemaStore,
 		sourceDB,
 		emitter,

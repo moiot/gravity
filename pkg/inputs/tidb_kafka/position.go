@@ -1,134 +1,124 @@
 package tidb_kafka
 
 import (
-	"database/sql"
+	"github.com/json-iterator/go"
 	"github.com/moiot/gravity/pkg/position_store"
-	"strings"
-	"time"
-
-	"github.com/moiot/gravity/pkg/consts"
 
 	"github.com/juju/errors"
 
 	"github.com/moiot/gravity/pkg/sarama_cluster"
 
-	"fmt"
-
-	log "github.com/sirupsen/logrus"
-
-	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/offsets"
-	"github.com/moiot/gravity/pkg/utils"
 )
 
-var offsetStoreTable = "kafka_offsets"
-
-var createDBStatement = fmt.Sprintf(`
-	CREATE DATABASE IF NOT EXISTS %s
-`, consts.GravityDBName)
-
-var createOffsetStoreTableStatement = fmt.Sprintf(`
-CREATE TABLE IF NOT EXISTS %s.%s (
-	consumer_group VARCHAR(50) NOT NULL DEFAULT '',
-	topic VARCHAR(50) NOT NULL DEFAULT '',
-	kafka_partition INT NOT NULL DEFAULT 0,
-    offset BIGINT(20) DEFAULT NULL,
-	ts TIMESTAMP,
-	metadata VARCHAR(50) DEFAULT NULL,
-	PRIMARY KEY(consumer_group, topic, kafka_partition)
-)
-`, consts.GravityDBName, offsetStoreTable)
+var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
 
 type KafkaOffsetStoreFactory struct {
-	positionRepo position_store.PositionRepo
+	pipelineName  string
+	positionCache *position_store.PositionCache
 }
 
+type TopicOffset map[int32]int64
+
+type ConsumerGroupOffset map[string]TopicOffset
 
 type KafkaPositionValue struct {
-	ConsumerGroup string `json:"consumer-group"'`
-	Topic string `json:"topic"`
-	Partition int `json:"kafka-partition"`
-	Offset int `json:"offset"`
+	Offsets map[string]ConsumerGroupOffset `json:"offsets"`
 }
 
+func Serialize(position *KafkaPositionValue) (string, error) {
+	s, err := myJson.MarshalToString(position)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return s, nil
+}
+
+func Deserialize(value string) (*KafkaPositionValue, error) {
+	position := KafkaPositionValue{}
+	if err := myJson.UnmarshalFromString(value, &position); err != nil {
+		return nil, errors.Trace(err)
+	}
+	return &position, nil
+}
 
 func (f *KafkaOffsetStoreFactory) GenOffsetStore(c *sarama_cluster.Consumer) sarama_cluster.OffsetStore {
-	// create db if needed
-	db, err := utils.CreateDBConnection(f.config.SourceMySQL)
-	if err != nil {
-		log.Fatalf("failed to create db connection: %v", err)
-	}
-	_, err = db.Exec(createDBStatement)
-	if err != nil {
-		log.Fatalf("failed to create db: %v", err)
-	}
-
-	_, err = db.Exec("use " + consts.GravityDBName)
-	if err != nil {
-		log.Fatalf("failed to use %s: %v", consts.GravityDBName, err)
-	}
-
-	_, err = db.Exec(createOffsetStoreTableStatement)
-	if err != nil {
-		log.Fatalf("failed to create offset table: %v", err)
-	}
-
-	return &DBOffsetStore{db}
+	return &OffsetStore{positionCache: f.positionCache, pipelineName: f.pipelineName}
 }
 
-func NewKafkaOffsetStoreFactory(positionRepo position_store.PositionRepo) *KafkaOffsetStoreFactory {
+func NewKafkaOffsetStoreFactory(pipelineName string, positionCache *position_store.PositionCache) *KafkaOffsetStoreFactory {
 	return &KafkaOffsetStoreFactory{
-		positionRepo: positionRepo,
+		pipelineName:  pipelineName,
+		positionCache: positionCache,
 	}
 }
 
-type DBOffsetStore struct {
-	db *sql.DB
+type OffsetStore struct {
+	pipelineName  string
+	positionCache *position_store.PositionCache
 }
 
-func (s *DBOffsetStore) CommitOffset(req *offsets.OffsetCommitRequest) (*offsets.OffsetCommitResponse, error) {
-	log.Debugf("Commit Offset: %#v", req)
-	return offsets.SaveOffsetToDB(s.db, fmt.Sprintf("%s.%s", consts.GravityDBName, offsetStoreTable), req)
+func (store *OffsetStore) CommitOffset(req *offsets.OffsetCommitRequest) (*offsets.OffsetCommitResponse, error) {
+	position := store.positionCache.Get()
 
-}
-
-func (s *DBOffsetStore) FetchOffset(req *offsets.OffsetFetchRequest) (*offsets.OffsetFetchResponse, error) {
-	qryTpl := "SELECT topic, kafka_partition, offset, metadata, ts from `%s`.`%s` where consumer_group=?"
-	stmt := fmt.Sprintf(qryTpl, consts.GravityDBName, offsetStoreTable)
-
-	rows, err := s.db.Query(stmt, req.ConsumerGroup)
+	positionValue, err := Deserialize(position.Value)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	defer rows.Close()
-	resp := &offsets.OffsetFetchResponse{}
-	var lastUpdate time.Time
-	for rows.Next() {
-		var topic, metadata string
-		var partition int32
-		var offset int64
-		var ts time.Time
-		err := rows.Scan(&topic, &partition, &offset, &metadata, &ts)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		resp.AddBlock(topic, partition, offset, metadata)
-		if ts.After(lastUpdate) {
-			lastUpdate = ts
+
+	if _, ok := positionValue.Offsets[req.ConsumerGroup]; !ok {
+		positionValue.Offsets[req.ConsumerGroup] = make(map[string]TopicOffset)
+	}
+
+	for topic, pbs := range req.Blocks() {
+		for partition, b := range pbs {
+			if _, ok := positionValue.Offsets[topic]; !ok {
+				positionValue.Offsets[req.ConsumerGroup][topic] = make(map[int32]int64)
+			}
+			positionValue.Offsets[req.ConsumerGroup][topic][partition] = b.Offset
 		}
 	}
-	resp.LastUpdate = lastUpdate
-	return resp, errors.Trace(rows.Err())
-}
 
-func (s *DBOffsetStore) Clear(group string, topic []string) {
-	stmt := fmt.Sprintf("DELETE FROM %s.%s WHERE consumer_group = ? and topic in ('%s')", consts.GravityDBName, offsetStoreTable, strings.Join(topic, "', '"))
-	_, err := s.db.Exec(stmt, group)
+	v, err := Serialize(positionValue)
 	if err != nil {
-		log.Fatalf("[DBOffsetStore.Clear] group = %s, sql = %s, err: %s", group, stmt, errors.Trace(err))
+		return nil, errors.Trace(err)
 	}
+
+	position.Value = v
+	store.positionCache.Put(position)
+
+	resp := &offsets.OffsetCommitResponse{}
+	for topic, pbs := range req.Blocks() {
+		for partition := range pbs {
+			resp.AddError(topic, partition, nil)
+		}
+	}
+	return resp, nil
 }
 
-func (s *DBOffsetStore) Close() error {
+func (store *OffsetStore) FetchOffset(req *offsets.OffsetFetchRequest) (*offsets.OffsetFetchResponse, error) {
+	position := store.positionCache.Get()
+
+	kafkaPositionValue, err := Deserialize(position.Value)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	consumerGroupOffset, ok := kafkaPositionValue.Offsets[req.ConsumerGroup]
+	if !ok {
+		return nil, errors.Errorf("consumer group offset empty")
+	}
+
+	resp := &offsets.OffsetFetchResponse{}
+	for topic, topicOffset := range consumerGroupOffset {
+		for partition, offset := range topicOffset {
+			resp.AddBlock(topic, partition, offset, "")
+		}
+	}
+	resp.LastUpdate = position.UpdateTime
+	return resp, nil
+}
+
+func (store *OffsetStore) Close() error {
 	return nil // should not close with kafka consumer. output needs to commit offset
 }

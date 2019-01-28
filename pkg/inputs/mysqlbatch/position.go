@@ -152,14 +152,14 @@ func (p *TablePosition) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-type BatchPositions struct {
+type BatchPositionValue struct {
 	Start   *utils.MySQLBinlogPosition `toml:"start-binlog" json:"start-binlog"`
 	Min     map[string]TablePosition   `toml:"min" json:"min"`
 	Max     map[string]TablePosition   `toml:"max" json:"max"`
 	Current map[string]TablePosition   `toml:"current" json:"current"`
 }
 
-func Serialize(positions *BatchPositions) (string, error) {
+func Serialize(positions *BatchPositionValue) (string, error) {
 	s, err := myJson.MarshalToString(positions)
 	if err != nil {
 		return "", errors.Trace(err)
@@ -167,8 +167,8 @@ func Serialize(positions *BatchPositions) (string, error) {
 	return s, nil
 }
 
-func Deserialize(value string) (*BatchPositions, error) {
-	positions := BatchPositions{}
+func Deserialize(value string) (*BatchPositionValue, error) {
+	positions := BatchPositionValue{}
 	if err := myJson.UnmarshalFromString(value, &positions); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -284,49 +284,49 @@ func PutMaxMin(cache *position_store.PositionCache, fullTableName string, max *T
 	return nil
 }
 
-// func (tablePositionState *BatchPositions) Get() interface{} {
+// func (tablePositionState *BatchPositionValue) Get() interface{} {
 // 	s := tablePositionState.GetRaw()
-// 	ret := BatchPositions{}
+// 	ret := BatchPositionValue{}
 // 	if err := myJson.UnmarshalFromString(s, &ret); err != nil {
-// 		log.Fatalf("[BatchPositions.Get] err: %s", err)
+// 		log.Fatalf("[BatchPositionValue.Get] err: %s", err)
 // 	}
 // 	return ret
 // }
 //
-// func (tablePositionState *BatchPositions) GetRaw() string {
+// func (tablePositionState *BatchPositionValue) GetRaw() string {
 // 	ret, err := tablePositionState.ToJSON()
 // 	if err != nil {
-// 		log.Fatalf("[BatchPositions.GetRaw] error ToJSON. %#v. err: %v", tablePositionState, errors.ErrorStack(err))
+// 		log.Fatalf("[BatchPositionValue.GetRaw] error ToJSON. %#v. err: %v", tablePositionState, errors.ErrorStack(err))
 // 	}
 // 	return ret
 // }
 //
-// func (tablePositionState *BatchPositions) PutRaw(pos string) {
+// func (tablePositionState *BatchPositionValue) PutRaw(pos string) {
 // 	if pos == "" {
-// 		*tablePositionState = BatchPositions{}
+// 		*tablePositionState = BatchPositionValue{}
 // 	} else {
 // 		if err := myJson.UnmarshalFromString(pos, tablePositionState); err != nil {
-// 			log.Fatalf("[BatchPositions.PutRaw] error put %s. err: %s", pos, err)
+// 			log.Fatalf("[BatchPositionValue.PutRaw] error put %s. err: %s", pos, err)
 // 		}
 // 	}
 // }
 //
-// func (tablePositionState *BatchPositions) Put(pos interface{}) {
-// 	*tablePositionState = pos.(BatchPositions)
+// func (tablePositionState *BatchPositionValue) Put(pos interface{}) {
+// 	*tablePositionState = pos.(BatchPositionValue)
 // }
 //
-// func (tablePositionState *BatchPositions) Stage() config.InputMode {
+// func (tablePositionState *BatchPositionValue) Stage() config.InputMode {
 // 	return config.Batch
 // }
 //
-// func (tablePositionState *BatchPositions) ToJSON() (string, error) {
+// func (tablePositionState *BatchPositionValue) ToJSON() (string, error) {
 // 	tablePositionState.Lock()
 // 	defer tablePositionState.Unlock()
 // 	s, err := myJson.MarshalToString(tablePositionState)
 // 	return s, errors.Trace(err)
 // }
 //
-// func (tablePositionState *BatchPositions) GetStartBinlogPos() (utils.MySQLBinlogPosition, bool) {
+// func (tablePositionState *BatchPositionValue) GetStartBinlogPos() (utils.MySQLBinlogPosition, bool) {
 // 	tablePositionState.Lock()
 // 	defer tablePositionState.Unlock()
 //
@@ -337,14 +337,14 @@ func PutMaxMin(cache *position_store.PositionCache, fullTableName string, max *T
 // 	return *tablePositionState.Start, true
 // }
 //
-// func (tablePositionState *BatchPositions) PutStartBinlogPos(p utils.MySQLBinlogPosition) {
+// func (tablePositionState *BatchPositionValue) PutStartBinlogPos(p utils.MySQLBinlogPosition) {
 // 	tablePositionState.Lock()
 // 	defer tablePositionState.Unlock()
 //
 // 	tablePositionState.Start = &p
 // }
 //
-// func (tablePositionState *BatchPositions) GetMaxMin(sourceName string) (TablePosition, TablePosition, bool) {
+// func (tablePositionState *BatchPositionValue) GetMaxMin(sourceName string) (TablePosition, TablePosition, bool) {
 // 	log.Infof("[tablePositionState] GetMaxMin")
 // 	tablePositionState.Lock()
 // 	defer tablePositionState.Unlock()
@@ -359,7 +359,7 @@ func PutMaxMin(cache *position_store.PositionCache, fullTableName string, max *T
 // 	return max, min, okMax && okMin
 // }
 //
-// func (tablePositionState *BatchPositions) PutMaxMin(sourceName string, max TablePosition, min TablePosition) {
+// func (tablePositionState *BatchPositionValue) PutMaxMin(sourceName string, max TablePosition, min TablePosition) {
 // 	tablePositionState.Lock()
 // 	defer tablePositionState.Unlock()
 //
@@ -374,7 +374,7 @@ func PutMaxMin(cache *position_store.PositionCache, fullTableName string, max *T
 // 	tablePositionState.Min[sourceName] = min
 // }
 //
-// func (tablePositionState *BatchPositions) GetCurrent(sourceName string) (TablePosition, bool) {
+// func (tablePositionState *BatchPositionValue) GetCurrent(sourceName string) (TablePosition, bool) {
 // 	tablePositionState.Lock()
 // 	defer tablePositionState.Unlock()
 //
@@ -386,7 +386,7 @@ func PutMaxMin(cache *position_store.PositionCache, fullTableName string, max *T
 // 	return p, ok
 // }
 //
-// func (tablePositionState *BatchPositions) PutCurrent(sourceName string, pos TablePosition) {
+// func (tablePositionState *BatchPositionValue) PutCurrent(sourceName string, pos TablePosition) {
 // 	tablePositionState.Lock()
 // 	defer tablePositionState.Unlock()
 //

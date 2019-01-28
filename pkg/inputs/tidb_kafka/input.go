@@ -27,7 +27,7 @@ var (
 	BinlogCheckInterval = time.Second
 )
 
-type tidbInput struct {
+type tidbKafkaInput struct {
 	pipelineName string
 
 	emitter core.Emitter
@@ -40,15 +40,15 @@ type tidbInput struct {
 	cancel context.CancelFunc
 
 	binlogTailer  *BinlogTailer
-	store         position_store.PositionCache
+	positionCache *position_store.PositionCache
 	binlogChecker binlog_checker.BinlogChecker
 }
 
 func init() {
-	registry.RegisterPlugin(registry.InputPlugin, "tidbkafka", &tidbInput{}, false)
+	registry.RegisterPlugin(registry.InputPlugin, "tidbkafka", &tidbKafkaInput{}, false)
 }
 
-func (plugin *tidbInput) Configure(pipelineName string, data map[string]interface{}) error {
+func (plugin *tidbKafkaInput) Configure(pipelineName string, data map[string]interface{}) error {
 	plugin.pipelineName = pipelineName
 
 	cfg := config.SourceTiDBConfig{}
@@ -65,7 +65,7 @@ func (plugin *tidbInput) Configure(pipelineName string, data map[string]interfac
 	}
 
 	if cfg.OffsetStoreConfig == nil {
-		return errors.Errorf("offset-store must be configured")
+		return errors.Errorf("offset-positionCache must be configured")
 	}
 
 	plugin.cfg = &cfg
@@ -73,7 +73,24 @@ func (plugin *tidbInput) Configure(pipelineName string, data map[string]interfac
 	return nil
 }
 
-func (plugin *tidbInput) Start(emitter core.Emitter) error {
+func (plugin *tidbKafkaInput) NewPositionCache() (*position_store.PositionCache, error) {
+	positionRepo, err := position_store.NewMySQLRepo(
+		plugin.pipelineName,
+		plugin.cfg.OffsetStoreConfig.SourceMySQL,
+		plugin.cfg.OffsetStoreConfig.Annotation)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	positionCache, err := position_store.NewPositionCache(plugin.pipelineName, positionRepo)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	plugin.positionCache = positionCache
+	return positionCache, nil
+}
+
+func (plugin *tidbKafkaInput) Start(emitter core.Emitter) error {
 	plugin.emitter = emitter
 	plugin.gravityServerID = utils.GenerateRandomServerID()
 
@@ -104,13 +121,6 @@ func (plugin *tidbInput) Start(emitter core.Emitter) error {
 	}
 	plugin.binlogTailer = binlogTailer
 
-	plugin.store = &offsetStoreAdapter{
-		name:     plugin.pipelineName,
-		delegate: binlogTailer.consumer.OffsetStore().(*DBOffsetStore),
-		group:    cfg.SourceKafka.GroupID,
-		topic:    cfg.SourceKafka.Topics,
-	}
-
 	if err := plugin.binlogTailer.Start(); err != nil {
 		return errors.Trace(err)
 	}
@@ -121,25 +131,22 @@ func (plugin *tidbInput) Start(emitter core.Emitter) error {
 	return nil
 }
 
-func (plugin *tidbInput) Stage() config.InputMode {
+func (plugin *tidbKafkaInput) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *tidbInput) PositionStore() position_store.PositionCache {
-	return plugin.store
-}
-
-func (plugin *tidbInput) Done() chan position_store.Position {
+func (plugin *tidbKafkaInput) Done() chan position_store.Position {
 	c := make(chan position_store.Position)
 	go func() {
 		plugin.binlogTailer.Wait()
-		c <- plugin.PositionStore().Position()
+		position := plugin.positionCache.Get()
+		c <- position
 		close(c)
 	}()
 	return c
 }
 
-func (plugin *tidbInput) SendDeadSignal() error {
+func (plugin *tidbKafkaInput) SendDeadSignal() error {
 	db, err := utils.CreateDBConnection(plugin.cfg.SourceDB)
 	if err != nil {
 		return errors.Trace(err)
@@ -147,15 +154,15 @@ func (plugin *tidbInput) SendDeadSignal() error {
 	return mysql_test.SendDeadSignal(db, plugin.Identity())
 }
 
-func (plugin *tidbInput) Wait() {
+func (plugin *tidbKafkaInput) Wait() {
 	plugin.binlogTailer.Wait()
 }
 
-func (plugin *tidbInput) Identity() uint32 {
+func (plugin *tidbKafkaInput) Identity() uint32 {
 	return plugin.gravityServerID
 }
 
-func (plugin *tidbInput) Close() {
+func (plugin *tidbKafkaInput) Close() {
 	log.Infof("[mysql_binlog_server] stop...")
 
 	plugin.binlogTailer.Close()
@@ -166,7 +173,7 @@ func (plugin *tidbInput) Close() {
 }
 
 type offsetStoreAdapter struct {
-	delegate *DBOffsetStore
+	delegate *OffsetStore
 	name     string
 	group    string
 	topic    []string
@@ -179,9 +186,9 @@ func (store *offsetStoreAdapter) Start() error {
 func (store *offsetStoreAdapter) Close() {
 	err := store.delegate.db.Close()
 	if err != nil {
-		log.Fatalf("db offset store closes the DB connection with error. %s", err)
+		log.Fatalf("db offset positionCache closes the DB connection with error. %s", err)
 	}
-	log.Info("db offset store closes the DB connection")
+	log.Info("db offset positionCache closes the DB connection")
 }
 
 func (store *offsetStoreAdapter) Stage() config.InputMode {
