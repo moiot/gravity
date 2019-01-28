@@ -225,7 +225,7 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 				}
 
 				metrics.WorkerPoolProcessedMsgCount.
-					WithLabelValues(scheduler.pipelineName, workerIndex).
+					WithLabelValues(scheduler.pipelineName).
 					Add(float64(len(msgBatch)))
 
 				metrics.WorkerPoolQueueSizeGauge.

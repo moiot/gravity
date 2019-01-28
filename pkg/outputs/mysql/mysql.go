@@ -4,6 +4,9 @@ import (
 	"database/sql"
 	"strings"
 
+	"github.com/moiot/gravity/pkg/metrics"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/pingcap/parser/format"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
@@ -27,6 +30,15 @@ const (
 	OutputMySQL = "mysql"
 )
 
+var (
+	ProcessedMsgCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "drc_v2",
+		Subsystem: "output_mysql",
+		Name:      "processed_msg_count",
+		Help:      "processed msg count",
+	}, []string{metrics.PipelineTag, "type"})
+)
+
 type MySQLPluginConfig struct {
 	DBConfig     *utils.DBConfig          `mapstructure:"target"  json:"target"`
 	Routes       []map[string]interface{} `mapstructure:"routes"  json:"routes"`
@@ -46,6 +58,7 @@ type MySQLOutput struct {
 }
 
 func init() {
+	prometheus.MustRegister(ProcessedMsgCount)
 	registry.RegisterPlugin(registry.OutputPlugin, OutputMySQL, &MySQLOutput{}, false)
 }
 
@@ -211,6 +224,10 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				log.Info("[output-mysql] ignore unsupported ddl: ", msg.DdlMsg.Statement)
 			}
 
+			ProcessedMsgCount.
+				WithLabelValues(output.pipelineName, string(core.MsgDDL)).
+				Add(1)
+
 			return nil
 
 		case core.MsgDML:
@@ -252,6 +269,10 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+
+		ProcessedMsgCount.
+			WithLabelValues(output.pipelineName, string(core.MsgDML)).
+			Add(float64(len(batch)))
 	}
 
 	return nil
