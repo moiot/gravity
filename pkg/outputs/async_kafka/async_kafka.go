@@ -59,10 +59,10 @@ var (
 )
 
 type AsyncKafkaPluginConfig struct {
-	KafkaConfig   *config.KafkaGlobalConfig `mapstructure:"kafka-global-config"`
-	Routes        []map[string]interface{}  `mapstructure:"routes"`
-	OutputFormat  string                    `mapstructure:"output-format"`
-	SchemaVersion string                    `mapstructure:"schema-version"`
+	KafkaConfig   *config.KafkaGlobalConfig `mapstructure:"kafka-global-config" json:"kafka-global-config"`
+	Routes        []map[string]interface{}  `mapstructure:"routes" json:"routes"`
+	OutputFormat  string                    `mapstructure:"output-format" json:"output-format"`
+	SchemaVersion string                    `mapstructure:"schema-version" json:"schema-version"`
 }
 
 type AsyncKafka struct {
