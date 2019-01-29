@@ -63,7 +63,7 @@ func TestMySQLToMySQLStream(t *testing.T) {
 	targetDBConfig := mysql_test.TargetDBConfig()
 
 	pipelineConfig := config.PipelineConfigV2{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		InputPlugins: map[string]interface{}{
 			"mysql": map[string]interface{}{
 				"source": map[string]interface{}{
@@ -117,7 +117,7 @@ func TestMySQLToMySQLStream(t *testing.T) {
 	cancel()
 	done.Wait()
 
-	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
 	server.Input.Wait()
@@ -164,7 +164,7 @@ func TestMySQLBatch(t *testing.T) {
 	}
 
 	pipelineConfig := config.PipelineConfigV2{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		InputPlugins: map[string]interface{}{
 			"mysql": map[string]interface{}{
 				"source": map[string]interface{}{
@@ -247,7 +247,7 @@ func TestMySQLBatchNoTableConfig(t *testing.T) {
 	targetDBConfig := mysql_test.TargetDBConfig()
 
 	pipelineConfig := config.PipelineConfigV3{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		Version:      config.PipelineConfigV3Version,
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
@@ -327,7 +327,7 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 		},
 	}
 	pipelineConfig := config.PipelineConfigV3{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		Version:      config.PipelineConfigV3Version,
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
@@ -423,7 +423,7 @@ func TestMySQLToMySQLReplication(t *testing.T) {
 	}
 
 	pipelineConfig := config.PipelineConfigV2{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		InputPlugins: map[string]interface{}{
 			"mysql": map[string]interface{}{
 				"source": map[string]interface{}{
@@ -481,7 +481,7 @@ func TestMySQLToMySQLReplication(t *testing.T) {
 	cancel()
 	done.Wait()
 
-	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
 	server.Input.Wait()
@@ -536,7 +536,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 		},
 	}
 	pipelineConfig := config.PipelineConfigV2{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		InputPlugins: map[string]interface{}{
 			"mysql": map[string]interface{}{
 				"source": map[string]interface{}{
@@ -604,7 +604,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 	cancel()
 	done.Wait()
 
-	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
 	server.Input.Wait()
@@ -630,8 +630,8 @@ func TestMySQLToMyBidirection(t *testing.T) {
 	sourceDBConfig := mysql_test.SourceDBConfig()
 	targetDBConfig := mysql_test.TargetDBConfig()
 
-	serverCfg := config.PipelineConfigV3{
-		PipelineName: sourceDBName,
+	pipelineConfig := config.PipelineConfigV3{
+		PipelineName: t.Name(),
 		Version:      config.PipelineConfigV3Version,
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
@@ -663,7 +663,7 @@ func TestMySQLToMyBidirection(t *testing.T) {
 		},
 	}
 	// start the server
-	server, err := app.NewServer(serverCfg)
+	server, err := app.NewServer(pipelineConfig)
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -683,7 +683,7 @@ func TestMySQLToMyBidirection(t *testing.T) {
 	_, err = sourceDB.Exec(fmt.Sprintf("insert into `%s`.t(id) values (2)", sourceDBName))
 	r.NoError(err)
 
-	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
 	server.Input.Wait()
@@ -721,7 +721,7 @@ func TestTagDDL(t *testing.T) {
 	targetDBConfig := mysql_test.TargetDBConfig()
 
 	pipelineConfig := config.PipelineConfigV3{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		Version:      config.PipelineConfigV3Version,
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
@@ -765,7 +765,7 @@ func TestTagDDL(t *testing.T) {
 	_, err = sourceDB.Exec(fmt.Sprintf("%screate table `%s`.`%s`(`id` int(11),  PRIMARY KEY (`id`)) ENGINE=InnoDB", consts.DDLTag, sourceDBName, tbl))
 	r.NoError(err)
 
-	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
 	<-server.Input.Done()
@@ -793,7 +793,7 @@ func TestDDL(t *testing.T) {
 	targetDBConfig := mysql_test.TargetDBConfig()
 
 	pipelineConfig := config.PipelineConfigV3{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		Version:      config.PipelineConfigV3Version,
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
@@ -863,7 +863,7 @@ func TestDDL(t *testing.T) {
 		r.NoError(tx.Commit())
 	}
 
-	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
 	<-server.Input.Done()
@@ -886,7 +886,7 @@ func TestDDLNoRoute(t *testing.T) {
 	targetDBConfig := mysql_test.TargetDBConfig()
 
 	pipelineConfig := config.PipelineConfigV3{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		Version:      config.PipelineConfigV3Version,
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
@@ -939,7 +939,7 @@ func TestDDLNoRoute(t *testing.T) {
 		r.NoError(tx.Commit())
 	}
 
-	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
 	<-server.Input.Done()

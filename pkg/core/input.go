@@ -16,5 +16,4 @@ type Input interface {
 	Done() chan position_store.Position
 	SendDeadSignal() error // for test only
 	Wait()
-	Identity() uint32
 }

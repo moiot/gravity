@@ -177,7 +177,7 @@ func TestMsgEmit(t *testing.T) {
 	err = mysql_test.UpdateTestTable(db, sourceDBName, mysql_test.TestTableName, 2, "test22")
 	assert.Nil(err)
 
-	err = mysql_test.SendDeadSignal(db, 100)
+	err = mysql_test.SendDeadSignal(db, t.Name())
 	assert.Nil(err)
 
 	select {

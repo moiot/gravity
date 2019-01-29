@@ -114,10 +114,6 @@ func (plugin *mysqlStreamInput) Configure(pipelineName string, configInput map[s
 	return nil
 }
 
-func (plugin *mysqlStreamInput) Identity() uint32 {
-	return plugin.binlogTailer.gravityServerID
-}
-
 func (plugin *mysqlStreamInput) Stage() config.InputMode {
 	return config.Stream
 }
@@ -142,7 +138,7 @@ func (plugin *mysqlStreamInput) PositionStore() position_store.PositionStore {
 }
 
 func (plugin *mysqlStreamInput) SendDeadSignal() error {
-	return mysql_test.SendDeadSignal(plugin.binlogTailer.sourceDB, plugin.binlogTailer.gravityServerID)
+	return mysql_test.SendDeadSignal(plugin.binlogTailer.sourceDB, plugin.pipelineName)
 }
 
 func (plugin *mysqlStreamInput) Wait() {

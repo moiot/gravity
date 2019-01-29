@@ -268,7 +268,7 @@ func (tailer *BinlogTailer) Start() error {
 				// dead signal is received from special internal table.
 				// it is only used for test purpose right now.
 				isDeadSignal := mysql_test.IsDeadSignal(schemaName, tableName)
-				if isDeadSignal && IsEventBelongsToMyself(ev, tailer.gravityServerID) {
+				if isDeadSignal && IsEventBelongsToMyself(ev, tailer.pipelineName) {
 					log.Infof("[binlog_tailer] dead signal for myself, exit")
 					return
 				}

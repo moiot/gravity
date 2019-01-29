@@ -74,14 +74,6 @@ func (i *TwoStageInputPlugin) SendDeadSignal() error {
 	}
 }
 
-func (i *TwoStageInputPlugin) Identity() uint32 {
-	if i.Stage() == config.Stream {
-		return i.incremental.Identity()
-	} else {
-		return i.full.Identity()
-	}
-}
-
 func (i *TwoStageInputPlugin) NewPositionStore() (position_store.PositionStore, error) {
 	s := twoStagePositionStore{}
 	s.current = &atomic.Value{}

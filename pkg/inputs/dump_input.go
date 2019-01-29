@@ -60,10 +60,6 @@ func (plugin *dumpInput) Wait() {
 
 }
 
-func (plugin *dumpInput) Identity() uint32 {
-	return 1
-}
-
 func init() {
 	registry.RegisterPlugin(registry.InputPlugin, "dump-input", &dumpInput{}, false)
 }

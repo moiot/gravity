@@ -143,10 +143,6 @@ func (plugin *mongoInputPlugin) SendDeadSignal() error {
 	return errors.Trace(plugin.oplogTailer.SendDeadSignal())
 }
 
-func (plugin *mongoInputPlugin) Identity() uint32 {
-	return 0
-}
-
 func (plugin *mongoInputPlugin) Close() {
 	plugin.closeOnce.Do(func() {
 		plugin.cancel()

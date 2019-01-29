@@ -8,9 +8,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func IsEventBelongsToMyself(event *replication.RowsEvent, gravityID uint32) bool {
-	if id, ok := event.Rows[0][0].(int32); ok {
-		if id == int32(gravityID) {
+func IsEventBelongsToMyself(event *replication.RowsEvent, pipelineName string) bool {
+	if id, ok := event.Rows[0][0].(string); ok {
+		if id == pipelineName {
 			return true
 		}
 		return false

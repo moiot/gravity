@@ -200,10 +200,6 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter, router core.Router) er
 	return nil
 }
 
-func (plugin *mysqlFullInput) Identity() uint32 {
-	return 0
-}
-
 func (plugin *mysqlFullInput) Stage() config.InputMode {
 	return config.Batch
 }
