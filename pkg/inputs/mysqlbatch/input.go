@@ -121,7 +121,6 @@ func (plugin *mysqlFullInput) Configure(pipelineName string, data map[string]int
 
 func (plugin *mysqlFullInput) NewPositionCache() (position_store.PositionCacheInterface, error) {
 	positionRepo, err := position_store.NewMySQLRepo(
-		plugin.pipelineName,
 		plugin.probeDBConfig,
 		plugin.probeSQLAnnotation)
 	if err != nil {

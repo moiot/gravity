@@ -72,7 +72,6 @@ func (plugin *tidbKafkaInput) Configure(pipelineName string, data map[string]int
 
 func (plugin *tidbKafkaInput) NewPositionCache() (position_store.PositionCacheInterface, error) {
 	positionRepo, err := position_store.NewMySQLRepo(
-		plugin.pipelineName,
 		plugin.cfg.OffsetStoreConfig.SourceMySQL,
 		plugin.cfg.OffsetStoreConfig.Annotation)
 	if err != nil {

@@ -63,7 +63,7 @@ func (repo *mysqlPositionRepo) Put(pipelineName string, position Position) error
 	return errors.Trace(err)
 }
 
-func NewMySQLRepo(pipelineName string, dbConfig *utils.DBConfig, annotation string) (PositionRepo, error) {
+func NewMySQLRepo(dbConfig *utils.DBConfig, annotation string) (PositionRepo, error) {
 	db, err := utils.CreateDBConnection(dbConfig)
 	if err != nil {
 		return nil, errors.Trace(err)

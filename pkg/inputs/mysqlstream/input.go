@@ -94,7 +94,6 @@ func (plugin *mysqlInputPlugin) Configure(pipelineName string, configInput map[s
 func (plugin *mysqlInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
 	// position cache
 	positionRepo, err := position_store.NewMySQLRepo(
-		plugin.pipelineName,
 		plugin.probeDBConfig,
 		plugin.probeSQLAnnotation)
 	if err != nil {
