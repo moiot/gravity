@@ -7,7 +7,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/mgo.v2"
+	mgo "gopkg.in/mgo.v2"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
@@ -71,7 +71,7 @@ func (plugin *mongoInputPlugin) NewPositionStore() (position_store.PositionStore
 	return positionStore, nil
 }
 
-func (plugin *mongoInputPlugin) Start(emitter core.Emitter) error {
+func (plugin *mongoInputPlugin) Start(emitter core.Emitter, router core.Router) error {
 	plugin.emitter = emitter
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
 
@@ -91,6 +91,7 @@ func (plugin *mongoInputPlugin) Start(emitter core.Emitter) error {
 		session:        session,
 		gtmConfig:      cfg.GtmConfig,
 		emitter:        emitter,
+		router:         router,
 		ctx:            plugin.ctx,
 		sourceHost:     cfg.Source.Host,
 		timestampStore: plugin.positionStore.(position_store.MongoPositionStore),

@@ -109,7 +109,7 @@ func (plugin *mysqlFullInput) Configure(pipelineName string, data map[string]int
 	return nil
 }
 
-func (plugin *mysqlFullInput) Start(emitter core.Emitter) error {
+func (plugin *mysqlFullInput) Start(emitter core.Emitter, router core.Router) error {
 	cfg := plugin.cfg
 
 	sourceDB, err := utils.CreateDBConnection(cfg.Source)
@@ -141,7 +141,7 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter) error {
 	plugin.ctx = ctx
 	plugin.cancel = cancelFunc
 
-	tableDefs, tableConfigs := GetTables(sourceDB, sourceSchemaStore, cfg.TableConfigs)
+	tableDefs, tableConfigs := GetTables(sourceDB, sourceSchemaStore, cfg.TableConfigs, router)
 	if err != nil {
 		return errors.Trace(err)
 	}

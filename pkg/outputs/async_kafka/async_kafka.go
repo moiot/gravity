@@ -74,6 +74,7 @@ type AsyncKafka struct {
 	kafkaAsyncProducer *kafka.KafkaAsyncProducer
 	msgAcker           core.MsgAcker
 	wg                 sync.WaitGroup
+	inFlight           sync.WaitGroup
 
 	msgSet map[int64]*core.Msg
 	sync.Mutex
@@ -159,7 +160,6 @@ func (output *AsyncKafka) Start(msgAcker core.MsgAcker) error {
 			if err := output.msgAcker.AckMsg(msg); err != nil {
 				log.Fatalf("failed to ack job, err: %v", errors.ErrorStack(err))
 			}
-
 			KafkaSuccessCount.WithLabelValues(output.pipelineName, topic).Add(1)
 			KafkaPartitionCounter.WithLabelValues(output.pipelineName, topic, fmt.Sprintf("%v", partition)).Add(1)
 		}
@@ -178,6 +178,10 @@ func (output *AsyncKafka) Start(msgAcker core.MsgAcker) error {
 	}()
 
 	return nil
+}
+
+func (output *AsyncKafka) GetRouter() core.Router {
+	return routers.KafkaRouter(output.routes)
 }
 
 func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
@@ -249,6 +253,7 @@ func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 
 func (output *AsyncKafka) Close() {
 	log.Infof("[output-async-kafka] closing")
+	output.inFlight.Wait()
 	output.kafkaAsyncProducer.Close()
 	output.kafkaClient.Close()
 	output.wg.Wait()
@@ -256,6 +261,8 @@ func (output *AsyncKafka) Close() {
 }
 
 func (output *AsyncKafka) addMsgSet(msg *core.Msg) {
+	output.inFlight.Add(1)
+
 	output.Lock()
 	defer output.Unlock()
 
@@ -263,6 +270,8 @@ func (output *AsyncKafka) addMsgSet(msg *core.Msg) {
 }
 
 func (output *AsyncKafka) delMsgSet(seq int64) (*core.Msg, error) {
+	output.inFlight.Done()
+
 	output.Lock()
 	defer output.Unlock()
 	msg, ok := output.msgSet[seq]

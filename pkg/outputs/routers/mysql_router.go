@@ -3,6 +3,7 @@ package routers
 import (
 	"github.com/juju/errors"
 
+	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/matchers"
 )
 
@@ -28,6 +29,17 @@ func (route *MySQLRoute) GetTarget(msgSchema string, msgTable string) (string, s
 		targetTable = route.TargetTable
 	}
 	return targetSchema, targetTable
+}
+
+type MySQLRouter []*MySQLRoute
+
+func (r MySQLRouter) Exists(msg *core.Msg) bool {
+	for i := range r {
+		if r[i].Match(msg) {
+			return true
+		}
+	}
+	return false
 }
 
 func NewMySQLRoutes(configData []map[string]interface{}) ([]*MySQLRoute, error) {

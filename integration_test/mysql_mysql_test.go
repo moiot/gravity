@@ -216,6 +216,80 @@ func TestMySQLBatch(t *testing.T) {
 	r.NoError(generator.TestChecksum())
 }
 
+func TestMySQLBatchNoTableConfig(t *testing.T) {
+	r := require.New(t)
+
+	sourceDBName := strings.ToLower(t.Name()) + "_source"
+	targetDBName := strings.ToLower(t.Name()) + "_target"
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	generator := mysql_test.Generator{
+		SourceDB:     sourceDB,
+		SourceSchema: sourceDBName,
+		TargetDB:     targetDB,
+		TargetSchema: targetDBName,
+		GeneratorConfig: mysql_test.GeneratorConfig{
+			NrTables:    10,
+			NrSeedRows:  50,
+			DeleteRatio: 0.2,
+			InsertRatio: 0.1,
+			Concurrency: 5,
+		},
+	}
+	generator.SetupTestTables(false)
+	generator.SeedRows()
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	pipelineConfig := config.PipelineConfigV3{
+		PipelineName: sourceDBName,
+		Version:      config.PipelineConfigV3Version,
+		InputPlugin: config.InputConfig{
+			Type: "mysql",
+			Mode: config.Batch,
+			Config: struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+				Source: sourceDBConfig,
+			}),
+		},
+		OutputPlugin: config.GenericConfig{
+			Type: "mysql",
+			Config: struct2Map(mysql.MySQLPluginConfig{
+				DBConfig:  targetDBConfig,
+				EnableDDL: true,
+				Routes: []map[string]interface{}{
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "*",
+						"target-schema": targetDBName,
+					},
+				},
+			}),
+		},
+	}
+
+	server, err := app.NewServer(pipelineConfig)
+	r.NoError(err)
+
+	r.NoError(server.Start())
+
+	<-server.Input.Done()
+
+	// wait for some time to see if server is healthy
+	sliding_window.DefaultHealthyThreshold = 4
+	time.Sleep(5)
+
+	r.True(server.Scheduler.Healthy())
+
+	server.Close()
+
+	r.NoError(generator.TestChecksum())
+}
+
 func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 	r := require.New(t)
 

@@ -11,8 +11,8 @@ import (
 	gomysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/moiot/gravity/mock/binlog_checker"
-	"github.com/moiot/gravity/mock/position_store"
+	mock_binlog_checker "github.com/moiot/gravity/mock/binlog_checker"
+	mock_position_store "github.com/moiot/gravity/mock/position_store"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/emitter"
 	"github.com/moiot/gravity/pkg/mysql_test"
@@ -125,6 +125,7 @@ func TestMsgEmit(t *testing.T) {
 		schemaStore,
 		db,
 		emitter,
+		nil,
 		mockBinlogChecker,
 		binlogFilter)
 	if err != nil {

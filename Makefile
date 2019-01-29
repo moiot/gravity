@@ -26,7 +26,7 @@ dev-down:
 
 go-test:
 	go test -failfast -race ./integration_test
-	go test -failfast -coverprofile=cover.out $(TEST_DIRS) && go tool cover -func=cover.out | tail -n 1
+	go test -coverprofile=cover.out $(TEST_DIRS) && go tool cover -func=cover.out | tail -n 1
 
 test-local:
 	make test; make test-down

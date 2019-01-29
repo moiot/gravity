@@ -11,7 +11,7 @@ import (
 	"github.com/Shopify/sarama"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/mgo.v2"
+	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
 	gravityConfig "github.com/moiot/gravity/pkg/config"
@@ -121,6 +121,16 @@ func TestMongoJson(t *testing.T) {
 				break
 			}
 		}
+		select {
+		case msg, ok := <-consumer.Messages():
+			if ok {
+				received = append(received, string(msg.Value))
+				fmt.Println(string(msg.Value))
+				consumer.MarkOffset(msg, "")
+			}
+
+		case <-time.After(time.Second):
+		}
 		close(done)
 	}()
 	go func() {
@@ -147,6 +157,10 @@ func TestMongoJson(t *testing.T) {
 	for i := 0; i < operations; i++ {
 		r.NoError(coll.Insert(&person{"Foo" + strconv.Itoa(i), time.Now().Format(time.RFC3339)}))
 	}
+
+	// should ignore
+	coll = session.DB(t.Name()).C(t.Name() + "_2")
+	r.NoError(coll.Insert(&person{"Foo", time.Now().Format(time.RFC3339)}))
 
 	<-done
 	r.NoError(consumer.Close())

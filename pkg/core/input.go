@@ -6,7 +6,7 @@ import (
 )
 
 type Input interface {
-	Start(emitter Emitter) error
+	Start(emitter Emitter, router Router) error
 	Close()
 	Stage() config.InputMode
 	// TODO position store can be hidden by input plugin

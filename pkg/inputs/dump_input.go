@@ -28,7 +28,7 @@ func (plugin *dumpInput) Configure(pipelineName string, data map[string]interfac
 	return nil
 }
 
-func (plugin *dumpInput) Start(emitter core.Emitter) error {
+func (plugin *dumpInput) Start(emitter core.Emitter, router core.Router) error {
 	return nil
 }
 

@@ -124,13 +124,13 @@ func (i *TwoStageInputPlugin) Done() chan position_store.Position {
 	}
 }
 
-func (i *TwoStageInputPlugin) Start(emitter core.Emitter) error {
+func (i *TwoStageInputPlugin) Start(emitter core.Emitter, router core.Router) error {
 	if i.Stage() == config.Stream {
 		log.Info("[TwoStageInputPlugin.Start] with inc")
-		return i.incremental.Start(emitter)
+		return i.incremental.Start(emitter, router)
 	} else {
 		log.Info("[TwoStageInputPlugin.Start] with full")
-		if err := i.full.Start(emitter); err != nil {
+		if err := i.full.Start(emitter, router); err != nil {
 			return errors.Trace(err)
 		}
 
@@ -171,7 +171,7 @@ func (i *TwoStageInputPlugin) Start(emitter core.Emitter) error {
 			}
 
 			// start incremental plugin
-			err = i.incremental.Start(emitter)
+			err = i.incremental.Start(emitter, router)
 			if err != nil {
 				log.Fatalf("[TwoStageInputPlugin] fail to start incremental. %s", err)
 			}

@@ -139,6 +139,10 @@ type outputCollector struct {
 	receivedRows map[string]rows
 }
 
+func (output *outputCollector) GetRouter() core.Router {
+	return core.EmptyRouter{}
+}
+
 func (output *outputCollector) Execute(msgs []*core.Msg) error {
 	for _, m := range msgs {
 		table := m.Table
