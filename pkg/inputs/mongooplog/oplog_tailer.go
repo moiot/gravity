@@ -34,7 +34,7 @@ type OplogTailer struct {
 	gtmConfig     *config.GtmConfig
 	opCtx         *gtm.OpCtx
 	sourceHost    string
-	positionCache *position_store.PositionCache
+	positionCache position_store.PositionCacheInterface
 	stopped       bool
 }
 
@@ -271,7 +271,7 @@ type OplogTailerOpt struct {
 	session       *mgo.Session
 	oplogChecker  *OplogChecker
 	sourceHost    string
-	positionCache *position_store.PositionCache
+	positionCache position_store.PositionCacheInterface
 	emitter       core.Emitter
 	logger        log.Logger
 	idx           int

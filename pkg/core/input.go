@@ -6,11 +6,11 @@ import (
 )
 
 type Input interface {
-	Start(emitter Emitter) error
+	NewPositionCache() (position_store.PositionCacheInterface, error)
+	Start(emitter Emitter, positionCache position_store.PositionCacheInterface) error
 	Close()
 	Stage() config.InputMode
-	NewPositionCache() (*position_store.PositionCache, error)
-	Done() chan position_store.Position
+	Done(positionCache position_store.PositionCacheInterface) chan position_store.Position
 	SendDeadSignal() error // for test only
 	Wait()
 	Identity() uint32

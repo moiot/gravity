@@ -267,15 +267,17 @@ func (t *BinlogTailer) dispatchMsg(msg *core.Msg) error {
 }
 
 func NewBinlogTailer(
+	pipelineName string,
 	serverID uint32,
+	positionCache position_store.PositionCacheInterface,
 	config *gCfg.SourceTiDBConfig,
 	emitter core.Emitter,
 	binlogChecker binlog_checker.BinlogChecker,
 ) (*BinlogTailer, error) {
 
 	srcKafkaCfg := config.SourceKafka
-	positionRepo, err := position_store.NewMySQLRepo()
-	osf := NewKafkaOffsetStoreFactory(config.OffsetStoreConfig)
+
+	osf := NewKafkaOffsetStoreFactory(pipelineName, positionCache)
 	kafkaConfig := sarama_cluster.NewConfig()
 	kafkaConfig.Version = kafka.MsgVersion
 	// if no previous offset committed, use the oldest offset

@@ -31,7 +31,7 @@ func Serialize(oplogPositionValue *OplogPositionsValue) (string, error) {
 	return s, nil
 }
 
-func InitPositionCache(cache *position_store.PositionCache, startPositionInSpec *config.MongoPosition) error {
+func InitPositionCache(cache position_store.PositionCacheInterface, startPositionInSpec *config.MongoPosition) error {
 	positionValues, err := GetPosition(cache)
 	if err != nil {
 		return errors.Trace(err)
@@ -53,7 +53,7 @@ func InitPositionCache(cache *position_store.PositionCache, startPositionInSpec 
 	return nil
 }
 
-func GetPosition(cache *position_store.PositionCache) (*OplogPositionsValue, error) {
+func GetPosition(cache position_store.PositionCacheInterface) (*OplogPositionsValue, error) {
 	position := cache.Get()
 	oplogPositionValue, err := Deserialize(position.Value)
 	if err != nil {
@@ -63,7 +63,7 @@ func GetPosition(cache *position_store.PositionCache) (*OplogPositionsValue, err
 	return oplogPositionValue, nil
 }
 
-func PutCurrentPosition(cache *position_store.PositionCache, positionValue *config.MongoPosition) error {
+func PutCurrentPosition(cache position_store.PositionCacheInterface, positionValue *config.MongoPosition) error {
 	position := cache.Get()
 	oplogPositionValue, err := Deserialize(position.Value)
 	if err != nil {
@@ -80,7 +80,7 @@ func PutCurrentPosition(cache *position_store.PositionCache, positionValue *conf
 	return nil
 }
 
-func PutPositions(cache *position_store.PositionCache, positionValues *OplogPositionsValue) error {
+func PutPositions(cache position_store.PositionCacheInterface, positionValues *OplogPositionsValue) error {
 	position := cache.Get()
 
 	v, err := Serialize(positionValues)

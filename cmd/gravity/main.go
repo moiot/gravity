@@ -71,7 +71,7 @@ func main() {
 	}
 
 	if cfg.ClearPosition {
-		if err := server.PositionStore.Clear(); err != nil {
+		if err := server.PositionCache.Clear(); err != nil {
 			log.Errorf("failed to clear position, err: %v", errors.ErrorStack(err))
 		}
 		return
@@ -114,7 +114,7 @@ func main() {
 
 	if cfg.PipelineConfig.InputPlugin.Mode == config.Batch {
 		go func(server *app.Server) {
-			<-server.Input.Done()
+			<-server.Input.Done(server.PositionCache)
 			server.Close()
 			os.Exit(0)
 		}(server)
@@ -175,7 +175,7 @@ func healthzHandler(server *app.Server) func(http.ResponseWriter, *http.Request)
 
 func statusHandler(server *app.Server, name, hash string) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		position := server.PositionStore.Get()
+		position := server.PositionCache.Get()
 		var state = core.ReportStageIncremental
 		if position.Stage == config.Batch {
 			state = core.ReportStageFull
@@ -210,7 +210,7 @@ func resetHandler(server *app.Server, pipelineConfig config.PipelineConfigV3) fu
 			http.Error(writer, fmt.Sprintf("fail to new server, err: %s", err), 500)
 			return
 		}
-		if err := server.PositionStore.Clear(); err != nil {
+		if err := server.PositionCache.Clear(); err != nil {
 			log.Errorf("[reset] failed to clear position, err: %v", errors.ErrorStack(err))
 			http.Error(writer, fmt.Sprintf("failed to clear position, err: %v", errors.ErrorStack(err)), 500)
 			return

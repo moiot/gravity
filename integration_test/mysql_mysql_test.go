@@ -610,7 +610,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 	server, err = app.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
-	server.PositionStore.Clear()
+	server.PositionCache.Clear()
 	for _, t := range tables {
 		_, err := targetDB.Exec(fmt.Sprintf("truncate table %s.%s", targetDBName, t))
 		r.NoError(err)

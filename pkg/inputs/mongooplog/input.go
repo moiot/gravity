@@ -34,10 +34,9 @@ type mongoInputPlugin struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	mongoSession  *mgo.Session
-	oplogTailer   *OplogTailer
-	oplogChecker  *OplogChecker
-	positionCache *position_store.PositionCache
+	mongoSession *mgo.Session
+	oplogTailer  *OplogTailer
+	oplogChecker *OplogChecker
 }
 
 func init() {
@@ -60,7 +59,30 @@ func (plugin *mongoInputPlugin) Configure(pipelineName string, data map[string]i
 	return nil
 }
 
-func (plugin *mongoInputPlugin) Start(emitter core.Emitter) error {
+func (plugin *mongoInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
+	session, err := mongo.CreateMongoSession(plugin.cfg.Source)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	positionRepo, err := position_store.NewMongoPositionRepo(session)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	positionCache, err := position_store.NewPositionCache(plugin.pipelineName, positionRepo)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if err := InitPositionCache(positionCache, plugin.cfg.StartPosition); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return positionCache, nil
+}
+
+func (plugin *mongoInputPlugin) Start(emitter core.Emitter, positionCache position_store.PositionCacheInterface) error {
 	plugin.emitter = emitter
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
 
@@ -74,22 +96,6 @@ func (plugin *mongoInputPlugin) Start(emitter core.Emitter) error {
 
 	// Create tailers, senders, oplog checkers
 	checker := NewOplogChecker(session, cfg.Source.Host, plugin.pipelineName, plugin.ctx)
-
-	positionRepo, err := position_store.NewMongoPositionRepo(session)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	positionCache, err := position_store.NewPositionCache(plugin.pipelineName, positionRepo)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	if err := InitPositionCache(positionCache, plugin.cfg.StartPosition); err != nil {
-		return errors.Trace(err)
-	}
-
-	plugin.positionCache = positionCache
 
 	tailerOpts := OplogTailerOpt{
 		oplogChecker:  checker,
@@ -125,11 +131,11 @@ func (plugin *mongoInputPlugin) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *mongoInputPlugin) Done() chan position_store.Position {
+func (plugin *mongoInputPlugin) Done(positionCache position_store.PositionCacheInterface) chan position_store.Position {
 	c := make(chan position_store.Position)
 	go func() {
 		plugin.Wait()
-		c <- plugin.positionCache.Get()
+		c <- positionCache.Get()
 		close(c)
 	}()
 	return c

@@ -22,7 +22,7 @@ type Server struct {
 	filters       []core.IFilter
 	Emitter       core.Emitter
 	Scheduler     core.Scheduler
-	PositionStore *position_store.PositionCache
+	PositionCache position_store.PositionCacheInterface
 	Output        core.Output
 
 	// When Input is done, server will be closed, when config changed, server will also be closed;
@@ -110,7 +110,7 @@ func NewServer(pipelineConfig config.PipelineConfigV3) (*Server, error) {
 	if p, err := server.Input.NewPositionCache(); err != nil {
 		return nil, errors.Trace(err)
 	} else {
-		server.PositionStore = p
+		server.PositionCache = p
 	}
 	return server, nil
 }
@@ -155,12 +155,12 @@ func (s *Server) Start() error {
 		return errors.Trace(err)
 	}
 
-	if err := s.PositionStore.Start(); err != nil {
+	if err := s.PositionCache.Start(); err != nil {
 		return errors.Trace(err)
 	}
 
 	log.Infof("[Server] start input")
-	if err := s.Input.Start(s.Emitter); err != nil {
+	if err := s.Input.Start(s.Emitter, s.PositionCache); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -188,7 +188,7 @@ func (s *Server) Close() {
 	s.Output.Close()
 	log.Infof("[Server] output closed")
 
-	s.PositionStore.Close()
+	s.PositionCache.Close()
 	log.Infof("[Server] position store closed")
 
 	log.Infof("[Server] stopped")

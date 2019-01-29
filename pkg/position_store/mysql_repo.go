@@ -3,13 +3,14 @@ package position_store
 import (
 	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/juju/errors"
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/utils"
 	"github.com/moiot/gravity/pkg/utils/retry"
 	log "github.com/sirupsen/logrus"
-	"time"
 )
 
 var (
@@ -30,8 +31,12 @@ var (
 	addStateStmt = fmt.Sprintf("ALTER TABLE %s ADD COLUMN stage VARCHAR(20) NOT NULL DEFAULT '%s';", positionFullTableName, config.Stream)
 )
 
+func IsPositionStoreEvent(schemaName string, tableName string) bool {
+	return (schemaName == consts.GravityDBName || schemaName == "drc") && tableName == positionTableName
+}
+
 type mysqlPositionRepo struct {
-	db *sql.DB
+	db         *sql.DB
 	annotation string
 }
 

@@ -8,7 +8,7 @@ import (
 	gomysql "github.com/siddontang/go-mysql/mysql"
 )
 
-func InitPositionCache(positionCache *position_store.PositionCache, startPositionSpec *utils.MySQLBinlogPosition) error {
+func InitPositionCache(positionCache position_store.PositionCacheInterface, startPositionSpec *utils.MySQLBinlogPosition) error {
 	position := positionCache.Get()
 	runTimePositions, err := helper.DeserializeBinlogPositions(position.Value)
 	if err != nil {
@@ -39,7 +39,7 @@ func InitPositionCache(positionCache *position_store.PositionCache, startPositio
 	return errors.Trace(positionCache.Flush())
 }
 
-func GetCurrentGTID(cache *position_store.PositionCache) (string, error) {
+func GetCurrentGTID(cache position_store.PositionCacheInterface) (string, error) {
 	currentPosition, err := GetCurrentPosition(cache)
 	if err != nil {
 		return "", errors.Trace(err)
@@ -47,7 +47,7 @@ func GetCurrentGTID(cache *position_store.PositionCache) (string, error) {
 	return currentPosition.BinlogGTID, nil
 }
 
-func GetCurrentPosition(cache *position_store.PositionCache) (*utils.MySQLBinlogPosition, error) {
+func GetCurrentPosition(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, error) {
 	position := cache.Get()
 	positions, err := helper.DeserializeBinlogPositions(position.Value)
 	if err != nil {
@@ -61,7 +61,7 @@ func GetCurrentPosition(cache *position_store.PositionCache) (*utils.MySQLBinlog
 	return positions.CurrentPosition, nil
 }
 
-func GetBinlogPositions(cache *position_store.PositionCache) (*utils.MySQLBinlogPosition, *utils.MySQLBinlogPosition, error) {
+func GetBinlogPositions(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, *utils.MySQLBinlogPosition, error) {
 	position := cache.Get()
 	positions, err := helper.DeserializeBinlogPositions(position.Value)
 	if err != nil {

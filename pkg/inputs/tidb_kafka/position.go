@@ -15,7 +15,7 @@ var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
 
 type KafkaOffsetStoreFactory struct {
 	pipelineName  string
-	positionCache *position_store.PositionCache
+	positionCache position_store.PositionCacheInterface
 }
 
 type TopicOffset map[int32]int64
@@ -46,7 +46,7 @@ func (f *KafkaOffsetStoreFactory) GenOffsetStore(c *sarama_cluster.Consumer) sar
 	return &OffsetStore{positionCache: f.positionCache, pipelineName: f.pipelineName}
 }
 
-func NewKafkaOffsetStoreFactory(pipelineName string, positionCache *position_store.PositionCache) *KafkaOffsetStoreFactory {
+func NewKafkaOffsetStoreFactory(pipelineName string, positionCache position_store.PositionCacheInterface) *KafkaOffsetStoreFactory {
 	return &KafkaOffsetStoreFactory{
 		pipelineName:  pipelineName,
 		positionCache: positionCache,
@@ -55,7 +55,7 @@ func NewKafkaOffsetStoreFactory(pipelineName string, positionCache *position_sto
 
 type OffsetStore struct {
 	pipelineName  string
-	positionCache *position_store.PositionCache
+	positionCache position_store.PositionCacheInterface
 }
 
 func (store *OffsetStore) CommitOffset(req *offsets.OffsetCommitRequest) (*offsets.OffsetCommitResponse, error) {

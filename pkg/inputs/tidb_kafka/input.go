@@ -16,8 +16,6 @@ import (
 
 	"github.com/moiot/gravity/pkg/mysql_test"
 
-	"github.com/moiot/gravity/pkg/offsets"
-
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/inputs/helper/binlog_checker"
 	"github.com/moiot/gravity/pkg/utils"
@@ -40,7 +38,6 @@ type tidbKafkaInput struct {
 	cancel context.CancelFunc
 
 	binlogTailer  *BinlogTailer
-	positionCache *position_store.PositionCache
 	binlogChecker binlog_checker.BinlogChecker
 }
 
@@ -73,7 +70,7 @@ func (plugin *tidbKafkaInput) Configure(pipelineName string, data map[string]int
 	return nil
 }
 
-func (plugin *tidbKafkaInput) NewPositionCache() (*position_store.PositionCache, error) {
+func (plugin *tidbKafkaInput) NewPositionCache() (position_store.PositionCacheInterface, error) {
 	positionRepo, err := position_store.NewMySQLRepo(
 		plugin.pipelineName,
 		plugin.cfg.OffsetStoreConfig.SourceMySQL,
@@ -86,11 +83,10 @@ func (plugin *tidbKafkaInput) NewPositionCache() (*position_store.PositionCache,
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	plugin.positionCache = positionCache
 	return positionCache, nil
 }
 
-func (plugin *tidbKafkaInput) Start(emitter core.Emitter) error {
+func (plugin *tidbKafkaInput) Start(emitter core.Emitter, positionCache position_store.PositionCacheInterface) error {
 	plugin.emitter = emitter
 	plugin.gravityServerID = utils.GenerateRandomServerID()
 
@@ -111,7 +107,9 @@ func (plugin *tidbKafkaInput) Start(emitter core.Emitter) error {
 	plugin.binlogChecker = binlogChecker
 
 	binlogTailer, err := NewBinlogTailer(
+		plugin.pipelineName,
 		plugin.gravityServerID,
+		positionCache,
 		cfg,
 		emitter,
 		binlogChecker,
@@ -135,11 +133,11 @@ func (plugin *tidbKafkaInput) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *tidbKafkaInput) Done() chan position_store.Position {
+func (plugin *tidbKafkaInput) Done(positionCache position_store.PositionCacheInterface) chan position_store.Position {
 	c := make(chan position_store.Position)
 	go func() {
 		plugin.binlogTailer.Wait()
-		position := plugin.positionCache.Get()
+		position := positionCache.Get()
 		c <- position
 		close(c)
 	}()
@@ -170,52 +168,4 @@ func (plugin *tidbKafkaInput) Close() {
 
 	plugin.binlogChecker.Stop()
 	log.Infof("[mysql_binlog_server] stopped binlogChecker")
-}
-
-type offsetStoreAdapter struct {
-	delegate *OffsetStore
-	name     string
-	group    string
-	topic    []string
-}
-
-func (store *offsetStoreAdapter) Start() error {
-	return nil
-}
-
-func (store *offsetStoreAdapter) Close() {
-	err := store.delegate.db.Close()
-	if err != nil {
-		log.Fatalf("db offset positionCache closes the DB connection with error. %s", err)
-	}
-	log.Info("db offset positionCache closes the DB connection")
-}
-
-func (store *offsetStoreAdapter) Stage() config.InputMode {
-	return config.Stream
-}
-
-func (store *offsetStoreAdapter) Position() position_store.Position {
-	req := &offsets.OffsetFetchRequest{
-		ConsumerGroup: store.group,
-	}
-	resp, err := store.delegate.FetchOffset(req)
-	if err != nil {
-		log.Fatalf("[offsetStoreAdapter.Position] %s", errors.Trace(err))
-	}
-
-	return position_store.Position{
-		Name:       store.name,
-		Stage:      store.Stage(),
-		Raw:        *resp,
-		UpdateTime: resp.LastUpdate,
-	}
-}
-
-func (store *offsetStoreAdapter) Update(pos position_store.Position) {
-	log.Fatal("[offsetStoreAdapter.Update] unimplemented") //TODO
-}
-
-func (store *offsetStoreAdapter) Clear() {
-	store.delegate.Clear(store.group, store.topic)
 }

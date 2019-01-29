@@ -13,7 +13,6 @@ import (
 
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/mysql"
-	"github.com/moiot/gravity/pkg/position_store"
 	"github.com/moiot/gravity/pkg/schema_store"
 	"github.com/moiot/gravity/pkg/utils"
 )
@@ -26,7 +25,7 @@ func NewMsg(
 	columnTypes []*sql.ColumnType,
 	sourceTableDef *schema_store.Table,
 	callbackFunc core.AfterMsgCommitFunc,
-	position position_store.MySQLTablePosition) *core.Msg {
+	position TablePosition) *core.Msg {
 
 	columnDataMap := mysql.SQLDataPtrs2Val(rowPtrs, columnTypes)
 	msg := core.Msg{

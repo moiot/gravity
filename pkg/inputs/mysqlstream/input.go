@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moiot/gravity/pkg/core"
+
 	"github.com/moiot/gravity/pkg/inputs/helper"
 
 	"github.com/juju/errors"
@@ -13,7 +15,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
-	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/inputs/helper/binlog_checker"
 	"github.com/moiot/gravity/pkg/mysql_test"
 	"github.com/moiot/gravity/pkg/position_store"
@@ -63,9 +64,6 @@ type mysqlInputPlugin struct {
 
 	sourceSchemaStore schema_store.SchemaStore
 
-	positionRepo  position_store.PositionRepo
-	positionCache *position_store.PositionCache
-
 	closeOnce sync.Once
 }
 
@@ -93,59 +91,31 @@ func (plugin *mysqlInputPlugin) Configure(pipelineName string, configInput map[s
 	return nil
 }
 
-func (plugin *mysqlInputPlugin) Identity() uint32 {
-	return plugin.binlogTailer.gravityServerID
-}
-
-func (plugin *mysqlInputPlugin) Stage() config.InputMode {
-	return config.Stream
-}
-
-func (plugin *mysqlInputPlugin) SendDeadSignal() error {
-	return mysql_test.SendDeadSignal(plugin.binlogTailer.sourceDB, plugin.binlogTailer.gravityServerID)
-}
-
-func (plugin *mysqlInputPlugin) Wait() {
-	plugin.binlogTailer.Wait()
-}
-
-func (plugin *mysqlInputPlugin) Done() chan position_store.Position {
-	c := make(chan position_store.Position)
-	go func() {
-		plugin.binlogTailer.Wait()
-		c <- plugin.positionCache.Get()
-		close(c)
-	}()
-	return c
-}
-
-func (plugin *mysqlInputPlugin) NewPositionCache() error {
+func (plugin *mysqlInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
 	// position cache
 	positionRepo, err := position_store.NewMySQLRepo(
 		plugin.pipelineName,
 		plugin.probeDBConfig,
 		plugin.probeSQLAnnotation)
 	if err != nil {
-		return errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
-	plugin.positionRepo = positionRepo
 
 	positionCache, err := position_store.NewPositionCache(
 		plugin.pipelineName,
-		plugin.positionRepo,
+		positionRepo,
 	)
 	if err != nil {
-		return errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
-	plugin.positionCache = positionCache
 
 	if err := InitPositionCache(positionCache, plugin.cfg.StartPosition); err != nil {
-		return errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
-	return nil
+	return positionCache, nil
 }
 
-func (plugin *mysqlInputPlugin) Start(emitter core.Emitter) error {
+func (plugin *mysqlInputPlugin) Start(emitter core.Emitter, positionCache position_store.PositionCacheInterface) error {
 	sourceDB, err := utils.CreateDBConnection(plugin.cfg.Source)
 	if err != nil {
 		log.Fatalf("[gravity] failed to create source connection %v", errors.ErrorStack(err))
@@ -183,7 +153,7 @@ func (plugin *mysqlInputPlugin) Start(emitter core.Emitter) error {
 		plugin.pipelineName,
 		plugin.cfg,
 		gravityServerID,
-		plugin.positionCache,
+		positionCache,
 		sourceSchemaStore,
 		sourceDB,
 		emitter,
@@ -198,6 +168,32 @@ func (plugin *mysqlInputPlugin) Start(emitter core.Emitter) error {
 	}
 
 	return nil
+}
+
+func (plugin *mysqlInputPlugin) Identity() uint32 {
+	return plugin.binlogTailer.gravityServerID
+}
+
+func (plugin *mysqlInputPlugin) Stage() config.InputMode {
+	return config.Stream
+}
+
+func (plugin *mysqlInputPlugin) SendDeadSignal() error {
+	return mysql_test.SendDeadSignal(plugin.binlogTailer.sourceDB, plugin.binlogTailer.gravityServerID)
+}
+
+func (plugin *mysqlInputPlugin) Wait() {
+	plugin.binlogTailer.Wait()
+}
+
+func (plugin *mysqlInputPlugin) Done(positionCache position_store.PositionCacheInterface) chan position_store.Position {
+	c := make(chan position_store.Position)
+	go func() {
+		plugin.binlogTailer.Wait()
+		c <- positionCache.Get()
+		close(c)
+	}()
+	return c
 }
 
 func (plugin *mysqlInputPlugin) Close() {

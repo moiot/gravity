@@ -27,7 +27,7 @@ type TableScanner struct {
 	pipelineName  string
 	tableWorkC    chan *TableWork
 	cfg           *PluginConfig
-	positionCache *position_store.PositionCache
+	positionCache position_store.PositionCacheInterface
 	db            *sql.DB
 	emitter       core.Emitter
 	throttle      *time.Ticker
@@ -502,7 +502,7 @@ func NewTableScanner(
 	pipelineName string,
 	tableWorkC chan *TableWork,
 	db *sql.DB,
-	positionCache *position_store.PositionCache,
+	positionCache position_store.PositionCacheInterface,
 	emitter core.Emitter,
 	throttle *time.Ticker,
 	schemaStore schema_store.SchemaStore,

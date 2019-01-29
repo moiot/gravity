@@ -83,8 +83,6 @@ type mysqlFullInput struct {
 
 	throttle *time.Ticker
 
-	positionCache *position_store.PositionCache
-
 	tableScanners []*TableScanner
 
 	// startBinlogPos utils.MySQLBinlogPosition
@@ -121,7 +119,28 @@ func (plugin *mysqlFullInput) Configure(pipelineName string, data map[string]int
 	return nil
 }
 
-func (plugin *mysqlFullInput) Start(emitter core.Emitter) error {
+func (plugin *mysqlFullInput) NewPositionCache() (position_store.PositionCacheInterface, error) {
+	positionRepo, err := position_store.NewMySQLRepo(
+		plugin.pipelineName,
+		plugin.probeDBConfig,
+		plugin.probeSQLAnnotation)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	positionCache, err := position_store.NewPositionCache(plugin.pipelineName, positionRepo)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if err := InitPositionCache(positionCache, plugin.sourceDB); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return positionCache, nil
+}
+
+func (plugin *mysqlFullInput) Start(emitter core.Emitter, positionCache position_store.PositionCacheInterface) error {
 	cfg := plugin.cfg
 
 	sourceDB, err := utils.CreateDBConnection(cfg.Source)
@@ -158,24 +177,6 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter) error {
 		return errors.Trace(err)
 	}
 
-	positionRepo, err := position_store.NewMySQLRepo(
-		plugin.pipelineName,
-		plugin.probeDBConfig,
-		plugin.probeSQLAnnotation)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	positionCache, err := position_store.NewPositionCache(plugin.pipelineName, positionRepo)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	plugin.positionCache = positionCache
-
-	if err := InitPositionCache(positionCache, plugin.sourceDB); err != nil {
-		return errors.Trace(err)
-	}
-
 	// Detect any potential error before any work is done, so that we can check the error early.
 	scanColumns := make([]string, len(tableDefs))
 	var allErrors []error
@@ -203,7 +204,7 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter) error {
 			plugin.pipelineName,
 			tableQueue,
 			scanDB,
-			plugin.positionCache,
+			positionCache,
 			emitter,
 			plugin.throttle,
 			sourceSchemaStore,
@@ -221,7 +222,7 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter) error {
 		}
 	}
 
-	go plugin.waitFinish()
+	go plugin.waitFinish(positionCache)
 
 	return nil
 }
@@ -234,16 +235,12 @@ func (plugin *mysqlFullInput) Stage() config.InputMode {
 	return config.Batch
 }
 
-func (plugin *mysqlFullInput) PositionCache() *position_store.PositionCache {
-	return plugin.positionCache
-}
-
 func (plugin *mysqlFullInput) SendDeadSignal() error {
 	plugin.Close()
 	return nil
 }
 
-func (plugin *mysqlFullInput) Done() chan position_store.Position {
+func (plugin *mysqlFullInput) Done(_ position_store.PositionCacheInterface) chan position_store.Position {
 	return plugin.doneC
 }
 
@@ -283,14 +280,20 @@ func (plugin *mysqlFullInput) Close() {
 
 }
 
-func (plugin *mysqlFullInput) waitFinish() {
+func (plugin *mysqlFullInput) waitFinish(positionCache position_store.PositionCacheInterface) {
 	for idx := range plugin.tableScanners {
 		plugin.tableScanners[idx].Wait()
 	}
 
 	if plugin.ctx.Err() == nil {
+		// It's better to flush the position here, so that the table position
+		// state is persisted as soon as the table scan finishes.
+		if err := positionCache.Flush(); err != nil {
+			log.Fatalf("[mysqlFullInput] failed to flush position cache")
+		}
+
 		log.Infof("[plugin.waitFinish] table scanners done")
-		startBinlog, err := GetStartBinlog(plugin.positionCache)
+		startBinlog, err := GetStartBinlog(positionCache)
 		if err != nil {
 			log.Fatalf("[mysqlFullInput] failed to get start position: %v", errors.ErrorStack(err))
 		}
@@ -303,12 +306,18 @@ func (plugin *mysqlFullInput) waitFinish() {
 		if err != nil {
 			log.Fatalf("[mysqlFullInput] failed to serialize binlog positions: %v", errors.ErrorStack(err))
 		}
-		plugin.doneC <- position_store.Position{
+
+		// Notice that we should not change position stage in this plugin.
+		// Changing the stage is done by two stage plugin.
+		position := position_store.Position{
 			Name:       plugin.pipelineName,
 			Stage:      config.Stream,
 			Value:      v,
 			UpdateTime: time.Now(),
 		}
+
+		plugin.doneC <- position
+
 		close(plugin.doneC)
 	} else if plugin.ctx.Err() == context.Canceled {
 		log.Infof("[plugin.waitFinish] table scanner cancelled")

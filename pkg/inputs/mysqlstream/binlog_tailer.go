@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moiot/gravity/pkg/inputs/helper"
+
 	"github.com/juju/errors"
 	"github.com/pingcap/parser"
 	"github.com/prometheus/client_golang/prometheus"
@@ -81,7 +83,7 @@ type BinlogTailer struct {
 
 	sourceTimeZone string
 
-	positionCache     *position_store.PositionCache
+	positionCache     position_store.PositionCacheInterface
 	sourceSchemaStore schema_store.SchemaStore
 	binlogChecker     binlog_checker.BinlogChecker
 
@@ -99,7 +101,7 @@ func NewBinlogTailer(
 	pipelineName string,
 	cfg *MySQLBinlogInputPluginConfig,
 	gravityServerID uint32,
-	positionCache *position_store.PositionCache,
+	positionCache position_store.PositionCacheInterface,
 	sourceSchemaStore schema_store.SchemaStore,
 	sourceDB *sql.DB,
 	emitter core.Emitter,
@@ -143,7 +145,7 @@ func (tailer *BinlogTailer) Start() error {
 
 	// streamer needs positionCache to load the GTID set
 	position := tailer.positionCache.Get()
-	binlogPositions, err := Deserialize(position.Value)
+	binlogPositions, err := helper.DeserializeBinlogPositions(position.Value)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -545,7 +547,7 @@ func (tailer *BinlogTailer) AfterMsgCommit(msg *core.Msg) error {
 		}
 		*currentPosition = ctx.position
 
-		v, err := Serialize(&BinlogPositions{StartPosition: startPosition, CurrentPosition: currentPosition})
+		v, err := helper.SerializeBinlogPositions(&helper.BinlogPositions{StartPosition: startPosition, CurrentPosition: currentPosition})
 		if err != nil {
 			return errors.Trace(err)
 		}

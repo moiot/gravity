@@ -175,7 +175,7 @@ func Deserialize(value string) (*BatchPositionValue, error) {
 	return &positions, nil
 }
 
-func InitPositionCache(cache *position_store.PositionCache, sourceDB *sql.DB) error {
+func InitPositionCache(cache position_store.PositionCacheInterface, sourceDB *sql.DB) error {
 	position := cache.Get()
 	batchPositions, err := Deserialize(position.Value)
 	if err != nil {
@@ -209,7 +209,7 @@ func InitPositionCache(cache *position_store.PositionCache, sourceDB *sql.DB) er
 	return nil
 }
 
-func GetStartBinlog(cache *position_store.PositionCache) (*utils.MySQLBinlogPosition, error) {
+func GetStartBinlog(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, error) {
 	position := cache.Get()
 	batchPositions, err := Deserialize(position.Value)
 	if err != nil {
@@ -219,7 +219,7 @@ func GetStartBinlog(cache *position_store.PositionCache) (*utils.MySQLBinlogPosi
 	return batchPositions.Start, nil
 }
 
-func GetCurrentPos(cache *position_store.PositionCache, fullTableName string) (*TablePosition, bool, error) {
+func GetCurrentPos(cache position_store.PositionCacheInterface, fullTableName string) (*TablePosition, bool, error) {
 	position := cache.Get()
 	batchPositions, err := Deserialize(position.Value)
 	if err != nil {
@@ -233,7 +233,7 @@ func GetCurrentPos(cache *position_store.PositionCache, fullTableName string) (*
 	return &current, true, nil
 }
 
-func PutCurrentPos(cache *position_store.PositionCache, fullTableName string, pos *TablePosition) error {
+func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName string, pos *TablePosition) error {
 	position := cache.Get()
 	batchPositions, err := Deserialize(position.Value)
 	if err != nil {
@@ -250,7 +250,7 @@ func PutCurrentPos(cache *position_store.PositionCache, fullTableName string, po
 	return nil
 }
 
-func GetMaxMin(cache *position_store.PositionCache, fullTableName string) (*TablePosition, *TablePosition, bool, error) {
+func GetMaxMin(cache position_store.PositionCacheInterface, fullTableName string) (*TablePosition, *TablePosition, bool, error) {
 	position := cache.Get()
 	batchPositions, err := Deserialize(position.Value)
 	if err != nil {
@@ -270,7 +270,7 @@ func GetMaxMin(cache *position_store.PositionCache, fullTableName string) (*Tabl
 	return &max, &min, true, nil
 }
 
-func PutMaxMin(cache *position_store.PositionCache, fullTableName string, max *TablePosition, min *TablePosition) error {
+func PutMaxMin(cache position_store.PositionCacheInterface, fullTableName string, max *TablePosition, min *TablePosition) error {
 	position := cache.Get()
 	batchPositions, err := Deserialize(position.Value)
 	if err != nil {

@@ -16,7 +16,16 @@ type Position struct {
 	UpdateTime time.Time
 }
 
-type PositionCache struct {
+type PositionCacheInterface interface {
+	Start() error
+	Close()
+	Put(position Position)
+	Get() Position
+	Flush() error
+	Clear() error
+}
+
+type defaultPositionCache struct {
 	pipelineName string
 	dirty        bool
 	repo         PositionRepo
@@ -28,7 +37,7 @@ type PositionCache struct {
 	wg     sync.WaitGroup
 }
 
-func (cache *PositionCache) Start() error {
+func (cache *defaultPositionCache) Start() error {
 	cache.wg.Add(1)
 	go func() {
 		defer cache.wg.Done()
@@ -39,11 +48,11 @@ func (cache *PositionCache) Start() error {
 			select {
 			case <-ticker.C:
 				if err := cache.Flush(); err != nil {
-					log.Fatalf("[PositionCache] ticker flush failed: %v", errors.ErrorStack(err))
+					log.Fatalf("[defaultPositionCache] ticker flush failed: %v", errors.ErrorStack(err))
 				}
 			case <-cache.closeC:
 				if err := cache.Flush(); err != nil {
-					log.Fatalf("[PositionCache] close flush failed: %v", errors.ErrorStack(err))
+					log.Fatalf("[defaultPositionCache] close flush failed: %v", errors.ErrorStack(err))
 				}
 				return
 			}
@@ -52,27 +61,27 @@ func (cache *PositionCache) Start() error {
 	return nil
 }
 
-func (cache *PositionCache) Close() {
-	log.Infof("[PositionCache] closing")
+func (cache *defaultPositionCache) Close() {
+	log.Infof("[defaultPositionCache] closing")
 	close(cache.closeC)
 	cache.wg.Wait()
-	log.Infof("[PositionCache] closed")
+	log.Infof("[defaultPositionCache] closed")
 }
 
-func (cache *PositionCache) Put(position Position) {
+func (cache *defaultPositionCache) Put(position Position) {
 	cache.Lock()
 	defer cache.Unlock()
 	cache.position = position
 	cache.dirty = true
 }
 
-func (cache *PositionCache) Get() Position {
+func (cache *defaultPositionCache) Get() Position {
 	cache.Lock()
 	defer cache.Unlock()
 	return cache.position
 }
 
-func (cache *PositionCache) Flush() error {
+func (cache *defaultPositionCache) Flush() error {
 	cache.Lock()
 	defer cache.Unlock()
 
@@ -88,7 +97,7 @@ func (cache *PositionCache) Flush() error {
 	return nil
 }
 
-func (cache *PositionCache) Clear() error {
+func (cache *defaultPositionCache) Clear() error {
 	cache.Lock()
 	defer cache.Unlock()
 	position := Position{
@@ -102,8 +111,8 @@ func (cache *PositionCache) Clear() error {
 	return errors.Trace(cache.repo.Put(cache.pipelineName, position))
 }
 
-func NewPositionCache(pipelineName string, repo PositionRepo) (*PositionCache, error) {
-	store := PositionCache{pipelineName: pipelineName, repo: repo, closeC: make(chan struct{})}
+func NewPositionCache(pipelineName string, repo PositionRepo) (PositionCacheInterface, error) {
+	store := defaultPositionCache{pipelineName: pipelineName, repo: repo, closeC: make(chan struct{})}
 
 	// Load initial data from repo
 	position, err := repo.Get(pipelineName)
