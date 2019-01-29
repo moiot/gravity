@@ -9,6 +9,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var DefaultFlushPeriod = 5 * time.Second
+
 type Position struct {
 	Name       string
 	Stage      config.InputMode
@@ -25,9 +27,6 @@ func (p Position) Validate() error {
 		return errors.Errorf("invalid position value: %v", p.Value)
 	}
 
-	if p.UpdateTime.IsZero() {
-		return errors.Errorf("invalid zero position update time")
-	}
 	return nil
 }
 
@@ -41,10 +40,11 @@ type PositionCacheInterface interface {
 }
 
 type defaultPositionCache struct {
-	pipelineName string
-	exist        bool
-	dirty        bool
-	repo         PositionRepo
+	flushDuration time.Duration
+	pipelineName  string
+	exist         bool
+	dirty         bool
+	repo          PositionRepo
 
 	position Position
 	sync.Mutex
@@ -57,7 +57,7 @@ func (cache *defaultPositionCache) Start() error {
 	cache.wg.Add(1)
 	go func() {
 		defer cache.wg.Done()
-		ticker := time.NewTicker(time.Second * 5)
+		ticker := time.NewTicker(cache.flushDuration)
 		defer ticker.Stop()
 
 		for {
@@ -90,8 +90,17 @@ func (cache *defaultPositionCache) Put(position Position) error {
 	if err := position.Validate(); err != nil {
 		return errors.Trace(err)
 	}
+
+	if !cache.exist {
+		if err := cache.repo.Put(cache.pipelineName, position); err != nil {
+			return errors.Trace(err)
+		}
+		cache.dirty = false
+		cache.exist = true
+	} else {
+		cache.dirty = true
+	}
 	cache.position = position
-	cache.dirty = true
 	return nil
 }
 
@@ -104,7 +113,7 @@ func (cache *defaultPositionCache) Get() (Position, bool, error) {
 		if err != nil && exist {
 			cache.exist = true
 		}
-		return position, true, errors.Trace(err)
+		return position, cache.exist, errors.Trace(err)
 	}
 
 	if err := cache.position.Validate(); err != nil {
@@ -148,8 +157,12 @@ func (cache *defaultPositionCache) Clear() error {
 	return nil
 }
 
-func NewPositionCache(pipelineName string, repo PositionRepo) (PositionCacheInterface, error) {
-	store := defaultPositionCache{pipelineName: pipelineName, repo: repo, closeC: make(chan struct{})}
+func NewPositionCache(pipelineName string, repo PositionRepo, flushDuration time.Duration) (PositionCacheInterface, error) {
+	store := defaultPositionCache{
+		pipelineName:  pipelineName,
+		repo:          repo,
+		flushDuration: flushDuration,
+		closeC:        make(chan struct{})}
 
 	// Load initial data from repo
 	position, exist, err := repo.Get(pipelineName)

@@ -103,6 +103,7 @@ func (plugin *mysqlInputPlugin) NewPositionCache() (position_store.PositionCache
 	positionCache, err := position_store.NewPositionCache(
 		plugin.pipelineName,
 		positionRepo,
+		position_store.DefaultFlushPeriod,
 	)
 	if err != nil {
 		return nil, errors.Trace(err)

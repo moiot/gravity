@@ -78,7 +78,7 @@ func (plugin *tidbKafkaInput) NewPositionCache() (position_store.PositionCacheIn
 		return nil, errors.Trace(err)
 	}
 
-	positionCache, err := position_store.NewPositionCache(plugin.pipelineName, positionRepo)
+	positionCache, err := position_store.NewPositionCache(plugin.pipelineName, positionRepo, position_store.DefaultFlushPeriod)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

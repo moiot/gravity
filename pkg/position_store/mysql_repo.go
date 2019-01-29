@@ -9,8 +9,6 @@ import (
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/utils"
-	"github.com/moiot/gravity/pkg/utils/retry"
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -103,25 +101,6 @@ func NewMySQLRepo(dbConfig *utils.DBConfig, annotation string) (PositionRepo, er
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-
-	// db migration logic when "stage" does not exist.
-	err = retry.Do(func() error {
-		row := db.QueryRow("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'stage'", consts.GravityDBName, positionTableName)
-		var cnt int
-		err := row.Scan(&cnt)
-		if err != nil {
-			return errors.Trace(err)
-		}
-
-		if cnt == 1 {
-			log.Debug("[mysqlPositionRepo] stage column already exists")
-			return nil
-		}
-
-		_, err = db.Exec(addStateStmt)
-		return err
-
-	}, 3, retry.DefaultSleep)
 
 	return &repo, nil
 }
