@@ -135,7 +135,13 @@ func (plugin *mongoInputPlugin) Done(positionCache position_store.PositionCacheI
 	c := make(chan position_store.Position)
 	go func() {
 		plugin.Wait()
-		c <- positionCache.Get()
+		position, exist, err := positionCache.Get()
+		if err != nil && exist {
+			c <- position
+		} else {
+			log.Fatalf("[mongoInputPlugin] failed to get position, exist: %v, err: %v", exist, errors.ErrorStack(err))
+		}
+
 		close(c)
 	}()
 	return c

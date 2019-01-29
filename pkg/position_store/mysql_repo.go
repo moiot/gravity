@@ -40,7 +40,7 @@ type mysqlPositionRepo struct {
 	annotation string
 }
 
-func (repo *mysqlPositionRepo) Get(pipelineName string) (Position, error) {
+func (repo *mysqlPositionRepo) Get(pipelineName string) (Position, bool, error) {
 	var value string
 	var stage string
 	var lastUpdate time.Time
@@ -49,13 +49,25 @@ func (repo *mysqlPositionRepo) Get(pipelineName string) (Position, error) {
 		"%sSELECT position, stage, updated_at FROM %s WHERE name = ?",
 		repo.annotation, positionFullTableName), pipelineName)
 	if err := row.Scan(&value, &stage, &lastUpdate); err != nil {
-		return Position{}, errors.Trace(err)
+		if err == sql.ErrNoRows {
+			return Position{}, false, nil
+		}
+		return Position{}, false, errors.Trace(err)
 	}
 
-	return Position{Name: pipelineName, Stage: config.InputMode(stage), Value: value, UpdateTime: lastUpdate}, nil
+	position := Position{Name: pipelineName, Stage: config.InputMode(stage), Value: value, UpdateTime: lastUpdate}
+	if err := position.Validate(); err != nil {
+		return Position{}, true, errors.Trace(err)
+	}
+
+	return position, true, nil
 }
 
 func (repo *mysqlPositionRepo) Put(pipelineName string, position Position) error {
+	if err := position.Validate(); err != nil {
+		return errors.Trace(err)
+	}
+
 	stmt := fmt.Sprintf(
 		"%sINSERT INTO %s(name, stage, position) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE stage = ?, position = ?",
 		repo.annotation, positionFullTableName)

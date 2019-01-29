@@ -16,17 +16,33 @@ type Position struct {
 	UpdateTime time.Time
 }
 
+func (p Position) Validate() error {
+	if p.Stage != config.Stream && p.Stage != config.Batch {
+		return errors.Errorf("invalid position stage: %v", p.Stage)
+	}
+
+	if p.Value == "" {
+		return errors.Errorf("invalid position value: %v", p.Value)
+	}
+
+	if p.UpdateTime.IsZero() {
+		return errors.Errorf("invalid zero position update time")
+	}
+	return nil
+}
+
 type PositionCacheInterface interface {
 	Start() error
 	Close()
-	Put(position Position)
-	Get() Position
+	Put(position Position) error
+	Get() (position Position, exist bool, err error)
 	Flush() error
 	Clear() error
 }
 
 type defaultPositionCache struct {
 	pipelineName string
+	exist        bool
 	dirty        bool
 	repo         PositionRepo
 
@@ -68,17 +84,33 @@ func (cache *defaultPositionCache) Close() {
 	log.Infof("[defaultPositionCache] closed")
 }
 
-func (cache *defaultPositionCache) Put(position Position) {
+func (cache *defaultPositionCache) Put(position Position) error {
 	cache.Lock()
 	defer cache.Unlock()
+	if err := position.Validate(); err != nil {
+		return errors.Trace(err)
+	}
 	cache.position = position
 	cache.dirty = true
+	return nil
 }
 
-func (cache *defaultPositionCache) Get() Position {
+func (cache *defaultPositionCache) Get() (Position, bool, error) {
 	cache.Lock()
 	defer cache.Unlock()
-	return cache.position
+
+	if !cache.exist {
+		position, exist, err := cache.repo.Get(cache.pipelineName)
+		if err != nil && exist {
+			cache.exist = true
+		}
+		return position, true, errors.Trace(err)
+	}
+
+	if err := cache.position.Validate(); err != nil {
+		return Position{}, true, errors.Trace(err)
+	}
+	return cache.position, true, nil
 }
 
 func (cache *defaultPositionCache) Flush() error {
@@ -106,20 +138,26 @@ func (cache *defaultPositionCache) Clear() error {
 		Value: "",
 	}
 
+	if err := cache.repo.Delete(cache.pipelineName); err != nil {
+		return errors.Trace(err)
+	}
+
 	cache.position = position
 	cache.dirty = false
-	return errors.Trace(cache.repo.Delete(cache.pipelineName))
+	cache.exist = false
+	return nil
 }
 
 func NewPositionCache(pipelineName string, repo PositionRepo) (PositionCacheInterface, error) {
 	store := defaultPositionCache{pipelineName: pipelineName, repo: repo, closeC: make(chan struct{})}
 
 	// Load initial data from repo
-	position, err := repo.Get(pipelineName)
+	position, exist, err := repo.Get(pipelineName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	store.position = position
+	store.exist = exist
 
 	return &store, nil
 }

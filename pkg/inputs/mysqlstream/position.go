@@ -1,33 +1,75 @@
 package mysqlstream
 
 import (
+	"database/sql"
+	"time"
+
 	"github.com/juju/errors"
+	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/inputs/helper"
 	"github.com/moiot/gravity/pkg/position_store"
 	"github.com/moiot/gravity/pkg/utils"
 	gomysql "github.com/siddontang/go-mysql/mysql"
 )
 
-func InitPositionCache(positionCache position_store.PositionCacheInterface, startPositionSpec *utils.MySQLBinlogPosition) error {
-	position := positionCache.Get()
+func InitPositionCache(db *sql.DB, positionCache position_store.PositionCacheInterface, startPositionSpec *utils.MySQLBinlogPosition) error {
+	position, exist, err := positionCache.Get()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if !exist {
+		dbUtil := utils.NewMySQLDB(db)
+		binlogFilePos, gtid, err := dbUtil.GetMasterStatus()
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		p := &utils.MySQLBinlogPosition{
+			BinLogFileName: binlogFilePos.Name,
+			BinLogFilePos:  binlogFilePos.Pos,
+			BinlogGTID:     gtid.String(),
+		}
+		// Do not initialize start position.
+		// StartPosition is a user configured parameter.
+		binlogPositions := helper.BinlogPositions{
+			CurrentPosition: p,
+		}
+
+		v, err := helper.SerializeBinlogPositions(&binlogPositions)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		position := position_store.Position{
+			Stage:      config.Stream,
+			Value:      v,
+			UpdateTime: time.Now(),
+		}
+		if err := positionCache.Put(position); err != nil {
+			return errors.Trace(err)
+		}
+
+		return errors.Trace(positionCache.Flush())
+
+	}
+
 	runTimePositions, err := helper.DeserializeBinlogPositions(position.Value)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	// TODO finish this
+	// reset runTimePositions
 	if startPositionSpec != nil {
 		if runTimePositions.StartPosition == nil {
 			runTimePositions.StartPosition = startPositionSpec
+			runTimePositions.CurrentPosition = startPositionSpec
 		} else {
 			if runTimePositions.StartPosition.BinlogGTID != startPositionSpec.BinlogGTID {
-				// reset position
 				runTimePositions.StartPosition = startPositionSpec
 				runTimePositions.CurrentPosition = startPositionSpec
 			}
 		}
-	} else {
-
 	}
 
 	v, err := helper.SerializeBinlogPositions(runTimePositions)
@@ -35,7 +77,9 @@ func InitPositionCache(positionCache position_store.PositionCacheInterface, star
 		return errors.Trace(err)
 	}
 	position.Value = v
-	positionCache.Put(position)
+	if err := positionCache.Put(position); err != nil {
+		return errors.Trace(err)
+	}
 	return errors.Trace(positionCache.Flush())
 }
 
@@ -48,7 +92,15 @@ func GetCurrentGTID(cache position_store.PositionCacheInterface) (string, error)
 }
 
 func GetCurrentPosition(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, error) {
-	position := cache.Get()
+	position, exist, err := cache.Get()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if !exist {
+		return nil, errors.Errorf("empty position")
+	}
+
 	positions, err := helper.DeserializeBinlogPositions(position.Value)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -62,7 +114,15 @@ func GetCurrentPosition(cache position_store.PositionCacheInterface) (*utils.MyS
 }
 
 func GetBinlogPositions(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, *utils.MySQLBinlogPosition, error) {
-	position := cache.Get()
+	position, exist, err := cache.Get()
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+
+	if !exist {
+		return nil, nil, errors.New("empty position")
+	}
+
 	positions, err := helper.DeserializeBinlogPositions(position.Value)
 	if err != nil {
 		return nil, nil, errors.Trace(err)

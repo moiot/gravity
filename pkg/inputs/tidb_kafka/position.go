@@ -59,7 +59,10 @@ type OffsetStore struct {
 }
 
 func (store *OffsetStore) CommitOffset(req *offsets.OffsetCommitRequest) (*offsets.OffsetCommitResponse, error) {
-	position := store.positionCache.Get()
+	position, _, err := store.positionCache.Get()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 
 	positionValue, err := Deserialize(position.Value)
 	if err != nil {
@@ -85,7 +88,9 @@ func (store *OffsetStore) CommitOffset(req *offsets.OffsetCommitRequest) (*offse
 	}
 
 	position.Value = v
-	store.positionCache.Put(position)
+	if err := store.positionCache.Put(position); err != nil {
+		return nil, errors.Trace(err)
+	}
 
 	resp := &offsets.OffsetCommitResponse{}
 	for topic, pbs := range req.Blocks() {
@@ -97,7 +102,16 @@ func (store *OffsetStore) CommitOffset(req *offsets.OffsetCommitRequest) (*offse
 }
 
 func (store *OffsetStore) FetchOffset(req *offsets.OffsetFetchRequest) (*offsets.OffsetFetchResponse, error) {
-	position := store.positionCache.Get()
+	resp := &offsets.OffsetFetchResponse{}
+
+	position, exist, err := store.positionCache.Get()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if !exist {
+		return resp, nil
+	}
 
 	kafkaPositionValue, err := Deserialize(position.Value)
 	if err != nil {
@@ -109,7 +123,6 @@ func (store *OffsetStore) FetchOffset(req *offsets.OffsetFetchRequest) (*offsets
 		return nil, errors.Errorf("consumer group offset empty")
 	}
 
-	resp := &offsets.OffsetFetchResponse{}
 	for topic, topicOffset := range consumerGroupOffset {
 		for partition, offset := range topicOffset {
 			resp.AddBlock(topic, partition, offset, "")

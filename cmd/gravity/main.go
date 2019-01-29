@@ -175,7 +175,13 @@ func healthzHandler(server *app.Server) func(http.ResponseWriter, *http.Request)
 
 func statusHandler(server *app.Server, name, hash string) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		position := server.PositionCache.Get()
+		position, exist, err := server.PositionCache.Get()
+		if err != nil || !exist {
+			writer.WriteHeader(http.StatusInternalServerError)
+			log.Error("[statusHandler] failed to get position, exist: %v, err: %v", exist, errors.ErrorStack(err))
+			return
+		}
+
 		var state = core.ReportStageIncremental
 		if position.Stage == config.Batch {
 			state = core.ReportStageFull

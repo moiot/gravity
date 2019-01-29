@@ -48,8 +48,12 @@ func (i *TwoStageInputPlugin) NewPositionCache() (position_store.PositionCacheIn
 	}
 	caches.full = fullPositionCache
 
-	stage := fullPositionCache.Get().Stage
+	position, _, err := fullPositionCache.Get()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 
+	stage := position.Stage
 	if stage == config.Stream {
 		if incrementalPositionStore, err := i.incremental.NewPositionCache(); err != nil {
 			return nil, errors.Trace(err)
@@ -219,15 +223,15 @@ func (s *twoStagePositionCache) Close() {
 	}
 }
 
-func (s *twoStagePositionCache) Put(position position_store.Position) {
+func (s *twoStagePositionCache) Put(position position_store.Position) error {
 	if s.Stage() == config.Stream {
-		s.incremental.Put(position)
+		return errors.Trace(s.incremental.Put(position))
 	} else {
-		s.full.Put(position)
+		return errors.Trace(s.full.Put(position))
 	}
 }
 
-func (s *twoStagePositionCache) Get() position_store.Position {
+func (s *twoStagePositionCache) Get() (position_store.Position, bool, error) {
 	if s.Stage() == config.Stream {
 		return s.incremental.Get()
 	} else {

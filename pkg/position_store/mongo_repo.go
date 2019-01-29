@@ -18,14 +18,17 @@ type mongoPositionRepo struct {
 	session *mgo.Session
 }
 
-func (repo *mongoPositionRepo) Get(pipelineName string) (Position, error) {
+func (repo *mongoPositionRepo) Get(pipelineName string) (Position, bool, error) {
 	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
 	position := Position{}
 	err := collection.Find(bson.M{"name": pipelineName}).One(&position)
 	if err != nil {
-		return Position{}, errors.Trace(err)
+		if err == mgo.ErrNotFound {
+			return Position{}, false, nil
+		}
+		return Position{}, false, errors.Trace(err)
 	}
-	return position, nil
+	return position, true, nil
 }
 
 // TODO compatible with previous version.

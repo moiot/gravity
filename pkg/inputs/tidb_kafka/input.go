@@ -136,8 +136,12 @@ func (plugin *tidbKafkaInput) Done(positionCache position_store.PositionCacheInt
 	c := make(chan position_store.Position)
 	go func() {
 		plugin.binlogTailer.Wait()
-		position := positionCache.Get()
-		c <- position
+		position, exist, err := positionCache.Get()
+		if err != nil && exist {
+			c <- position
+		} else {
+			log.Fatalf("[tidbKafkaInput] failed to get position, exist: %v, err: %v", exist, errors.ErrorStack(err))
+		}
 		close(c)
 	}()
 	return c

@@ -144,7 +144,15 @@ func (tailer *BinlogTailer) Start() error {
 	}
 
 	// streamer needs positionCache to load the GTID set
-	position := tailer.positionCache.Get()
+	position, exist, err := tailer.positionCache.Get()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if !exist {
+		return errors.Errorf("empty position")
+	}
+
 	binlogPositions, err := helper.DeserializeBinlogPositions(position.Value)
 	if err != nil {
 		return errors.Trace(err)
@@ -557,7 +565,9 @@ func (tailer *BinlogTailer) AfterMsgCommit(msg *core.Msg) error {
 			Stage: config.Stream,
 			Value: v,
 		}
-		tailer.positionCache.Put(position)
+		if err := tailer.positionCache.Put(position); err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	return nil

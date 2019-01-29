@@ -108,7 +108,7 @@ func (plugin *mysqlInputPlugin) NewPositionCache() (position_store.PositionCache
 		return nil, errors.Trace(err)
 	}
 
-	if err := InitPositionCache(positionCache, plugin.cfg.StartPosition); err != nil {
+	if err := InitPositionCache(plugin.sourceDB, positionCache, plugin.cfg.StartPosition); err != nil {
 		return nil, errors.Trace(err)
 	}
 	return positionCache, nil
@@ -140,10 +140,6 @@ func (plugin *mysqlInputPlugin) Start(emitter core.Emitter, positionCache positi
 	if err := plugin.binlogChecker.Start(); err != nil {
 		return errors.Trace(err)
 	}
-
-	// Init position cache with position repo, and compare start-position in repo with start-position in spec.
-	// If the two position is not the same, then set current position to start-position in spec.
-	//
 
 	// binlog tailer
 	gravityServerID := utils.GenerateRandomServerID()
@@ -189,7 +185,12 @@ func (plugin *mysqlInputPlugin) Done(positionCache position_store.PositionCacheI
 	c := make(chan position_store.Position)
 	go func() {
 		plugin.binlogTailer.Wait()
-		c <- positionCache.Get()
+		position, exist, err := positionCache.Get()
+		if err != nil && exist {
+			c <- position
+		} else {
+			log.Fatalf("[mysqlInputPlugin] failed get position exist: %v, err: %v", exist, errors.ErrorStack(err))
+		}
 		close(c)
 	}()
 	return c
