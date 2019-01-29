@@ -144,30 +144,22 @@ func (output *outputCollector) GetRouter() core.Router {
 }
 
 func (output *outputCollector) Execute(msgs []*core.Msg) error {
+	output.Lock()
+	defer output.Unlock()
+
 	for _, m := range msgs {
 		table := m.Table
-
-		output.Lock()
-		if output.receivedRows == nil {
-			output.receivedRows = make(map[string]rows)
-		}
-
 		if _, ok := output.receivedRows[table]; !ok {
 			output.receivedRows[table] = make(map[string][]*core.Msg)
 		}
-
 		rowName := m.DmlMsg.Data["rowName"].(string)
-		if _, ok := output.receivedRows[table][rowName]; !ok {
-			output.receivedRows[table][rowName] = []*core.Msg{m}
-		} else {
-			output.receivedRows[table][rowName] = append(output.receivedRows[table][rowName], m)
-		}
-		output.Unlock()
+		output.receivedRows[table][rowName] = append(output.receivedRows[table][rowName], m)
 	}
 	return nil
 }
 
 func (output *outputCollector) Start() error {
+	output.receivedRows = make(map[string]rows)
 	return nil
 }
 
@@ -211,7 +203,7 @@ func TestBatchScheduler(t *testing.T) {
 				"sliding-window-size": 1024 * 10,
 			},
 			[]string{"mysqlstream"},
-			200,
+			20,
 			100,
 			15,
 		},
@@ -224,7 +216,7 @@ func TestBatchScheduler(t *testing.T) {
 				"sliding-window-size": 1024 * 10,
 			},
 			[]string{"s1", "s2", "s3", "s4", "s5"},
-			200,
+			20,
 			100,
 			15,
 		},
@@ -272,10 +264,8 @@ func TestBatchScheduler(t *testing.T) {
 		}
 
 		output := &outputCollector{}
-		err = s.Start(output)
-		if err != nil {
-			assert.FailNow(err.Error())
-		}
+		assert.NoError(output.Start())
+		assert.NoError(s.Start(output))
 
 		inputMsgs := submitTestMsgs(s, tt.eventSources, tt.nrTables, tt.nrRows, tt.nrEventsPerRow)
 		log.Infof("submitted all msgs")
