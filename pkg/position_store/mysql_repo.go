@@ -63,6 +63,12 @@ func (repo *mysqlPositionRepo) Put(pipelineName string, position Position) error
 	return errors.Trace(err)
 }
 
+func (repo *mysqlPositionRepo) Delete(pipelineName string) error {
+	stmt := fmt.Sprintf("%sDELETE FROM %s WHERE name = ?", repo.annotation, positionFullTableName)
+	_, err := repo.db.Exec(stmt, pipelineName)
+	return errors.Trace(err)
+}
+
 func NewMySQLRepo(dbConfig *utils.DBConfig, annotation string) (PositionRepo, error) {
 	db, err := utils.CreateDBConnection(dbConfig)
 	if err != nil {

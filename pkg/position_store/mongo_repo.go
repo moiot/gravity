@@ -41,6 +41,11 @@ func (repo *mongoPositionRepo) Put(pipelineName string, position Position) error
 	return errors.Trace(err)
 }
 
+func (repo *mongoPositionRepo) Delete(pipelineName string) error {
+	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
+	return errors.Trace(collection.Remove(bson.M{"name": pipelineName}))
+}
+
 func NewMongoPositionRepo(session *mgo.Session) (PositionRepo, error) {
 	session.SetMode(mgo.Primary, true)
 	collection := session.DB(mongoPositionDB).C(mongoPositionCollection)

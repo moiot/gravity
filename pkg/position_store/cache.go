@@ -108,7 +108,7 @@ func (cache *defaultPositionCache) Clear() error {
 
 	cache.position = position
 	cache.dirty = false
-	return errors.Trace(cache.repo.Put(cache.pipelineName, position))
+	return errors.Trace(cache.repo.Delete(cache.pipelineName))
 }
 
 func NewPositionCache(pipelineName string, repo PositionRepo) (PositionCacheInterface, error) {
