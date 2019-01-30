@@ -82,6 +82,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer server.Close()
 
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
@@ -155,21 +156,24 @@ func main() {
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
-				continue
+				log.Infof("watcher closed")
+				return
 			}
-			log.Println("error:", err)
+			log.Error("watcher error:", err)
 			server.Close()
+			return
 		}
 	}
 }
 
 func healthzHandler(server *app.Server) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if server.Scheduler.Healthy() {
-			w.WriteHeader(http.StatusOK)
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
+		w.WriteHeader(http.StatusOK)
+		// if server.Scheduler.Healthy() {
+		// 	w.WriteHeader(http.StatusOK)
+		// } else {
+		// 	w.WriteHeader(http.StatusInternalServerError)
+		// }
 	}
 }
 
