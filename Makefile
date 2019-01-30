@@ -25,8 +25,8 @@ dev-down:
 	docker-compose -f docker-compose-gravity-dev.yml down
 
 go-test:
-	go test -failfast -race ./integration_test
-	go test -coverprofile=cover.out $(TEST_DIRS) && go tool cover -func=cover.out | tail -n 1
+	go test -failfast -race -v -timeout 10m ./integration_test
+	go test  -timeout 10m -coverprofile=cover.out $(TEST_DIRS) && go tool cover -func=cover.out | tail -n 1
 
 test-local:
 	make test; make test-down
