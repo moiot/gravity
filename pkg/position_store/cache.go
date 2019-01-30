@@ -12,6 +12,9 @@ import (
 var DefaultFlushPeriod = 5 * time.Second
 
 type Position struct {
+	// Version is the schema version of position
+	Version string
+	// Name is the unique name of a pipeline
 	Name       string
 	Stage      config.InputMode
 	Value      string
