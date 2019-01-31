@@ -185,7 +185,9 @@ func (s *Server) Close() {
 	s.Scheduler.Close()
 	log.Infof("[Server] scheduler closed")
 
-	s.Output.Close()
+	if err := s.Output.Close(); err != nil {
+		log.Errorf("[Server] output close error: %v", errors.ErrorStack(err))
+	}
 	log.Infof("[Server] output closed")
 
 	s.PositionStore.Close()

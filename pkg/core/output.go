@@ -2,7 +2,7 @@ package core
 
 type Output interface {
 	Execute(msgs []*Msg) error
-	Close()
+	Close() error
 }
 
 type SynchronousOutput interface {

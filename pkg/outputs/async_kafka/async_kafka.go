@@ -247,12 +247,20 @@ func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 	return nil
 }
 
-func (output *AsyncKafka) Close() {
+func (output *AsyncKafka) Close() error {
 	log.Infof("[output-async-kafka] closing")
-	output.kafkaAsyncProducer.Close()
-	output.kafkaClient.Close()
+	if err := output.kafkaAsyncProducer.Close(); err != nil {
+		log.Errorf("[output-async-kafka] kafka async producer close error: %v", errors.ErrorStack(err))
+		return errors.Trace(err)
+	}
+
+	if err := output.kafkaClient.Close(); err != nil {
+		log.Errorf("[output-async-kafka] kafka client close error: %v", errors.ErrorStack(err))
+		return errors.Trace(err)
+	}
 	output.wg.Wait()
 	log.Infof("[output-async-kafka] closed")
+	return nil
 }
 
 func (output *AsyncKafka) addMsgSet(msg *core.Msg) {

@@ -108,18 +108,17 @@ func (output *MySQLOutput) Configure(pipelineName string, data map[string]interf
 
 func (output *MySQLOutput) Start() error {
 
-	targetSchemaStore, err := schema_store.NewSimpleSchemaStore(output.cfg.DBConfig)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	output.targetSchemaStore = targetSchemaStore
-
 	db, err := utils.CreateDBConnection(output.cfg.DBConfig)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	output.db = db
+
+	targetSchemaStore, err := schema_store.NewSimpleSchemaStoreFromDBConn(db)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	output.targetSchemaStore = targetSchemaStore
 
 	engineInitializer, ok := output.sqlExecutionEnginePlugin.(sql_execution_engine.EngineInitializer)
 	if !ok {
@@ -139,9 +138,9 @@ func (output *MySQLOutput) Start() error {
 	return nil
 }
 
-func (output *MySQLOutput) Close() {
-	output.db.Close()
+func (output *MySQLOutput) Close() error {
 	output.targetSchemaStore.Close()
+	return errors.Trace(output.db.Close())
 }
 
 // msgs in the same batch should have the same table name

@@ -5,15 +5,12 @@ import (
 	"sync"
 
 	"github.com/juju/errors"
-
-	"github.com/moiot/gravity/pkg/utils"
 )
 
 type SimpleSchemaStore struct {
 	sync.RWMutex
-	sourceDB *sql.DB
-	dbCfg    *utils.DBConfig
-	schemas  map[string]Schema
+	db      *sql.DB
+	schemas map[string]Schema
 }
 
 func (store *SimpleSchemaStore) IsInCache(dbName string) bool {
@@ -38,7 +35,7 @@ func (store *SimpleSchemaStore) GetSchema(dbName string) (Schema, error) {
 		return cachedSchema, nil
 	}
 
-	schema, err := GetSchemaFromDB(store.sourceDB, dbName)
+	schema, err := GetSchemaFromDB(store.db, dbName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -63,20 +60,8 @@ func (store *SimpleSchemaStore) InvalidateCache() {
 }
 
 func (store *SimpleSchemaStore) Close() {
-	if store.sourceDB != nil {
-		store.sourceDB.Close()
-	}
 }
 
 func NewSimpleSchemaStoreFromDBConn(db *sql.DB) (SchemaStore, error) {
-	return &SimpleSchemaStore{sourceDB: db, schemas: make(map[string]Schema)}, nil
-}
-
-func NewSimpleSchemaStore(dbCfg *utils.DBConfig) (*SimpleSchemaStore, error) {
-	sourceDB, err := utils.CreateDBConnection(dbCfg)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	return &SimpleSchemaStore{dbCfg: dbCfg, schemas: make(map[string]Schema), sourceDB: sourceDB}, nil
+	return &SimpleSchemaStore{db: db, schemas: make(map[string]Schema)}, nil
 }
