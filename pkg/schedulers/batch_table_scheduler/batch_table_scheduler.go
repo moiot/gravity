@@ -200,6 +200,7 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 					}, scheduler.cfg.NrRetries, scheduler.cfg.RetrySleep)
 
 					if err != nil {
+
 						log.Fatalf("[batchScheduler] output exec error: %v", errors.ErrorStack(err))
 					}
 

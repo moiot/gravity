@@ -266,7 +266,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 
 		err := output.sqlExecutor.Execute(batch, targetTableDef)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.Annotatef(err, "db.Stats: %+v", output.db.Stats())
 		}
 
 		ProcessedMsgCount.
