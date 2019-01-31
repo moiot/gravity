@@ -29,7 +29,8 @@ func (plugin *DumpOutput) Start() error {
 	return nil
 }
 
-func (plugin *DumpOutput) Close() {
+func (plugin *DumpOutput) Close() error {
+	return nil
 
 }
 
