@@ -3,6 +3,8 @@ package position_store_test
 import (
 	"testing"
 
+	"github.com/moiot/gravity/pkg/mongo"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/moiot/gravity/pkg/config"
@@ -11,11 +13,14 @@ import (
 )
 
 func TestMongoPositionStore(t *testing.T) {
-	mongo_test.InitReplica()
+	mongoCfg := mongo_test.TestConfig()
+	s, err := mongo.CreateMongoSession(&mongoCfg)
+	if err != nil {
+		panic(err)
+	}
+	mongo_test.InitReplica(s)
 
 	r := require.New(t)
-
-	mongoCfg := mongo_test.TestConfig()
 
 	store, err := NewMongoPositionStore(t.Name(), &mongoCfg, nil)
 	r.NoError(err)

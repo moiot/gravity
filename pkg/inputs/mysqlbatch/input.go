@@ -89,8 +89,10 @@ type TableWork struct {
 	TableConfig *TableConfig
 }
 
+const Name = "mysql-batch"
+
 func init() {
-	registry.RegisterPlugin(registry.InputPlugin, "mysqlbatch", &mysqlFullInput{}, false)
+	registry.RegisterPlugin(registry.InputPlugin, Name, &mysqlFullInput{}, false)
 }
 
 func (plugin *mysqlFullInput) Configure(pipelineName string, data map[string]interface{}) error {

@@ -67,6 +67,9 @@ func (i *TwoStageInputPlugin) Wait() {
 }
 
 func (i *TwoStageInputPlugin) SendDeadSignal() error {
+	i.transitionMutex.Lock()
+	defer i.transitionMutex.Unlock()
+
 	if i.Stage() == config.Stream {
 		return i.incremental.SendDeadSignal()
 	} else {

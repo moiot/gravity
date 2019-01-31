@@ -23,7 +23,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-const AsyncKafkaPluginName = "async-kafka"
+const Name = "async-kafka"
 
 var (
 	KafkaMsgSizeGaugeVec = prometheus.NewGaugeVec(
@@ -74,14 +74,12 @@ type AsyncKafka struct {
 	kafkaAsyncProducer *kafka.KafkaAsyncProducer
 	msgAcker           core.MsgAcker
 	wg                 sync.WaitGroup
-	inFlight           sync.WaitGroup
 
-	msgSet map[int64]*core.Msg
 	sync.Mutex
 }
 
 func init() {
-	registry.RegisterPlugin(registry.OutputPlugin, AsyncKafkaPluginName, &AsyncKafka{}, false)
+	registry.RegisterPlugin(registry.OutputPlugin, Name, &AsyncKafka{}, false)
 
 	prometheus.MustRegister(KafkaMsgSizeGaugeVec)
 	prometheus.MustRegister(KafkaEnqueuedCount)
@@ -139,7 +137,6 @@ func (output *AsyncKafka) Start(msgAcker core.MsgAcker) error {
 		return errors.Trace(err)
 	}
 	output.kafkaClient = kafkaClient
-	output.msgSet = make(map[int64]*core.Msg)
 	output.wg.Add(1)
 	go func() {
 		defer output.wg.Done()
@@ -147,14 +144,9 @@ func (output *AsyncKafka) Start(msgAcker core.MsgAcker) error {
 		for msg := range output.kafkaAsyncProducer.Successes() {
 			topic := msg.Topic
 			partition := msg.Partition
-			meta, ok := msg.Metadata.(kafka.KafkaMetaData)
+			msg, ok := msg.Metadata.(*core.Msg)
 			if !ok {
 				log.Fatalf("[kafka_target_worker] failed to get meta data")
-			}
-
-			msg, err := output.delMsgSet(meta.InputSequenceNumber)
-			if err != nil {
-				log.Fatalf("failed to delete job, err: %v", errors.ErrorStack(err))
 			}
 
 			if err := output.msgAcker.AckMsg(msg); err != nil {
@@ -225,15 +217,11 @@ func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 			return errors.Annotatef(err, "topic: %v", topic)
 		}
 		partition := int(utils.GenHashKey(*msg.OutputStreamKey)) % len(partitions)
-		metadata := kafka.KafkaMetaData{
-			InputSequenceNumber: *msg.InputSequence,
-			InputStreamKey:      *msg.InputStreamKey,
-		}
 		kafkaMsg := sarama.ProducerMessage{
 			Topic:     topic,
 			Value:     sarama.ByteEncoder(b),
 			Partition: int32(partition),
-			Metadata:  metadata,
+			Metadata:  msg,
 		}
 
 		size := byteSize(&kafkaMsg)
@@ -242,9 +230,7 @@ func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 		}
 
 		KafkaMsgSizeGaugeVec.WithLabelValues(output.pipelineName, topic).Set(float64(size))
-		output.addMsgSet(msg)
 		output.kafkaAsyncProducer.Input() <- &kafkaMsg
-
 		KafkaEnqueuedCount.WithLabelValues(output.pipelineName, topic).Add(1)
 	}
 
@@ -253,34 +239,10 @@ func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 
 func (output *AsyncKafka) Close() {
 	log.Infof("[output-async-kafka] closing")
-	output.inFlight.Wait()
 	output.kafkaAsyncProducer.Close()
 	output.kafkaClient.Close()
 	output.wg.Wait()
 	log.Infof("[output-async-kafka] closed")
-}
-
-func (output *AsyncKafka) addMsgSet(msg *core.Msg) {
-	output.inFlight.Add(1)
-
-	output.Lock()
-	defer output.Unlock()
-
-	output.msgSet[*msg.InputSequence] = msg
-}
-
-func (output *AsyncKafka) delMsgSet(seq int64) (*core.Msg, error) {
-	output.inFlight.Done()
-
-	output.Lock()
-	defer output.Unlock()
-	msg, ok := output.msgSet[seq]
-	if !ok {
-		return nil, errors.Errorf("job not in set, seq: %d", seq)
-	}
-
-	delete(output.msgSet, seq)
-	return msg, nil
 }
 
 func byteSize(m *sarama.ProducerMessage) int {

@@ -28,6 +28,7 @@ It is designed to be a customizable data replication tool that:
 |  MySQL Binlog | ✅  | 
 |  MySQL Scan |  ✅ |   
 |  Mongo Oplog | ✅  | 
+|  Mongo Scan | ✅  | 
 |  TiDB Binlog | Doing  |
 |  PostgreSQL WAL | Doing  |
 

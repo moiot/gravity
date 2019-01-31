@@ -3,6 +3,9 @@ package mysql
 import (
 	log "github.com/sirupsen/logrus"
 
+	"github.com/moiot/gravity/pkg/inputs/mysqlbatch"
+	"github.com/moiot/gravity/pkg/inputs/mysqlstream"
+
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/inputs/helper"
 
@@ -12,8 +15,10 @@ import (
 	"github.com/moiot/gravity/pkg/registry"
 )
 
+const Name = "mysql"
+
 func init() {
-	registry.RegisterPlugin(registry.InputPlugin, "mysql", &input{}, false)
+	registry.RegisterPlugin(registry.InputPlugin, Name, &input{}, false)
 }
 
 type input struct {
@@ -30,24 +35,24 @@ func (i *input) Configure(pipelineName string, data map[string]interface{}) erro
 
 	switch mode.(config.InputMode) {
 	case config.Batch:
-		i.Input, err = getDelegate("mysqlbatch", pipelineName, data)
+		i.Input, err = helper.GetInputFromPlugin(mysqlbatch.Name, pipelineName, data)
 		if err != nil {
 			return errors.Trace(err)
 		}
 
 	case config.Stream:
-		i.Input, err = getDelegate("mysqlstream", pipelineName, data)
+		i.Input, err = helper.GetInputFromPlugin(mysqlstream.Name, pipelineName, data)
 		if err != nil {
 			return errors.Trace(err)
 		}
 
 	case config.Replication:
-		scan, err := getDelegate("mysqlbatch", pipelineName, data)
+		scan, err := helper.GetInputFromPlugin(mysqlbatch.Name, pipelineName, data)
 		if err != nil {
 			return errors.Trace(err)
 		}
 
-		binlog, err := getDelegate("mysqlstream", pipelineName, data)
+		binlog, err := helper.GetInputFromPlugin(mysqlstream.Name, pipelineName, data)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -62,16 +67,4 @@ func (i *input) Configure(pipelineName string, data map[string]interface{}) erro
 	}
 
 	return nil
-}
-
-func getDelegate(pluginName string, pipelineName string, data map[string]interface{}) (core.Input, error) {
-	plugin, err := registry.GetPlugin(registry.InputPlugin, pluginName)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	err = plugin.Configure(pipelineName, data)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	return plugin.(core.Input), nil
 }

@@ -252,13 +252,13 @@ func TestMySQLBatchNoTableConfig(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
 			Mode: config.Batch,
-			Config: struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+			Config: utils.Struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
 				Source: sourceDBConfig,
 			}),
 		},
 		OutputPlugin: config.GenericConfig{
 			Type: "mysql",
-			Config: struct2Map(mysql.MySQLPluginConfig{
+			Config: utils.Struct2Map(mysql.MySQLPluginConfig{
 				DBConfig:  targetDBConfig,
 				EnableDDL: true,
 				Routes: []map[string]interface{}{
@@ -636,14 +636,14 @@ func TestMySQLToMyBidirection(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
 			Mode: config.Stream,
-			Config: struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+			Config: utils.Struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
 				IgnoreBiDirectionalData: true,
 				Source:                  sourceDBConfig,
 			}),
 		},
 		OutputPlugin: config.GenericConfig{
 			Type: "mysql",
-			Config: struct2Map(mysql.MySQLPluginConfig{
+			Config: utils.Struct2Map(mysql.MySQLPluginConfig{
 				DBConfig:  targetDBConfig,
 				EnableDDL: true,
 				Routes: []map[string]interface{}{
@@ -655,7 +655,7 @@ func TestMySQLToMyBidirection(t *testing.T) {
 				},
 				EngineConfig: &config.GenericConfig{
 					Type: sql_execution_engine.MySQLReplaceEngine,
-					Config: struct2Map(sql_execution_engine.MysqlReplaceEngineConfig{
+					Config: utils.Struct2Map(sql_execution_engine.MysqlReplaceEngineConfig{
 						TagInternalTxn: true,
 					}),
 				},

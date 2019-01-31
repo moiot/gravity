@@ -21,7 +21,7 @@ func TestConfigure(t *testing.T) {
 	r := require.New(t)
 
 	t.Run("default plugin exists", func(tt *testing.T) {
-		p, err := registry.GetPlugin(registry.OutputPlugin, OutputMySQL)
+		p, err := registry.GetPlugin(registry.OutputPlugin, Name)
 		r.NoError(err)
 
 		r.NoError(p.Configure("test", map[string]interface{}{
@@ -39,7 +39,7 @@ func TestConfigure(t *testing.T) {
 	})
 
 	t.Run("sql plugin without any configuration", func(tt *testing.T) {
-		p, err := registry.GetPlugin(registry.OutputPlugin, OutputMySQL)
+		p, err := registry.GetPlugin(registry.OutputPlugin, Name)
 		r.NoError(err)
 
 		r.NoError(p.Configure("test", map[string]interface{}{

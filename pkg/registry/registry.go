@@ -33,7 +33,7 @@ func RegisterPluginFactory(pluginType PluginType, name string, v PluginFactory) 
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	log.Infof("[RegisterPlugin] type: %v, name: %v", pluginType, name)
+	log.Debugf("[RegisterPlugin] type: %v, name: %v", pluginType, name)
 	if registry == nil {
 		registry = make(map[PluginType]map[string]PluginFactory)
 	}

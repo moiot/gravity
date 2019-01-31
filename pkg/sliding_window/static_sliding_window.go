@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -116,7 +115,7 @@ func (w *staticSlidingWindow) Close() {
 	// log.Infof("[staticSlidingWindow] closed")
 }
 
-func (w *staticSlidingWindow) removeItemFromSequence() (*itemWithTime, error) {
+func (w *staticSlidingWindow) removeItemFromSequence() (*itemWithTime, bool) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -124,9 +123,9 @@ func (w *staticSlidingWindow) removeItemFromSequence() (*itemWithTime, error) {
 		select {
 		case nextItem, ok := <-w.waitingItemC:
 			if !ok {
-				return nil, errors.Errorf("no more sequence")
+				return nil, ok
 			}
-			return &nextItem, nil
+			return &nextItem, ok
 
 		case <-ticker.C:
 			w.reportWatermarkDelay()
@@ -141,8 +140,8 @@ func (w *staticSlidingWindow) start() {
 	defer w.wgForClose.Done()
 
 	// init the nextItemToCommit the first time
-	if nextItemToCommit, err := w.removeItemFromSequence(); err != nil {
-		log.Infof("[staticSlidingWindow]: exist on init. %v", errors.ErrorStack(err))
+	if nextItemToCommit, ok := w.removeItemFromSequence(); !ok {
+		log.Infof("[staticSlidingWindow]: exist on init.")
 		return
 	} else {
 		w.nextItemToCommit = nextItemToCommit
@@ -186,9 +185,9 @@ func (w *staticSlidingWindow) start() {
 
 				heap.Pop(w.readyCommitHeap)
 
-				w.nextItemToCommit, err = w.removeItemFromSequence()
-				if err != nil {
-					log.Infof("[staticSlidingWindow]: %v", errors.ErrorStack(err))
+				w.nextItemToCommit, ok = w.removeItemFromSequence()
+				if !ok {
+					log.Infof("[staticSlidingWindow] closing")
 					return
 				}
 			}

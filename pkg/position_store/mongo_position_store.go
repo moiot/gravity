@@ -199,14 +199,12 @@ func NewMongoPositionStore(pipelineName string, conn *config.MongoConnConfig, po
 
 	store.loadPosition()
 
-	startPositionInSpec := make(map[string]config.MongoPosition)
-
 	var runtimePipelinePosition = store.position
 
 	// If the start position in the spec is different than the start position last saved,
 	// we use the start position in the spec;
 	// otherwise, we just start normally
-	log.Infof("[NewMongoPositionStore] start position in spec %v, runtime start position %v", startPositionInSpec, runtimePipelinePosition.StartPosition)
+	log.Infof("[NewMongoPositionStore] start position in spec %v, runtime start position %v", pos, runtimePipelinePosition.StartPosition)
 	if pos != nil && *pos != runtimePipelinePosition.StartPosition {
 		log.Infof("[NewMongoPositionStore]: spec violation!")
 		store.position = MongoPosition{*pos, *pos}

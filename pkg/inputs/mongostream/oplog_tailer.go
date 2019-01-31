@@ -1,9 +1,11 @@
-package mongooplog
+package mongostream
 
 import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/moiot/gravity/pkg/mongo"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
@@ -113,7 +115,7 @@ func (tailer *OplogTailer) Run() {
 		log.Infof("[oplog_tailer] start from the latest timestamp")
 		after = nil
 	} else {
-		log.Infof("[oplog_tailer] start from the configured timestamp")
+		log.Infof("[oplog_tailer] start from the configured timestamp %v", t)
 	}
 
 	filter := func(op *gtm.Op) bool {
@@ -145,15 +147,9 @@ func (tailer *OplogTailer) Run() {
 		case err := <-tailer.opCtx.ErrC:
 			log.Fatalf("[oplog_tailer] err: %v", err)
 		case op := <-tailer.opCtx.OpC:
-			if op.GetDatabase() == consts.GravityDBName && op.GetCollection() == deadSignalCollection {
-				if op.Data["name"] == tailer.pipelineName {
-					log.Info("[oplog_tailer] receive dead signal, exit")
-					tailer.Stop()
-					return
-				} else {
-					log.Warnf("[oplog_tailer] dead signal for %s, I'm %s, ignore.", op.Data["name"], tailer.pipelineName)
-					continue
-				}
+			if mongo.IsDeadSignal(op, tailer.pipelineName) {
+				log.Info("[oplog_tailer] receive dead signal, exit")
+				tailer.Stop()
 			}
 
 			msg := core.Msg{
@@ -235,13 +231,8 @@ func outputStreamKey(oplog *gtm.Op) string {
 	}
 }
 
-const deadSignalCollection = "dead_signals"
-
 func (tailer *OplogTailer) SendDeadSignal() error {
-	c := tailer.session.DB(consts.GravityDBName).C(deadSignalCollection)
-	return c.Insert(bson.M{
-		"name": tailer.pipelineName,
-	})
+	return mongo.SendDeadSignal(tailer.session, tailer.pipelineName)
 }
 
 func (tailer *OplogTailer) Wait() {

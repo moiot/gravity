@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	OutputMySQL = "mysql"
+	Name = "mysql"
 )
 
 var (
@@ -57,7 +57,7 @@ type MySQLOutput struct {
 
 func init() {
 	prometheus.MustRegister(ProcessedMsgCount)
-	registry.RegisterPlugin(registry.OutputPlugin, OutputMySQL, &MySQLOutput{}, false)
+	registry.RegisterPlugin(registry.OutputPlugin, Name, &MySQLOutput{}, false)
 }
 
 func (output *MySQLOutput) Configure(pipelineName string, data map[string]interface{}) error {
