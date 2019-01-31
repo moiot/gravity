@@ -167,8 +167,9 @@ func (output *outputCollector) Start() error {
 	return nil
 }
 
-func (output *outputCollector) Close() {
+func (output *outputCollector) Close() error {
 	output.receivedRows = nil
+	return nil
 }
 
 func TestBatchScheduler(t *testing.T) {
