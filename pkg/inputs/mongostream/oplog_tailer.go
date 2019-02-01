@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/moiot/gravity/pkg/mongo"
-
 	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
@@ -16,6 +14,7 @@ import (
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
 	"github.com/moiot/gravity/pkg/position_store"
 	"github.com/moiot/gravity/pkg/utils"

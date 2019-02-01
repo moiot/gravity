@@ -74,6 +74,7 @@ type AsyncKafka struct {
 	kafkaAsyncProducer *kafka.KafkaAsyncProducer
 	msgAcker           core.MsgAcker
 	wg                 sync.WaitGroup
+	inFlight           sync.WaitGroup
 
 	sync.Mutex
 }
@@ -239,6 +240,7 @@ func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 
 func (output *AsyncKafka) Close() {
 	log.Infof("[output-async-kafka] closing")
+	output.inFlight.Wait()
 	output.kafkaAsyncProducer.Close()
 	output.kafkaClient.Close()
 	output.wg.Wait()

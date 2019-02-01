@@ -6,7 +6,6 @@ import (
 
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
