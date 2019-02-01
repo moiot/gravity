@@ -32,6 +32,15 @@ func getIndexRowsName(db *sql.DB, statement string) ([]string, error) {
 	return result, nil
 }
 
+func IsTableEmpty(db *sql.DB, schema string, table string) bool {
+	r := db.QueryRow(fmt.Sprintf("select count(*) from (select * from `%s`.`%s` limit 1)t", schema, table))
+	var cnt int
+	if err := r.Scan(&cnt); err != nil {
+		log.Fatalf("error IsTableEmpty, schema %s, table %s, err %s", schema, table, errors.Trace(err))
+	}
+	return cnt == 0
+}
+
 func GetIndexRows(db *sql.DB, statement string) ([][]sql.NullString, error) {
 	rows, err := db.Query(statement)
 	defer func() {

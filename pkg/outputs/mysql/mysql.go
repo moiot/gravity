@@ -4,21 +4,19 @@ import (
 	"database/sql"
 	"strings"
 
-	"github.com/moiot/gravity/pkg/metrics"
-	"github.com/prometheus/client_golang/prometheus"
-
-	"github.com/pingcap/parser/format"
-
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/format"
 	"github.com/pingcap/parser/model"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/outputs/routers"
 	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/schema_store"
@@ -142,6 +140,10 @@ func (output *MySQLOutput) Start() error {
 func (output *MySQLOutput) Close() {
 	output.db.Close()
 	output.targetSchemaStore.Close()
+}
+
+func (output *MySQLOutput) GetRouter() core.Router {
+	return routers.MySQLRouter(output.routes)
 }
 
 // msgs in the same batch should have the same table name

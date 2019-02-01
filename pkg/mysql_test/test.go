@@ -96,7 +96,7 @@ var setupSqls = []string{
 
 var deadSignalSQL = fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %s.%s(
-id INT NOT NULL,
+id varchar(255) NOT NULL,
 v BIGINT UNSIGNED NOT NULL DEFAULT 0,
 PRIMARY KEY (id)
 )ENGINE=InnoDB DEFAULT CHARSET=utf8
@@ -232,8 +232,8 @@ func IsDeadSignal(schema string, table string) bool {
 	return schema == consts.GravityDBName && table == deadSignalTable
 }
 
-func SendDeadSignal(db *sql.DB, gravityID uint32) error {
-	_, err := db.Exec(fmt.Sprintf("insert into %s.%s(id, v) values (%d, 1) on duplicate key update v = v+1", consts.GravityDBName, deadSignalTable, gravityID))
+func SendDeadSignal(db *sql.DB, pipeline string) error {
+	_, err := db.Exec(fmt.Sprintf("insert into %s.%s(id, v) values ('%s', 1) on duplicate key update v = v+1", consts.GravityDBName, deadSignalTable, pipeline))
 	return errors.Trace(err)
 }
 

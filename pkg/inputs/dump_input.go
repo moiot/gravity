@@ -28,7 +28,7 @@ func (plugin *dumpInput) Configure(pipelineName string, data map[string]interfac
 	return nil
 }
 
-func (plugin *dumpInput) Start(emitter core.Emitter) error {
+func (plugin *dumpInput) Start(emitter core.Emitter, router core.Router) error {
 	return nil
 }
 
@@ -58,10 +58,6 @@ func (plugin *dumpInput) Done() chan position_store.Position {
 
 func (plugin *dumpInput) Wait() {
 
-}
-
-func (plugin *dumpInput) Identity() uint32 {
-	return 1
 }
 
 func init() {

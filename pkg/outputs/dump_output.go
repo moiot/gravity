@@ -25,6 +25,10 @@ func (plugin *DumpOutput) Configure(pipelineName string, data map[string]interfa
 	return nil
 }
 
+func (plugin *DumpOutput) GetRouter() core.Router {
+	return core.EmptyRouter{}
+}
+
 func (plugin *DumpOutput) Start() error {
 	return nil
 }

@@ -86,6 +86,7 @@ type BinlogTailer struct {
 	binlogChecker     binlog_checker.BinlogChecker
 
 	emitter core.Emitter
+	router  core.Router
 
 	wg sync.WaitGroup
 
@@ -103,6 +104,7 @@ func NewBinlogTailer(
 	sourceSchemaStore schema_store.SchemaStore,
 	sourceDB *sql.DB,
 	emitter core.Emitter,
+	router core.Router,
 	binlogChecker binlog_checker.BinlogChecker,
 	binlogEventSchemaFilter BinlogEventSchemaFilterFunc,
 ) (*BinlogTailer, error) {
@@ -123,6 +125,7 @@ func NewBinlogTailer(
 		cancel:                  cancel,
 		binlogSyncer:            utils.NewBinlogSyncer(gravityServerID, cfg.Source),
 		emitter:                 emitter,
+		router:                  router,
 		positionStore:           positionStore,
 		sourceSchemaStore:       sourceSchemaStore,
 		binlogChecker:           binlogChecker,
@@ -265,7 +268,7 @@ func (tailer *BinlogTailer) Start() error {
 				// dead signal is received from special internal table.
 				// it is only used for test purpose right now.
 				isDeadSignal := mysql_test.IsDeadSignal(schemaName, tableName)
-				if isDeadSignal && IsEventBelongsToMyself(ev, tailer.gravityServerID) {
+				if isDeadSignal && IsEventBelongsToMyself(ev, tailer.pipelineName) {
 					log.Infof("[binlog_tailer] dead signal for myself, exit")
 					return
 				}
@@ -532,6 +535,9 @@ func (tailer *BinlogTailer) Wait() {
 
 // AppendMsgTxnBuffer adds basic job information to txn buffer
 func (tailer *BinlogTailer) AppendMsgTxnBuffer(msg *core.Msg) {
+	if msg.Database != consts.GravityDBName && msg.Type != core.MsgCtl && tailer.router != nil && !tailer.router.Exists(msg) {
+		return
+	}
 	tailer.msgTxnBuffer = append(tailer.msgTxnBuffer, msg)
 
 	// the main purpose of txn buffer is to filter out internal data,
@@ -546,7 +552,6 @@ func (tailer *BinlogTailer) AppendMsgTxnBuffer(msg *core.Msg) {
 // FlushMsgTxnBuffer will flush job in txn  buffer to queue.
 // We will also filter out job that don't need to send out in this stage.
 func (tailer *BinlogTailer) FlushMsgTxnBuffer() {
-
 	// ignore internal drc txn data
 	isBiDirectionalTxn := false
 	for _, msg := range tailer.msgTxnBuffer {
@@ -576,8 +581,6 @@ func (tailer *BinlogTailer) FlushMsgTxnBuffer() {
 		if err := tailer.emitter.Emit(m); err != nil {
 			log.Fatalf("failed to emit, idx: %d, schema: %v, table: %v, msgType: %v, op: %v, err: %v",
 				i, m.Database, m.Table, m.Type, ctx.op, errors.ErrorStack(err))
-		} else {
-
 		}
 	}
 }

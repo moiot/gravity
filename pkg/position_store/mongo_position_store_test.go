@@ -11,6 +11,8 @@ import (
 )
 
 func TestMongoPositionStore(t *testing.T) {
+	mongo_test.InitReplica()
+
 	r := require.New(t)
 
 	mongoCfg := mongo_test.TestConfig()

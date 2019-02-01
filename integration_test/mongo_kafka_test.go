@@ -9,10 +9,8 @@ import (
 	"github.com/moiot/gravity/pkg/app"
 
 	"github.com/Shopify/sarama"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
+	mgo "gopkg.in/mgo.v2"
 
 	gravityConfig "github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/kafka"
@@ -22,39 +20,13 @@ import (
 	"github.com/moiot/gravity/pkg/sarama_cluster"
 )
 
-// see https://stackoverflow.com/a/44342358 for mgo and mongo replication init
-func initReplica() {
-	mongoCfg := mongo_test.TestConfig()
-	session, err := mongo.CreateMongoSession(&mongoCfg)
-	if err != nil {
-		panic(err)
-	}
-
-	// Session mode should be monotonic as the default session used by mgo is primary which performs all operations on primary.
-	// Since the replica set has not been initialized yet, there wont be a primary and the operation (in this case, replSetInitiate) will just timeout
-	session.SetMode(mgo.Monotonic, true)
-
-	result := bson.M{}
-	err = session.Run("replSetInitiate", &result)
-	if err != nil {
-		if (result["codeName"] != "AlreadyInitialized") && result["code"] != 23 {
-			panic(err.Error())
-		}
-	}
-
-	log.Infof("%+v", result)
-	session.Close()
-
-	fmt.Println("mongo replSet initialized")
-}
-
 type person struct {
 	Name string
 	Time string
 }
 
 func TestMongoJson(t *testing.T) {
-	initReplica()
+	mongo_test.InitReplica()
 
 	r := require.New(t)
 
@@ -121,6 +93,16 @@ func TestMongoJson(t *testing.T) {
 				break
 			}
 		}
+		select {
+		case msg, ok := <-consumer.Messages():
+			if ok {
+				received = append(received, string(msg.Value))
+				fmt.Println(string(msg.Value))
+				consumer.MarkOffset(msg, "")
+			}
+
+		case <-time.After(time.Second):
+		}
 		close(done)
 	}()
 	go func() {
@@ -147,6 +129,10 @@ func TestMongoJson(t *testing.T) {
 	for i := 0; i < operations; i++ {
 		r.NoError(coll.Insert(&person{"Foo" + strconv.Itoa(i), time.Now().Format(time.RFC3339)}))
 	}
+
+	// should ignore
+	coll = session.DB(t.Name()).C(t.Name() + "_2")
+	r.NoError(coll.Insert(&person{"Foo", time.Now().Format(time.RFC3339)}))
 
 	<-done
 	r.NoError(consumer.Close())

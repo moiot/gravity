@@ -94,6 +94,7 @@ func (plugin *tidbInput) Start(emitter core.Emitter) error {
 	plugin.binlogChecker = binlogChecker
 
 	binlogTailer, err := NewBinlogTailer(
+		plugin.pipelineName,
 		plugin.gravityServerID,
 		cfg,
 		emitter,
@@ -144,7 +145,7 @@ func (plugin *tidbInput) SendDeadSignal() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	return mysql_test.SendDeadSignal(db, plugin.Identity())
+	return mysql_test.SendDeadSignal(db, plugin.pipelineName)
 }
 
 func (plugin *tidbInput) Wait() {

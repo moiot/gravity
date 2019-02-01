@@ -1,8 +1,14 @@
 package mongo_test
 
 import (
+	"fmt"
 	"os"
 	"strconv"
+
+	mgo "gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
+
+	"github.com/moiot/gravity/pkg/mongo"
 
 	log "github.com/sirupsen/logrus"
 
@@ -41,4 +47,30 @@ func TestConfig() config.MongoConnConfig {
 	}
 
 	return cfg
+}
+
+// see https://stackoverflow.com/a/44342358 for mgo and mongo replication init
+func InitReplica() {
+	mongoCfg := TestConfig()
+	session, err := mongo.CreateMongoSession(&mongoCfg)
+	if err != nil {
+		panic(err)
+	}
+
+	// Session mode should be monotonic as the default session used by mgo is primary which performs all operations on primary.
+	// Since the replica set has not been initialized yet, there wont be a primary and the operation (in this case, replSetInitiate) will just timeout
+	session.SetMode(mgo.Monotonic, true)
+
+	result := bson.M{}
+	err = session.Run("replSetInitiate", &result)
+	if err != nil {
+		if (result["codeName"] != "AlreadyInitialized") && result["code"] != 23 {
+			panic(err.Error())
+		}
+	}
+
+	log.Infof("%+v", result)
+	session.Close()
+
+	fmt.Println("mongo replSet initialized")
 }

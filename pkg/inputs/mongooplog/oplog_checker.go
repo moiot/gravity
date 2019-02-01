@@ -6,13 +6,13 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/mgo.v2"
+	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
+	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/metrics"
 )
 
-const OplogCheckerDBName = "drc"
 const OplogCheckerCollectionName = "heartbeat"
 
 type OplogChecker struct {
@@ -59,7 +59,7 @@ func (checker *OplogChecker) MarkActive(source string, data map[string]interface
 
 func (checker *OplogChecker) Run() {
 	checker.session.SetMode(mgo.Primary, true)
-	c := checker.session.DB(OplogCheckerDBName).C(OplogCheckerCollectionName)
+	c := checker.session.DB(consts.GravityDBName).C(OplogCheckerCollectionName)
 
 	heartbeat := OplogHeartbeat{}
 

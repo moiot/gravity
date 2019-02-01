@@ -21,8 +21,6 @@ import (
 	"github.com/moiot/gravity/pkg/utils"
 )
 
-var ErrTableEmpty = errors.New("table_scanner: this table is empty")
-
 type TableScanner struct {
 	pipelineName  string
 	tableWorkC    chan *TableWork
@@ -56,12 +54,17 @@ func (tableScanner *TableScanner) Start() error {
 					log.Fatalf("[TableScanner] initTableDDL for %s.%s, err: %s", work.TableDef.Schema, work.TableDef.Name, err)
 				}
 
-				err = tableScanner.InitTablePosition(work.TableDef, work.TableConfig)
-				if err == ErrTableEmpty {
-					log.Infof("[TableScanner] Target table is empty. schema: %v, table: %v",
-						work.TableDef.Schema, work.TableDef.Name)
+				if utils.IsTableEmpty(tableScanner.db, work.TableDef.Schema, work.TableDef.Name) {
+					msg := NewCloseInputStreamMsg(work.TableDef)
+					if err := tableScanner.emitter.Emit(msg); err != nil {
+						log.Fatalf("[LoopInBatch] failed to emit close stream msg: %v", errors.ErrorStack(err))
+					}
+					log.Infof("[TableScanner] table %s.%s is empty.", work.TableDef.Schema, work.TableDef.Name)
 					continue
-				} else if err != nil {
+				}
+
+				err = tableScanner.InitTablePosition(work.TableDef, work.TableConfig)
+				if err != nil {
 					log.Fatalf("[TableScanner] InitTablePosition failed: %v", errors.ErrorStack(err))
 				}
 				max, min, ok := tableScanner.positionStore.GetMaxMin(utils.TableIdentity(work.TableDef.Schema, work.TableDef.Name))
@@ -123,13 +126,6 @@ func (tableScanner *TableScanner) InitTablePosition(tableDef *schema_store.Table
 		} else {
 			max, min := FindMaxMinValueFromDB(tableScanner.db, tableDef.Schema, tableDef.Name, scanColumn)
 			maxPos := position_store.MySQLTablePosition{Value: max, Type: scanType, Column: scanColumn}
-			empty, err := tableScanner.validateTableEmpty(maxPos)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if empty {
-				return ErrTableEmpty
-			}
 			minPos := position_store.MySQLTablePosition{Value: min, Type: scanType, Column: scanColumn}
 			tableScanner.positionStore.PutMaxMin(utils.TableIdentity(tableDef.Schema, tableDef.Name), maxPos, minPos)
 			log.Infof("[InitTablePosition] PutMaxMin: max value type: %v, max: %v; min value type: %v, min: %v", reflect.TypeOf(maxPos.Value), maxPos, reflect.TypeOf(minPos.Value), minPos)
@@ -137,14 +133,6 @@ func (tableScanner *TableScanner) InitTablePosition(tableDef *schema_store.Table
 		log.Infof("[InitTablePosition] schema: %v, table: %v, scanColumn: %v", tableDef.Schema, tableDef.Name, scanColumn)
 	}
 	return nil
-}
-
-func (tableScanner *TableScanner) validateTableEmpty(pos position_store.MySQLTablePosition) (bool, error) {
-	mapStr, err := pos.MapString()
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-	return mapStr["value"] == "", nil
 }
 
 func (tableScanner *TableScanner) Wait() {

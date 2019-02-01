@@ -5,20 +5,18 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/moiot/gravity/pkg/utils"
-
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
+	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/mgo.v2"
+	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
-	"github.com/moiot/gravity/pkg/core"
-
-	"github.com/juju/errors"
-
 	"github.com/moiot/gravity/pkg/config"
+	"github.com/moiot/gravity/pkg/consts"
+	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
 	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/utils"
 )
 
 type OplogTailer struct {
@@ -27,6 +25,7 @@ type OplogTailer struct {
 	oplogChecker     *OplogChecker
 	// mqMsgType         protocol.JobMsgType
 	emitter        core.Emitter
+	router         core.Router
 	ctx            context.Context
 	cancel         context.CancelFunc
 	idx            int
@@ -70,17 +69,22 @@ func (tailer *OplogTailer) Filter(op *gtm.Op, option *filterOpt) bool {
 	tableName := op.GetCollection()
 
 	// handle heartbeat before route filter
-	if op.IsUpdate() && dbName == OplogCheckerDBName && tableName == OplogCheckerCollectionName {
+	if op.IsUpdate() && dbName == consts.GravityDBName && tableName == OplogCheckerCollectionName {
 		tailer.oplogChecker.MarkActive(tailer.sourceHost, op.Data)
-		return false
 	}
 
 	// handle control msg
-	if dbName == internalDB {
+	if dbName == consts.GravityDBName {
 		return true
 	}
 
-	log.Debugf("[oplog_tailer] Filter dbName: %v, tableName: %v", dbName, tableName)
+	m := core.Msg{
+		Database: dbName,
+		Table:    tableName,
+	}
+	if !tailer.router.Exists(&m) {
+		return false
+	}
 
 	return true
 }
@@ -141,7 +145,7 @@ func (tailer *OplogTailer) Run() {
 		case err := <-tailer.opCtx.ErrC:
 			log.Fatalf("[oplog_tailer] err: %v", err)
 		case op := <-tailer.opCtx.OpC:
-			if op.GetDatabase() == internalDB && op.GetCollection() == deadSignalCollection {
+			if op.GetDatabase() == consts.GravityDBName && op.GetCollection() == deadSignalCollection {
 				if op.Data["name"] == tailer.pipelineName {
 					log.Info("[oplog_tailer] receive dead signal, exit")
 					tailer.Stop()
@@ -231,11 +235,10 @@ func outputStreamKey(oplog *gtm.Op) string {
 	}
 }
 
-const internalDB = "drc"
 const deadSignalCollection = "dead_signals"
 
 func (tailer *OplogTailer) SendDeadSignal() error {
-	c := tailer.session.DB(internalDB).C(deadSignalCollection)
+	c := tailer.session.DB(consts.GravityDBName).C(deadSignalCollection)
 	return c.Insert(bson.M{
 		"name": tailer.pipelineName,
 	})
@@ -264,6 +267,7 @@ type OplogTailerOpt struct {
 	sourceHost     string
 	timestampStore position_store.MongoPositionStore
 	emitter        core.Emitter
+	router         core.Router
 	logger         log.Logger
 	idx            int
 	ctx            context.Context
@@ -281,6 +285,7 @@ func NewOplogTailer(opts *OplogTailerOpt) *OplogTailer {
 		oplogChecker:     opts.oplogChecker,
 		gtmConfig:        opts.gtmConfig,
 		emitter:          opts.emitter,
+		router:           opts.router,
 		idx:              opts.idx,
 		sourceHost:       opts.sourceHost,
 		timestampStore:   opts.timestampStore,

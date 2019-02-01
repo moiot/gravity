@@ -6,15 +6,15 @@ import (
 
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/mgo.v2"
+	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/moiot/gravity/pkg/config"
+	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/utils/retry"
 )
 
-const mongoPositionDB = "drc"
 const mongoPositionCollection = "positions"
 
 type mongoPositionStore struct {
@@ -61,7 +61,7 @@ func (store *mongoPositionStore) Clear() {
 	store.Lock()
 	defer store.Unlock()
 
-	collection := store.session.DB(mongoPositionDB).C(mongoPositionCollection)
+	collection := store.session.DB(consts.GravityDBName).C(mongoPositionCollection)
 	collection.Remove(bson.M{"name": store.name})
 	store.position = MongoPosition{}
 }
@@ -104,7 +104,7 @@ func (store *mongoPositionStore) savePosition() {
 		return
 	}
 
-	collection := store.session.DB(mongoPositionDB).C(mongoPositionCollection)
+	collection := store.session.DB(consts.GravityDBName).C(mongoPositionCollection)
 	err := retry.Do(func() error {
 		_, err := collection.Upsert(bson.M{"name": store.name}, bson.M{
 			"$set": bson.M{
@@ -125,7 +125,7 @@ func (store *mongoPositionStore) savePosition() {
 }
 
 func (store *mongoPositionStore) loadPosition() {
-	collection := store.session.DB(mongoPositionDB).C(mongoPositionCollection)
+	collection := store.session.DB(consts.GravityDBName).C(mongoPositionCollection)
 	err := retry.Do(func() error {
 		pos := positionEntity{}
 		err := collection.Find(bson.M{"name": store.name}).One(&pos)
@@ -181,7 +181,7 @@ func NewMongoPositionStore(pipelineName string, conn *config.MongoConnConfig, po
 		return nil, errors.Trace(err)
 	}
 	session.SetMode(mgo.Primary, true)
-	collection := session.DB(mongoPositionDB).C(mongoPositionCollection)
+	collection := session.DB(consts.GravityDBName).C(mongoPositionCollection)
 	err = collection.EnsureIndex(mgo.Index{
 		Key:    []string{"name"},
 		Unique: true,

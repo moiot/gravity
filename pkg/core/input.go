@@ -6,7 +6,7 @@ import (
 )
 
 type Input interface {
-	Start(emitter Emitter) error
+	Start(emitter Emitter, router Router) error
 	Close()
 	Stage() config.InputMode
 	// TODO position store can be hidden by input plugin
@@ -16,5 +16,4 @@ type Input interface {
 	Done() chan position_store.Position
 	SendDeadSignal() error // for test only
 	Wait()
-	Identity() uint32
 }

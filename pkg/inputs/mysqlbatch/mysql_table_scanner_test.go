@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -334,7 +333,7 @@ func TestFindInBatch(t *testing.T) {
 			r.NoError(err)
 			cfg := c.cfg
 
-			tableDefs, tableConfigs := GetTables(db, schemaStore, cfg.TableConfigs)
+			tableDefs, tableConfigs := GetTables(db, schemaStore, cfg.TableConfigs, nil)
 			r.Equal(1, len(tableDefs))
 			r.Equal(1, len(tableConfigs))
 
@@ -368,70 +367,4 @@ func TestFindInBatch(t *testing.T) {
 		}
 	})
 
-}
-
-func TestInitTablePosition(t *testing.T) {
-	r := require.New(t)
-
-	positionFile := "test_position_file_1.toml"
-
-	f, err := os.Create(positionFile)
-	r.NoError(err)
-	defer func() {
-		f.Close()
-		os.Remove(positionFile)
-	}()
-
-	t.Run("throws ErrTableEmpty when table is empty", func(tt *testing.T) {
-		testDBName := "mysql_table_scanner_test_15"
-
-		db := mysql_test.MustSetupSourceDB(testDBName)
-
-		cfg := PluginConfig{
-			Source: mysql_test.SourceDBConfig(),
-			TableConfigs: []TableConfig{
-				{
-					Schema: testDBName,
-					Table:  []string{mysql_test.TestTableName},
-				},
-			},
-			NrScanner:           1,
-			TableScanBatch:      1,
-			BatchPerSecondLimit: 10000,
-		}
-		err := cfg.ValidateAndSetDefault()
-		r.NoError(err)
-
-		schemaStore, err := schema_store.NewSimpleSchemaStoreFromDBConn(db)
-		r.NoError(err)
-
-		positionStore, err := position_store.NewMySQLTableLocalPositionStore(positionFile)
-		r.NoError(err)
-		tableDefs, tableConfigs := GetTables(db, schemaStore, cfg.TableConfigs)
-		r.Equal(1, len(tableDefs))
-
-		throttle := time.NewTicker(100 * time.Millisecond)
-
-		submitter := &fakeMsgSubmitter{}
-		emitter, err := emitter.NewEmitter(nil, submitter)
-		r.NoError(err)
-
-		q := make(chan *TableWork, 1)
-		close(q)
-		tableScanner := NewTableScanner(
-			tt.Name(),
-			q,
-			db,
-			positionStore,
-			emitter,
-			throttle,
-			schemaStore,
-			&cfg,
-			context.Background(),
-		)
-
-		err = tableScanner.InitTablePosition(tableDefs[0], &tableConfigs[0])
-		assert.NotNil(t, err)
-		assert.EqualValues(t, errors.Cause(ErrTableEmpty), err)
-	})
 }
