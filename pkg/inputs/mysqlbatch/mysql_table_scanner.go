@@ -45,8 +45,8 @@ func (tableScanner *TableScanner) Start() error {
 
 		for {
 			select {
-			case work, ok := <-tableScanner.tableWorkC:
-				if !ok {
+			case work, exists := <-tableScanner.tableWorkC:
+				if !exists {
 					return
 				}
 
@@ -63,15 +63,17 @@ func (tableScanner *TableScanner) Start() error {
 				} else if err != nil {
 					log.Fatalf("[TableScanner] InitTablePosition failed: %v", errors.ErrorStack(err))
 				}
-				max, min, ok, err := GetMaxMin(tableScanner.positionCache, utils.TableIdentity(work.TableDef.Schema, work.TableDef.Name))
+				max, min, exists, err := GetMaxMin(tableScanner.positionCache, utils.TableIdentity(work.TableDef.Schema, work.TableDef.Name))
 				if err != nil {
 					log.Fatalf("[TableScanner] InitTablePosition failed: %v", errors.ErrorStack(err))
 				}
-				log.Infof("positionCache.GetMaxMin: max value type: %v, max %v; min value type: %v, min %v", reflect.TypeOf(max.Value), max, reflect.TypeOf(min.Value), min)
-				scanColumn := max.Column
-				if !ok {
+				if !exists {
 					log.Fatalf("[table_scanner] failed to find max min")
 				}
+
+				log.Infof("positionCache.GetMaxMin: max value type: %v, max %v; min value type: %v, min %v", reflect.TypeOf(max.Value), max, reflect.TypeOf(min.Value), min)
+				scanColumn := max.Column
+
 				// If the scan column is *, then we do a full dump of the table
 				if scanColumn == "*" {
 					tableScanner.FindAll(tableScanner.db, work.TableDef, work.TableConfig)

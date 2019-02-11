@@ -15,12 +15,12 @@ type SourceProbeCfg struct {
 	Annotation  string          `mapstructure:"annotation"json:"annotation"`
 }
 
-type BinlogPositions struct {
+type BinlogPositionsValue struct {
 	CurrentPosition *utils.MySQLBinlogPosition `json:"current_position"`
 	StartPosition   *utils.MySQLBinlogPosition `json:"start_position"`
 }
 
-func SerializeBinlogPositions(position *BinlogPositions) (string, error) {
+func SerializeBinlogPositionValue(position *BinlogPositionsValue) (string, error) {
 	s, err := myJson.MarshalToString(position)
 	if err != nil {
 		return "", errors.Trace(err)
@@ -29,13 +29,14 @@ func SerializeBinlogPositions(position *BinlogPositions) (string, error) {
 	return s, nil
 }
 
-func DeserializeBinlogPositions(value string) (*BinlogPositions, error) {
-	position := BinlogPositions{}
+func DeserializeBinlogPositionValue(value string) (*BinlogPositionsValue, error) {
+	position := BinlogPositionsValue{}
 	if err := myJson.UnmarshalFromString(value, &position); err != nil {
 		return nil, errors.Trace(err)
 	}
 	return &position, nil
 }
+
 func GetProbCfg(sourceProbeCfg *SourceProbeCfg, sourceDBCfg *utils.DBConfig) (*utils.DBConfig, string) {
 	var probeDBCfg *utils.DBConfig
 	var probeAnnotation string

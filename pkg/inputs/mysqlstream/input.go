@@ -109,7 +109,7 @@ func (plugin *mysqlInputPlugin) NewPositionCache() (position_store.PositionCache
 		return nil, errors.Trace(err)
 	}
 
-	if err := InitPositionCache(plugin.sourceDB, positionCache, plugin.cfg.StartPosition); err != nil {
+	if err := SetupInitialPosition(plugin.sourceDB, positionCache, plugin.cfg.StartPosition); err != nil {
 		return nil, errors.Trace(err)
 	}
 	return positionCache, nil

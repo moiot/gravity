@@ -132,7 +132,7 @@ func (plugin *mysqlFullInput) NewPositionCache() (position_store.PositionCacheIn
 		return nil, errors.Trace(err)
 	}
 
-	if err := InitPositionCache(positionCache, plugin.sourceDB); err != nil {
+	if err := SetupInitialPosition(positionCache, plugin.sourceDB); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -297,11 +297,11 @@ func (plugin *mysqlFullInput) waitFinish(positionCache position_store.PositionCa
 			log.Fatalf("[mysqlFullInput] failed to get start position: %v", errors.ErrorStack(err))
 		}
 
-		binlogPositions := helper.BinlogPositions{
+		binlogPositions := helper.BinlogPositionsValue{
 			StartPosition:   startBinlog,
 			CurrentPosition: startBinlog,
 		}
-		v, err := helper.SerializeBinlogPositions(&binlogPositions)
+		v, err := helper.SerializeBinlogPositionValue(&binlogPositions)
 		if err != nil {
 			log.Fatalf("[mysqlFullInput] failed to serialize binlog positions: %v", errors.ErrorStack(err))
 		}

@@ -6,6 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moiot/gravity/pkg/config"
+	"github.com/moiot/gravity/pkg/inputs/helper"
+	"github.com/moiot/gravity/pkg/position_store"
+
 	"github.com/golang/mock/gomock"
 	"github.com/juju/errors"
 	gomysql "github.com/siddontang/go-mysql/mysql"
@@ -102,14 +106,23 @@ func TestMsgEmit(t *testing.T) {
 	position, gtidSet, err := dbUtils.GetMasterStatus()
 	assert.Nil(err)
 
-	positionConfig := utils.MySQLBinlogPosition{
-		BinLogFileName: position.Name,
-		BinLogFilePos:  position.Pos,
-		BinlogGTID:     gtidSet.String(),
+	positionValue := helper.BinlogPositionsValue{
+		CurrentPosition: &utils.MySQLBinlogPosition{
+			BinLogFileName: position.Name,
+			BinLogFilePos:  position.Pos,
+			BinlogGTID:     gtidSet.String(),
+		},
 	}
+	v, err := helper.SerializeBinlogPositionValue(&positionValue)
+	assert.Nil(err)
 
-	mockPositionStore := mock_position_store.NewMockMySQLPositionStore(mockCtrl)
-	mockPositionStore.EXPECT().Get().Return(positionConfig).AnyTimes()
+	p := position_store.Position{
+		Name:  "test",
+		Stage: config.Stream,
+		Value: v,
+	}
+	mockPositionCache := mock_position_store.NewMockPositionCacheInterface(mockCtrl)
+	mockPositionCache.EXPECT().Get().Return(p, true, nil).AnyTimes()
 
 	// mockBinlogChecker
 	mockBinlogChecker := mock_binlog_checker.NewMockBinlogChecker(mockCtrl)
@@ -121,7 +134,7 @@ func TestMsgEmit(t *testing.T) {
 		t.Name(),
 		&pluginCfg,
 		100,
-		mockPositionStore,
+		mockPositionCache,
 		schemaStore,
 		db,
 		emitter,

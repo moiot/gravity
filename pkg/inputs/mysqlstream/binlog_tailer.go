@@ -153,7 +153,7 @@ func (tailer *BinlogTailer) Start() error {
 		return errors.Errorf("empty position")
 	}
 
-	binlogPositions, err := helper.DeserializeBinlogPositions(position.Value)
+	binlogPositions, err := helper.DeserializeBinlogPositionValue(position.Value)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -549,13 +549,13 @@ func (tailer *BinlogTailer) AfterMsgCommit(msg *core.Msg) error {
 	ctx := msg.InputContext.(inputContext)
 	if ctx.op == xid || ctx.op == ddl {
 
-		startPosition, currentPosition, err := GetBinlogPositions(tailer.positionCache)
+		startPosition, currentPosition, err := GetBinlogPositionsValue(tailer.positionCache)
 		if err != nil {
 			return errors.Trace(err)
 		}
 		*currentPosition = ctx.position
 
-		v, err := helper.SerializeBinlogPositions(&helper.BinlogPositions{StartPosition: startPosition, CurrentPosition: currentPosition})
+		v, err := helper.SerializeBinlogPositionValue(&helper.BinlogPositionsValue{StartPosition: startPosition, CurrentPosition: currentPosition})
 		if err != nil {
 			return errors.Trace(err)
 		}

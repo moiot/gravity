@@ -170,14 +170,27 @@ func Serialize(positions *BatchPositionValue) (string, error) {
 }
 
 func Deserialize(value string) (*BatchPositionValue, error) {
-	positions := BatchPositionValue{}
-	if err := myJson.UnmarshalFromString(value, &positions); err != nil {
+	positionValue := BatchPositionValue{}
+	if err := myJson.UnmarshalFromString(value, &positionValue); err != nil {
 		return nil, errors.Trace(err)
 	}
-	return &positions, nil
+
+	if positionValue.Min == nil {
+		positionValue.Min = make(map[string]TablePosition)
+	}
+
+	if positionValue.Max == nil {
+		positionValue.Max = make(map[string]TablePosition)
+	}
+
+	if positionValue.Current == nil {
+		positionValue.Current = make(map[string]TablePosition)
+	}
+
+	return &positionValue, nil
 }
 
-func InitPositionCache(cache position_store.PositionCacheInterface, sourceDB *sql.DB) error {
+func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB *sql.DB) error {
 	position, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -161,16 +160,11 @@ func TestFindInBatch(t *testing.T) {
 	r := require.New(t)
 
 	t.Run("terminates when there is no record in table", func(tt *testing.T) {
-		testDBName := "mysql_table_scanner_test_8"
-		positionFile := "mysql_table_scanner_test_8.toml"
-		f, err := os.Create(positionFile)
-		r.NoError(err)
-		defer func() {
-			f.Close()
-			os.Remove(positionFile)
-		}()
+		testDBName := mysql_test.TestCaseMd5Name(tt)
 
 		dbCfg := mysql_test.SourceDBConfig()
+		positionRepo, err := position_store.NewMySQLRepo(dbCfg, "")
+		r.NoError(err)
 
 		testCases := []struct {
 			name       string
@@ -347,8 +341,10 @@ func TestFindInBatch(t *testing.T) {
 
 			throttle := time.NewTicker(100 * time.Millisecond)
 
-			positionStore, err := position_store.NewMySQLTableLocalPositionStore(positionFile)
+			positionCache, err := position_store.NewPositionCache(testDBName, positionRepo, 5*time.Second)
 			r.NoError(err)
+
+			r.NoError(SetupInitialPosition(positionCache, db))
 
 			submitter := &fakeMsgSubmitter{}
 			emitter, err := emitter.NewEmitter(nil, submitter)
@@ -362,7 +358,7 @@ func TestFindInBatch(t *testing.T) {
 				tt.Name(),
 				q,
 				db,
-				positionStore,
+				positionCache,
 				emitter,
 				throttle,
 				schemaStore,
@@ -380,20 +376,11 @@ func TestFindInBatch(t *testing.T) {
 func TestInitTablePosition(t *testing.T) {
 	r := require.New(t)
 
-	positionFile := "test_position_file_1.toml"
-
-	f, err := os.Create(positionFile)
-	r.NoError(err)
-	defer func() {
-		f.Close()
-		os.Remove(positionFile)
-	}()
-
 	t.Run("throws ErrTableEmpty when table is empty", func(tt *testing.T) {
 		testDBName := "mysql_table_scanner_test_15"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-
+		dbCfg := mysql_test.SourceDBConfig()
 		cfg := PluginConfig{
 			Source: mysql_test.SourceDBConfig(),
 			TableConfigs: []TableConfig{
@@ -413,7 +400,10 @@ func TestInitTablePosition(t *testing.T) {
 		schemaStore, err := schema_store.NewSimpleSchemaStoreFromDBConn(db)
 		r.NoError(err)
 
-		positionStore, err := position_store.NewMySQLTableLocalPositionStore(positionFile)
+		positionRepo, err := position_store.NewMySQLRepo(dbCfg, "")
+		r.NoError(err)
+
+		positionCache, err := position_store.NewPositionCache(testDBName, positionRepo, 5*time.Second)
 		r.NoError(err)
 		tableDefs, tableConfigs := GetTables(db, schemaStore, cfg.TableConfigs)
 		r.Equal(1, len(tableDefs))
@@ -430,7 +420,7 @@ func TestInitTablePosition(t *testing.T) {
 			tt.Name(),
 			q,
 			db,
-			positionStore,
+			positionCache,
 			emitter,
 			throttle,
 			schemaStore,

@@ -1,8 +1,11 @@
 package mysql_test
 
 import (
+	"crypto/md5"
 	"database/sql"
 	"fmt"
+	"io"
+	"testing"
 	"time"
 
 	"github.com/moiot/gravity/pkg/consts"
@@ -126,11 +129,11 @@ func IsTestDB(schemaName string) bool {
 }
 
 func dropDBStatement(testDBName string) string {
-	return fmt.Sprintf("DROP DATABASE IF EXISTS %s", testDBName)
+	return fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", testDBName)
 }
 
 func createDBStatement(tesetDBName string) string {
-	return fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s ", tesetDBName)
+	return fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", tesetDBName)
 }
 
 func dbConfig(configStr string) *utils.DBConfig {
@@ -378,7 +381,7 @@ func setupTestDB(db *sql.DB, dbName string) error {
 			return errors.Trace(err)
 		}
 
-		txn.Exec(fmt.Sprintf("USE %s", dbName))
+		txn.Exec(fmt.Sprintf("USE `%s`", dbName))
 		_, err = txn.Exec(statement)
 		if err != nil {
 			return errors.Trace(err)
@@ -494,4 +497,10 @@ func SetMySQLGlobalVars(db *sql.DB) {
 			log.Fatalf("failed to set global settings, s: %v, err: %v", s, err.Error())
 		}
 	}
+}
+
+func TestCaseMd5Name(t *testing.T) string {
+	h := md5.New()
+	io.WriteString(h, t.Name())
+	return fmt.Sprintf("%x", h.Sum(nil))
 }

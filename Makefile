@@ -77,5 +77,5 @@ proto:
 
 mock:
 	mockgen -destination ./mock/binlog_checker/mock.go github.com/moiot/gravity/pkg/inputs/helper/binlog_checker BinlogChecker
-	mockgen -destination ./mock/position_store/mock.go github.com/moiot/gravity/pkg/position_store MySQLPositionStore,MongoPositionStore,MySQLTablePositionStore
+	mockgen -destination ./mock/position_store/mock.go github.com/moiot/gravity/pkg/position_store PositionCacheInterface
 	mockgen -destination ./mock/sliding_window/mock.go github.com/moiot/gravity/pkg/sliding_window WindowItem
