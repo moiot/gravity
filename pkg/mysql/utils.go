@@ -125,6 +125,11 @@ func MySQLDataEquals(a interface{}, b interface{}) bool {
 		log.Fatalf("MySQLDataEquals normalized type not match, a type: %v, b type: %v", reflect.TypeOf(a), reflect.TypeOf(b))
 	}
 
+	if reflect.TypeOf(normalizedA) == reflect.TypeOf(mysql.NullTime{}) {
+		t1 := normalizedA.(mysql.NullTime).Time
+		t2 := normalizedB.(mysql.NullTime).Time
+		return t1.Equal(t2)
+	}
 	return reflect.DeepEqual(normalizedA, normalizedB)
 }
 

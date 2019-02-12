@@ -127,7 +127,7 @@ func (t *BinlogTailer) createMsgs(
 	if binlog.Type == pb.BinlogType_DDL {
 		ddlStmt := string(binlog.DdlData.DdlQuery)
 		if strings.Contains(ddlStmt, consts.DDLTag) {
-			log.Infof("ignore internal ddl: ", ddlStmt)
+			log.Infof("ignore internal ddl: %v", ddlStmt)
 			return msgList, nil
 		} else {
 			//TODO support ddl for tidb
