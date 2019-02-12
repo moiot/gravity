@@ -85,7 +85,7 @@ func (plugin *mysqlStreamInput) Configure(pipelineName string, configInput map[s
 	}
 
 	// probe connection settings
-	plugin.probeDBConfig, plugin.probeSQLAnnotation = helper.GetProbCfg(plugin.cfg.SourceProbeCfg, plugin.cfg.Source)
+	plugin.probeDBConfig, plugin.probeSQLAnnotation = helper.GetProbCfg(pluginConfig.SourceProbeCfg, pluginConfig.Source)
 	plugin.cfg = &pluginConfig
 
 	return nil
