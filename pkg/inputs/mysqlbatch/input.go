@@ -132,7 +132,13 @@ func (plugin *mysqlFullInput) NewPositionCache() (position_store.PositionCacheIn
 		return nil, errors.Trace(err)
 	}
 
-	if err := SetupInitialPosition(positionCache, plugin.sourceDB); err != nil {
+	sourceDB, err := utils.CreateDBConnection(plugin.cfg.Source)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer sourceDB.Close()
+
+	if err := SetupInitialPosition(positionCache, sourceDB); err != nil {
 		return nil, errors.Trace(err)
 	}
 

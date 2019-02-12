@@ -109,7 +109,13 @@ func (plugin *mysqlStreamInput) NewPositionCache() (position_store.PositionCache
 		return nil, errors.Trace(err)
 	}
 
-	if err := SetupInitialPosition(plugin.sourceDB, positionCache, plugin.cfg.StartPosition); err != nil {
+	sourceDB, err := utils.CreateDBConnection(plugin.cfg.Source)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer sourceDB.Close()
+
+	if err := SetupInitialPosition(sourceDB, positionCache, plugin.cfg.StartPosition); err != nil {
 		return nil, errors.Trace(err)
 	}
 	return positionCache, nil
