@@ -139,7 +139,7 @@ func (plugin *mysqlFullInput) NewPositionCache() (position_store.PositionCacheIn
 	return positionCache, nil
 }
 
-func (plugin *mysqlFullInput) Start(emitter core.Emitter, positionCache position_store.PositionCacheInterface) error {
+func (plugin *mysqlFullInput) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
 	cfg := plugin.cfg
 
 	sourceDB, err := utils.CreateDBConnection(cfg.Source)
@@ -171,7 +171,7 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter, positionCache position
 	plugin.ctx = ctx
 	plugin.cancel = cancelFunc
 
-	tableDefs, tableConfigs := GetTables(sourceDB, sourceSchemaStore, cfg.TableConfigs)
+	tableDefs, tableConfigs := GetTables(sourceDB, sourceSchemaStore, cfg.TableConfigs, router)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -224,10 +224,6 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter, positionCache position
 	go plugin.waitFinish(positionCache)
 
 	return nil
-}
-
-func (plugin *mysqlFullInput) Identity() uint32 {
-	return 0
 }
 
 func (plugin *mysqlFullInput) Stage() config.InputMode {

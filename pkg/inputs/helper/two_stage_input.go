@@ -68,13 +68,13 @@ func (i *TwoStageInputPlugin) NewPositionCache() (position_store.PositionCacheIn
 	return &caches, nil
 }
 
-func (i *TwoStageInputPlugin) Start(emitter core.Emitter, positionCache position_store.PositionCacheInterface) error {
+func (i *TwoStageInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
 	if i.Stage() == config.Stream {
 		log.Info("[TwoStageInputPlugin.Start] with inc")
-		return i.incremental.Start(emitter, positionCache)
+		return i.incremental.Start(emitter, router, positionCache)
 	} else {
 		log.Info("[TwoStageInputPlugin.Start] with full")
-		if err := i.full.Start(emitter, positionCache); err != nil {
+		if err := i.full.Start(emitter, router, positionCache); err != nil {
 			return errors.Trace(err)
 		}
 
@@ -119,7 +119,7 @@ func (i *TwoStageInputPlugin) Start(emitter core.Emitter, positionCache position
 			}
 
 			// start incremental plugin
-			err = i.incremental.Start(emitter, positionCache)
+			err = i.incremental.Start(emitter, router, positionCache)
 			if err != nil {
 				log.Fatalf("[TwoStageInputPlugin] fail to start incremental. %s", err)
 			}
@@ -162,14 +162,6 @@ func (i *TwoStageInputPlugin) SendDeadSignal() error {
 		return i.incremental.SendDeadSignal()
 	} else {
 		return i.full.SendDeadSignal()
-	}
-}
-
-func (i *TwoStageInputPlugin) Identity() uint32 {
-	if i.Stage() == config.Stream {
-		return i.incremental.Identity()
-	} else {
-		return i.full.Identity()
 	}
 }
 

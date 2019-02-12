@@ -16,14 +16,14 @@ import (
 	"github.com/moiot/gravity/pkg/schema_store"
 )
 
-type mysqlReplaceEngineConfig struct {
+type MysqlReplaceEngineConfig struct {
 	TagInternalTxn bool   `mapstructure:"tag-internal-txn" json:"tag-internal-txn"`
 	SQLAnnotation  string `mapstructure:"sql-annotation" json:"sql-annotation"`
 }
 
 type mysqlReplaceEngine struct {
 	pipelineName string
-	cfg          *mysqlReplaceEngineConfig
+	cfg          *MysqlReplaceEngineConfig
 	db           *sql.DB
 }
 
@@ -41,7 +41,7 @@ func init() {
 }
 
 func (engine *mysqlReplaceEngine) Configure(pipelineName string, data map[string]interface{}) error {
-	cfg := mysqlReplaceEngineConfig{}
+	cfg := MysqlReplaceEngineConfig{}
 	if err := mapstructure.Decode(data, &cfg); err != nil {
 		return errors.Trace(err)
 	}

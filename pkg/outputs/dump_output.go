@@ -12,12 +12,12 @@ type pluginConfig struct {
 	TestKey1 string `mapstructure:"test-key-1"`
 }
 
-type dumpOutput struct {
+type DumpOutput struct {
 	pipelineName string
 	cfg          *pluginConfig
 }
 
-func (plugin *dumpOutput) Configure(pipelineName string, data map[string]interface{}) error {
+func (plugin *DumpOutput) Configure(pipelineName string, data map[string]interface{}) error {
 	cfg := pluginConfig{}
 	if err := mapstructure.Decode(data, &cfg); err != nil {
 		return errors.Trace(err)
@@ -25,18 +25,22 @@ func (plugin *dumpOutput) Configure(pipelineName string, data map[string]interfa
 	return nil
 }
 
-func (plugin *dumpOutput) Start() error {
+func (plugin *DumpOutput) GetRouter() core.Router {
+	return core.EmptyRouter{}
+}
+
+func (plugin *DumpOutput) Start() error {
 	return nil
 }
 
-func (plugin *dumpOutput) Close() {
+func (plugin *DumpOutput) Close() {
 
 }
 
-func (plugin *dumpOutput) Execute(msgs []*core.Msg) error {
+func (plugin *DumpOutput) Execute(msgs []*core.Msg) error {
 	return nil
 }
 
 func init() {
-	registry.RegisterPlugin(registry.OutputPlugin, "dump-output", &dumpOutput{}, false)
+	registry.RegisterPlugin(registry.OutputPlugin, "dump-output", &DumpOutput{}, false)
 }

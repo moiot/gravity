@@ -4,18 +4,19 @@ import (
 	"database/sql"
 	"strings"
 
-	"github.com/pingcap/parser/format"
-
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/format"
 	"github.com/pingcap/parser/model"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/outputs/routers"
 	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/schema_store"
@@ -25,6 +26,15 @@ import (
 
 const (
 	OutputMySQL = "mysql"
+)
+
+var (
+	ProcessedMsgCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "drc_v2",
+		Subsystem: "output_mysql",
+		Name:      "processed_msg_count",
+		Help:      "processed msg count",
+	}, []string{metrics.PipelineTag, "type"})
 )
 
 type MySQLPluginConfig struct {
@@ -46,6 +56,7 @@ type MySQLOutput struct {
 }
 
 func init() {
+	prometheus.MustRegister(ProcessedMsgCount)
 	registry.RegisterPlugin(registry.OutputPlugin, OutputMySQL, &MySQLOutput{}, false)
 }
 
@@ -131,6 +142,10 @@ func (output *MySQLOutput) Close() {
 	output.targetSchemaStore.Close()
 }
 
+func (output *MySQLOutput) GetRouter() core.Router {
+	return routers.MySQLRouter(output.routes)
+}
+
 // msgs in the same batch should have the same table name
 func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 	var targetTableDef *schema_store.Table
@@ -155,6 +170,10 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 
 		switch msg.Type {
 		case core.MsgDDL:
+			if msg.DdlMsg.AST == nil {
+				log.Info("[output-mysql] ignore unsupported ddl: ", msg.DdlMsg.Statement)
+				return nil
+			}
 			switch node := msg.DdlMsg.AST.(type) {
 			case *ast.CreateTableStmt:
 				if !matched {
@@ -176,6 +195,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
 				}
 				log.Info("[output-mysql] executed ddl: ", stmt)
+				output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
 
 			case *ast.AlterTableStmt:
 				if !matched {
@@ -192,7 +212,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				stmt := restore(&copy)
 				err := output.executeDDL(targetSchema, stmt)
 				if err != nil {
-					if e := err.(*mysqldriver.MySQLError); e.Number == 1060 {
+					if e := errors.Cause(err).(*mysqldriver.MySQLError); e.Number == 1060 {
 						log.Errorf("[output-mysql] ignore duplicate column. ddl: %s. err: %s", stmt, e)
 					} else {
 						log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
@@ -205,6 +225,10 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 			default:
 				log.Info("[output-mysql] ignore unsupported ddl: ", msg.DdlMsg.Statement)
 			}
+
+			ProcessedMsgCount.
+				WithLabelValues(output.pipelineName, string(core.MsgDDL)).
+				Add(1)
 
 			return nil
 
@@ -247,6 +271,10 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+
+		ProcessedMsgCount.
+			WithLabelValues(output.pipelineName, string(core.MsgDML)).
+			Add(float64(len(batch)))
 	}
 
 	return nil

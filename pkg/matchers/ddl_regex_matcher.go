@@ -29,7 +29,7 @@ func (m *DDLRegexMatcher) Configure(data interface{}) error {
 }
 
 func (m *DDLRegexMatcher) Match(msg *core.Msg) bool {
-	if msg.Type == core.MsgDML {
+	if msg.Type != core.MsgDDL {
 		return false
 	}
 

@@ -32,7 +32,7 @@ func (plugin *dumpInput) NewPositionStore() (position_store.PositionCacheInterfa
 	return nil, nil
 }
 
-func (plugin *dumpInput) Start(emitter core.Emitter, positionCache position_store.PositionCacheInterface) error {
+func (plugin *dumpInput) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
 	return nil
 }
 
@@ -54,10 +54,6 @@ func (plugin *dumpInput) Done(positionCache position_store.PositionCacheInterfac
 
 func (plugin *dumpInput) Wait() {
 
-}
-
-func (plugin *dumpInput) Identity() uint32 {
-	return 1
 }
 
 func init() {

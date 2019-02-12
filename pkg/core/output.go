@@ -2,6 +2,7 @@ package core
 
 type Output interface {
 	Execute(msgs []*Msg) error
+	GetRouter() Router
 	Close()
 }
 

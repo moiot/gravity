@@ -10,7 +10,6 @@ import (
 	"github.com/moiot/gravity/pkg/utils"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -337,7 +336,7 @@ func TestFindInBatch(t *testing.T) {
 			r.NoError(err)
 			cfg := c.cfg
 
-			tableDefs, tableConfigs := GetTables(db, schemaStore, cfg.TableConfigs)
+			tableDefs, tableConfigs := GetTables(db, schemaStore, cfg.TableConfigs, nil)
 			r.Equal(1, len(tableDefs))
 			r.Equal(1, len(tableConfigs))
 
@@ -407,7 +406,7 @@ func TestInitTablePosition(t *testing.T) {
 
 		positionCache, err := position_store.NewPositionCache(testDBName, positionRepo, 5*time.Second)
 		r.NoError(err)
-		tableDefs, tableConfigs := GetTables(db, schemaStore, cfg.TableConfigs)
+		tableDefs, tableConfigs := GetTables(db, schemaStore, cfg.TableConfigs, nil)
 		r.Equal(1, len(tableDefs))
 
 		throttle := time.NewTicker(100 * time.Millisecond)
@@ -432,6 +431,5 @@ func TestInitTablePosition(t *testing.T) {
 
 		err = tableScanner.InitTablePosition(tableDefs[0], &tableConfigs[0], "id")
 		assert.NotNil(t, err)
-		assert.EqualValues(t, errors.Cause(ErrTableEmpty), err)
 	})
 }

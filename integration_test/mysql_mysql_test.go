@@ -5,21 +5,23 @@ import (
 	"database/sql"
 	"fmt"
 	"math/rand"
-	"net/http"
 	_ "net/http/pprof"
 	"strings"
 	"testing"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/moiot/gravity/pkg/app"
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/inputs/mysqlstream"
 	"github.com/moiot/gravity/pkg/mysql_test"
+	"github.com/moiot/gravity/pkg/outputs/mysql"
 	"github.com/moiot/gravity/pkg/sliding_window"
+	"github.com/moiot/gravity/pkg/sql_execution_engine"
+	"github.com/moiot/gravity/pkg/utils"
 )
 
 func init() {
@@ -29,12 +31,6 @@ func init() {
 		panic(err)
 	}
 	_ = db.Close()
-	go func() {
-		err = http.ListenAndServe(":8080", nil)
-		if err != nil {
-			log.Println("http error", err)
-		}
-	}()
 }
 
 func TestMySQLToMySQLStream(t *testing.T) {
@@ -67,7 +63,7 @@ func TestMySQLToMySQLStream(t *testing.T) {
 	targetDBConfig := mysql_test.TargetDBConfig()
 
 	pipelineConfig := config.PipelineConfigV2{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		InputPlugins: map[string]interface{}{
 			"mysql": map[string]interface{}{
 				"source": map[string]interface{}{
@@ -121,7 +117,7 @@ func TestMySQLToMySQLStream(t *testing.T) {
 	cancel()
 	done.Wait()
 
-	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
 	server.Input.Wait()
@@ -168,7 +164,7 @@ func TestMySQLBatch(t *testing.T) {
 	}
 
 	pipelineConfig := config.PipelineConfigV2{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		InputPlugins: map[string]interface{}{
 			"mysql": map[string]interface{}{
 				"source": map[string]interface{}{
@@ -220,7 +216,7 @@ func TestMySQLBatch(t *testing.T) {
 	r.NoError(generator.TestChecksum())
 }
 
-func TestMySQLBatchWithDump(t *testing.T) {
+func TestMySQLBatchNoTableConfig(t *testing.T) {
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -231,64 +227,52 @@ func TestMySQLBatchWithDump(t *testing.T) {
 	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
 	defer targetDB.Close()
 
-	// Table without primary key, unique index
-	table := "t"
-	_, err := sourceDB.Exec(fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s.%s (
-  id int(11) unsigned NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8`, sourceDBName, table))
-	r.NoError(err)
-
-	for i := 0; i < 100; i++ {
-		_, err = sourceDB.Exec(fmt.Sprintf("INSERT INTO %s.%s (id) VALUES (?)", sourceDBName, table), i)
-		r.NoError(err)
+	generator := mysql_test.Generator{
+		SourceDB:     sourceDB,
+		SourceSchema: sourceDBName,
+		TargetDB:     targetDB,
+		TargetSchema: targetDBName,
+		GeneratorConfig: mysql_test.GeneratorConfig{
+			NrTables:    10,
+			NrSeedRows:  50,
+			DeleteRatio: 0.2,
+			InsertRatio: 0.1,
+			Concurrency: 5,
+		},
 	}
+	generator.SetupTestTables(false)
+	generator.SeedRows()
 
 	sourceDBConfig := mysql_test.SourceDBConfig()
 	targetDBConfig := mysql_test.TargetDBConfig()
 
-	tableConfigs := []map[string]interface{}{
-		{
-			"schema": sourceDBName,
-			"table":  []string{table},
+	pipelineConfig := config.PipelineConfigV3{
+		PipelineName: t.Name(),
+		Version:      config.PipelineConfigV3Version,
+		InputPlugin: config.InputConfig{
+			Type: "mysql",
+			Mode: config.Batch,
+			Config: struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+				Source: sourceDBConfig,
+			}),
 		},
-	}
-
-	pipelineConfig := config.PipelineConfigV2{
-		PipelineName: sourceDBName,
-		InputPlugins: map[string]interface{}{
-			"mysql": map[string]interface{}{
-				"source": map[string]interface{}{
-					"host":     sourceDBConfig.Host,
-					"username": sourceDBConfig.Username,
-					"password": sourceDBConfig.Password,
-					"port":     sourceDBConfig.Port,
-				},
-				"table-configs": tableConfigs,
-				"mode":          "batch",
-			},
-		},
-		OutputPlugins: map[string]interface{}{
-			"mysql": map[string]interface{}{
-				"target": map[string]interface{}{
-					"host":     targetDBConfig.Host,
-					"username": targetDBConfig.Username,
-					"password": targetDBConfig.Password,
-					"port":     targetDBConfig.Port,
-				},
-
-				"routes": []map[string]interface{}{
+		OutputPlugin: config.GenericConfig{
+			Type: "mysql",
+			Config: struct2Map(mysql.MySQLPluginConfig{
+				DBConfig:  targetDBConfig,
+				EnableDDL: true,
+				Routes: []map[string]interface{}{
 					{
 						"match-schema":  sourceDBName,
 						"match-table":   "*",
 						"target-schema": targetDBName,
 					},
 				},
-				"enable-ddl": true,
-			},
+			}),
 		},
 	}
 
-	server, err := app.NewServer(pipelineConfig.ToV3())
+	server, err := app.NewServer(pipelineConfig)
 	r.NoError(err)
 
 	r.NoError(server.Start())
@@ -296,19 +280,14 @@ func TestMySQLBatchWithDump(t *testing.T) {
 	<-server.Input.Done()
 
 	// wait for some time to see if server is healthy
-	sliding_window.DefaultHealthyThreshold = 1
+	sliding_window.DefaultHealthyThreshold = 4
 	time.Sleep(5)
 
 	r.True(server.Scheduler.Healthy())
 
 	server.Close()
 
-	var targetCount int
-	row := targetDB.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s.%s", targetDBName, table))
-
-	err = row.Scan(&targetCount)
-	r.NoError(err)
-	r.Equal(100, targetCount)
+	r.NoError(generator.TestChecksum())
 }
 
 func TestMySQLBatchWithInsertIgnore(t *testing.T) {
@@ -348,7 +327,7 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 		},
 	}
 	pipelineConfig := config.PipelineConfigV3{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		Version:      config.PipelineConfigV3Version,
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
@@ -393,7 +372,7 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 
 	r.NoError(server.Start())
 
-	<-server.Input.Done()
+	<-server.Input.Done(server.PositionCache)
 
 	// wait for some time to see if server is healthy
 	sliding_window.DefaultHealthyThreshold = 4
@@ -444,7 +423,7 @@ func TestMySQLToMySQLReplication(t *testing.T) {
 	}
 
 	pipelineConfig := config.PipelineConfigV2{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		InputPlugins: map[string]interface{}{
 			"mysql": map[string]interface{}{
 				"source": map[string]interface{}{
@@ -502,7 +481,7 @@ func TestMySQLToMySQLReplication(t *testing.T) {
 	cancel()
 	done.Wait()
 
-	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
 	server.Input.Wait()
@@ -557,7 +536,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 		},
 	}
 	pipelineConfig := config.PipelineConfigV2{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		InputPlugins: map[string]interface{}{
 			"mysql": map[string]interface{}{
 				"source": map[string]interface{}{
@@ -625,12 +604,106 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 	cancel()
 	done.Wait()
 
-	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
 	server.Input.Wait()
 	server.Close()
 	r.NoError(generator.TestChecksum())
+}
+
+func TestMySQLToMyBidirection(t *testing.T) {
+	r := require.New(t)
+
+	sourceDBName := strings.ToLower(t.Name()) + "_source"
+	targetDBName := strings.ToLower(t.Name()) + "_target"
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+
+	err := utils.InitInternalTxnTags(sourceDB)
+	r.NoError(err)
+
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	pipelineConfig := config.PipelineConfigV3{
+		PipelineName: t.Name(),
+		Version:      config.PipelineConfigV3Version,
+		InputPlugin: config.InputConfig{
+			Type: "mysql",
+			Mode: config.Stream,
+			Config: struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+				IgnoreBiDirectionalData: true,
+				Source:                  sourceDBConfig,
+			}),
+		},
+		OutputPlugin: config.GenericConfig{
+			Type: "mysql",
+			Config: struct2Map(mysql.MySQLPluginConfig{
+				DBConfig:  targetDBConfig,
+				EnableDDL: true,
+				Routes: []map[string]interface{}{
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "*",
+						"target-schema": targetDBName,
+					},
+				},
+				EngineConfig: &config.GenericConfig{
+					Type: sql_execution_engine.MySQLReplaceEngine,
+					Config: struct2Map(sql_execution_engine.MysqlReplaceEngineConfig{
+						TagInternalTxn: true,
+					}),
+				},
+			}),
+		},
+	}
+	// start the server
+	server, err := app.NewServer(pipelineConfig)
+	r.NoError(err)
+
+	r.NoError(server.Start())
+
+	_, err = sourceDB.Exec(fmt.Sprintf("create table `%s`.t(id int(11), primary key(id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ", sourceDBName))
+	r.NoError(err)
+
+	tx, err := sourceDB.Begin()
+	r.NoError(err)
+	_, err = tx.Exec(utils.GenerateTxnTagSQL(sourceDBName))
+	r.NoError(err)
+	_, err = tx.Exec(fmt.Sprintf("insert into `%s`.t(id) values (1)", sourceDBName))
+	r.NoError(err)
+	err = tx.Commit()
+	r.NoError(err)
+
+	_, err = sourceDB.Exec(fmt.Sprintf("insert into `%s`.t(id) values (2)", sourceDBName))
+	r.NoError(err)
+
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
+	r.NoError(err)
+
+	server.Input.Wait()
+	server.Close()
+
+	rows, err := targetDB.Query(fmt.Sprintf("select id from `%s`.t", targetDBName))
+	r.NoError(err)
+	defer rows.Close()
+
+	ids := make([]int, 0, 1)
+	for rows.Next() {
+		var id int
+		err = rows.Scan(&id)
+		r.NoError(err)
+		ids = append(ids, id)
+	}
+	r.NoError(rows.Err())
+
+	r.Equal(1, len(ids))
+	r.Equal(2, ids[0])
 }
 
 func TestTagDDL(t *testing.T) {
@@ -648,7 +721,7 @@ func TestTagDDL(t *testing.T) {
 	targetDBConfig := mysql_test.TargetDBConfig()
 
 	pipelineConfig := config.PipelineConfigV3{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		Version:      config.PipelineConfigV3Version,
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
@@ -692,10 +765,10 @@ func TestTagDDL(t *testing.T) {
 	_, err = sourceDB.Exec(fmt.Sprintf("%screate table `%s`.`%s`(`id` int(11),  PRIMARY KEY (`id`)) ENGINE=InnoDB", consts.DDLTag, sourceDBName, tbl))
 	r.NoError(err)
 
-	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
-	<-server.Input.Done()
+	<-server.Input.Done(server.PositionCache)
 
 	server.Close()
 
@@ -720,7 +793,7 @@ func TestDDL(t *testing.T) {
 	targetDBConfig := mysql_test.TargetDBConfig()
 
 	pipelineConfig := config.PipelineConfigV3{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		Version:      config.PipelineConfigV3Version,
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
@@ -790,10 +863,10 @@ func TestDDL(t *testing.T) {
 		r.NoError(tx.Commit())
 	}
 
-	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
-	<-server.Input.Done()
+	<-server.Input.Done(server.PositionCache)
 
 	server.Close()
 }
@@ -813,7 +886,7 @@ func TestDDLNoRoute(t *testing.T) {
 	targetDBConfig := mysql_test.TargetDBConfig()
 
 	pipelineConfig := config.PipelineConfigV3{
-		PipelineName: sourceDBName,
+		PipelineName: t.Name(),
 		Version:      config.PipelineConfigV3Version,
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
@@ -866,10 +939,10 @@ func TestDDLNoRoute(t *testing.T) {
 		r.NoError(tx.Commit())
 	}
 
-	err = mysql_test.SendDeadSignal(sourceDB, server.Input.Identity())
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
-	<-server.Input.Done()
+	<-server.Input.Done(server.PositionCache)
 
 	server.Close()
 }

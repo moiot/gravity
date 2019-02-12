@@ -7,7 +7,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/mgo.v2"
+	mgo "gopkg.in/mgo.v2"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
@@ -82,7 +82,7 @@ func (plugin *mongoInputPlugin) NewPositionCache() (position_store.PositionCache
 	return positionCache, nil
 }
 
-func (plugin *mongoInputPlugin) Start(emitter core.Emitter, positionCache position_store.PositionCacheInterface) error {
+func (plugin *mongoInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
 	plugin.emitter = emitter
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
 
@@ -102,6 +102,7 @@ func (plugin *mongoInputPlugin) Start(emitter core.Emitter, positionCache positi
 		session:       session,
 		gtmConfig:     cfg.GtmConfig,
 		emitter:       emitter,
+		router:        router,
 		ctx:           plugin.ctx,
 		sourceHost:    cfg.Source.Host,
 		positionCache: positionCache,
@@ -153,10 +154,6 @@ func (plugin *mongoInputPlugin) Wait() {
 
 func (plugin *mongoInputPlugin) SendDeadSignal() error {
 	return errors.Trace(plugin.oplogTailer.SendDeadSignal())
-}
-
-func (plugin *mongoInputPlugin) Identity() uint32 {
-	return 0
 }
 
 func (plugin *mongoInputPlugin) Close() {

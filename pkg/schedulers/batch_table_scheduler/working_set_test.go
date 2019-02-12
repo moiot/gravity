@@ -2,19 +2,16 @@ package batch_table_scheduler
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 	"testing"
-	"time"
-
-	"math/rand"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestWorkingSet(t *testing.T) {
-	assert := assert.New(t)
-
 	t.Run("simple element put and ack", func(tt *testing.T) {
+		assert := assert.New(t)
 		ws := newWorkingSet()
 		k := "1"
 		// ack a non exist key will return error
@@ -32,13 +29,12 @@ func TestWorkingSet(t *testing.T) {
 		_, b3 := ws.checkConflict(k)
 		assert.False(b3)
 
-		time.Sleep(time.Second)
-
 		assert.Equal(0, ws.numElements())
 	})
 
 	t.Run("batch put and ack with the same key", func(tt *testing.T) {
 
+		assert := assert.New(t)
 		ws := newWorkingSet()
 
 		// 100 size bath with the same key
@@ -106,6 +102,7 @@ func TestWorkingSet(t *testing.T) {
 	}
 
 	t.Run("run a serials of step that may conflict", func(tt *testing.T) {
+		assert := assert.New(t)
 		// 100 batches
 		var batches [][]string
 		for i := 0; i < 100; i++ {
@@ -158,6 +155,7 @@ func TestWorkingSet(t *testing.T) {
 	})
 
 	t.Run("large number of random put and ack", func(tt *testing.T) {
+		assert := assert.New(t)
 		ws := newWorkingSet()
 		nrKeys := 1000
 		keys := make([]string, nrKeys)

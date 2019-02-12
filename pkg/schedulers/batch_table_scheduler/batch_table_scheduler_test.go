@@ -2,11 +2,17 @@ package batch_table_scheduler
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	_ "net/http/pprof"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/moiot/gravity/pkg/outputs"
+
+	"github.com/stretchr/testify/require"
 
 	log "github.com/sirupsen/logrus"
 
@@ -133,31 +139,27 @@ type outputCollector struct {
 	receivedRows map[string]rows
 }
 
+func (output *outputCollector) GetRouter() core.Router {
+	return core.EmptyRouter{}
+}
+
 func (output *outputCollector) Execute(msgs []*core.Msg) error {
+	output.Lock()
+	defer output.Unlock()
+
 	for _, m := range msgs {
 		table := m.Table
-
-		output.Lock()
-		if output.receivedRows == nil {
-			output.receivedRows = make(map[string]rows)
-		}
-
 		if _, ok := output.receivedRows[table]; !ok {
 			output.receivedRows[table] = make(map[string][]*core.Msg)
 		}
-
 		rowName := m.DmlMsg.Data["rowName"].(string)
-		if _, ok := output.receivedRows[table][rowName]; !ok {
-			output.receivedRows[table][rowName] = []*core.Msg{m}
-		} else {
-			output.receivedRows[table][rowName] = append(output.receivedRows[table][rowName], m)
-		}
-		output.Unlock()
+		output.receivedRows[table][rowName] = append(output.receivedRows[table][rowName], m)
 	}
 	return nil
 }
 
 func (output *outputCollector) Start() error {
+	output.receivedRows = make(map[string]rows)
 	return nil
 }
 
@@ -201,7 +203,7 @@ func TestBatchScheduler(t *testing.T) {
 				"sliding-window-size": 1024 * 10,
 			},
 			[]string{"mysqlstream"},
-			200,
+			20,
 			100,
 			15,
 		},
@@ -214,7 +216,7 @@ func TestBatchScheduler(t *testing.T) {
 				"sliding-window-size": 1024 * 10,
 			},
 			[]string{"s1", "s2", "s3", "s4", "s5"},
-			200,
+			20,
 			100,
 			15,
 		},
@@ -262,10 +264,8 @@ func TestBatchScheduler(t *testing.T) {
 		}
 
 		output := &outputCollector{}
-		err = s.Start(output)
-		if err != nil {
-			assert.FailNow(err.Error())
-		}
+		assert.NoError(output.Start())
+		assert.NoError(s.Start(output))
 
 		inputMsgs := submitTestMsgs(s, tt.eventSources, tt.nrTables, tt.nrRows, tt.nrEventsPerRow)
 		log.Infof("submitted all msgs")
@@ -274,4 +274,183 @@ func TestBatchScheduler(t *testing.T) {
 		testTableMsgsEqual(t, inputMsgs, output.receivedRows)
 	}
 
+}
+
+type benchmarkStreamConfig struct {
+	workers int
+	batch   int
+	tables  int
+}
+
+func BenchmarkStream(b *testing.B) {
+	workers := []int{1, 10, 100}
+	batches := []int{1, 10}
+	tables := []int{1, 32, 512}
+	testCases := make([]benchmarkStreamConfig, 0, len(workers)*len(batches)*len(tables))
+	for _, b := range batches {
+		for _, t := range tables {
+			for _, w := range workers {
+				testCases = append(testCases, benchmarkStreamConfig{workers: w, batch: b, tables: t})
+			}
+		}
+	}
+
+	inputStream := "stream"
+	const totalRecords = 100000
+	const hotRecords = 1024
+	log.SetOutput(ioutil.Discard)
+
+	for _, tt := range testCases {
+		name := fmt.Sprintf("%dworker-%dtable-%dbatch", tt.workers, tt.tables, tt.batch)
+		b.Run(name, func(b *testing.B) {
+			b.StopTimer()
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			r := require.New(b)
+			plugin, err := registry.GetPlugin(registry.SchedulerPlugin, BatchTableSchedulerName)
+			r.NoError(err)
+			r.NoError(plugin.Configure(name, DefaultConfig))
+			scheduler := plugin.(*batchScheduler)
+			scheduler.cfg.NrWorker = tt.workers
+			scheduler.cfg.MaxBatchPerWorker = tt.batch
+			r.NoError(scheduler.Start(&outputs.DumpOutput{}))
+
+			for i := 0; i < b.N; i++ {
+				wg := &sync.WaitGroup{}
+				messages := make([]*core.Msg, totalRecords, totalRecords)
+				for i := 0; i < totalRecords; i++ {
+					seq := int64(i + 1)
+					pk := strconv.Itoa(rand.Intn(hotRecords))
+					msg := &core.Msg{
+						Type:            core.MsgDML,
+						Table:           strconv.Itoa(rand.Intn(tt.tables)),
+						InputSequence:   &seq,
+						InputStreamKey:  &inputStream,
+						OutputStreamKey: &pk,
+						Done:            make(chan struct{}),
+						AfterCommitCallback: func(m *core.Msg) error {
+							wg.Done()
+							return nil
+						},
+					}
+					messages[i] = msg
+				}
+				wg.Add(totalRecords)
+
+				b.StartTimer()
+				for i := range messages {
+					r.NoError(scheduler.SubmitMsg(messages[i]))
+				}
+				wg.Wait()
+				b.StopTimer()
+			}
+		})
+	}
+}
+
+func BenchmarkBatch(b *testing.B) {
+	workers := []int{1, 10, 20}
+	batches := []int{1, 10}
+	tables := []int{1, 32, 64}
+	testCases := make([]benchmarkStreamConfig, 0, len(workers)*len(batches)*len(tables))
+	for _, b := range batches {
+		for _, t := range tables {
+			for _, w := range workers {
+				testCases = append(testCases, benchmarkStreamConfig{workers: w, batch: b, tables: t})
+			}
+		}
+	}
+
+	log.SetOutput(ioutil.Discard)
+	const minRecords = 5000
+	const totalRecords = 100000
+
+	for _, tt := range testCases {
+		name := fmt.Sprintf("%dworker-%dtable-%dbatch", tt.workers, tt.tables, tt.batch)
+		b.Run(name, func(b *testing.B) {
+			b.StopTimer()
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			r := require.New(b)
+			plugin, err := registry.GetPlugin(registry.SchedulerPlugin, BatchTableSchedulerName)
+			r.NoError(err)
+			r.NoError(plugin.Configure(name, DefaultConfig))
+			scheduler := plugin.(*batchScheduler)
+			scheduler.cfg.NrWorker = tt.workers
+			scheduler.cfg.MaxBatchPerWorker = tt.batch
+			r.NoError(scheduler.Start(&outputs.DumpOutput{}))
+
+			for i := 0; i < b.N; i++ {
+				wg := &sync.WaitGroup{}
+
+				messages := make([]*core.Msg, 0, minRecords)
+				if tt.tables == 1 {
+					recordsPerTable := totalRecords
+					tableName := "table"
+					for i := 0; i < recordsPerTable; i++ {
+						seq := int64(i + 1)
+						pk := fmt.Sprint(seq) // batch mode has no conflict OutputStreamKey
+						msg := &core.Msg{
+							Type:            core.MsgDML,
+							Table:           tableName,
+							InputSequence:   &seq,
+							InputStreamKey:  &tableName,
+							OutputStreamKey: &pk,
+							Done:            make(chan struct{}),
+							AfterCommitCallback: func(m *core.Msg) error {
+								wg.Done()
+								return nil
+							},
+						}
+						messages = append(messages, msg)
+					}
+				} else {
+					c := make(chan *core.Msg, totalRecords)
+					wwg := &sync.WaitGroup{}
+					wwg.Add(tt.tables)
+					go func() {
+						wwg.Wait()
+						close(c)
+					}()
+					for tbl := 0; tbl < tt.tables; tbl++ {
+						go func(tbl int) {
+							defer wwg.Done()
+							recordsPerTable := minRecords + rand.Intn(minRecords*10)
+							tableName := fmt.Sprint("table-", tbl)
+							for i := 0; i < recordsPerTable; i++ {
+								seq := int64(i + 1)
+								pk := fmt.Sprint(seq) // batch mode has no conflict OutputStreamKey
+								msg := &core.Msg{
+									Type:            core.MsgDML,
+									Table:           tableName,
+									InputSequence:   &seq,
+									InputStreamKey:  &tableName,
+									OutputStreamKey: &pk,
+									Done:            make(chan struct{}),
+									AfterCommitCallback: func(m *core.Msg) error {
+										wg.Done()
+										return nil
+									},
+								}
+								c <- msg
+							}
+						}(tbl)
+					}
+					for m := range c {
+						messages = append(messages, m)
+					}
+					messages = messages[:totalRecords]
+				}
+				wg.Add(totalRecords)
+				b.StartTimer()
+				for i := range messages {
+					r.NoError(scheduler.SubmitMsg(messages[i]))
+				}
+				wg.Wait()
+				b.StopTimer()
+			}
+		})
+	}
 }

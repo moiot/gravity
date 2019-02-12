@@ -3,6 +3,7 @@ package routers
 import (
 	"github.com/juju/errors"
 
+	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/matchers"
 )
 
@@ -10,6 +11,17 @@ type KafkaRoute struct {
 	RouteMatchers
 	DMLTargetTopic string
 	// DDLTargetTopic string
+}
+
+type KafkaRouter []*KafkaRoute
+
+func (r KafkaRouter) Exists(msg *core.Msg) bool {
+	for i := range r {
+		if r[i].Match(msg) {
+			return true
+		}
+	}
+	return false
 }
 
 func NewKafkaRoutes(configData []map[string]interface{}) ([]*KafkaRoute, error) {

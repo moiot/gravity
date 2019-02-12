@@ -160,7 +160,8 @@ func (s *Server) Start() error {
 	}
 
 	log.Infof("[Server] start input")
-	if err := s.Input.Start(s.Emitter, s.PositionCache); err != nil {
+
+	if err := s.Input.Start(s.Emitter, s.Output.GetRouter(), s.PositionCache); err != nil {
 		return errors.Trace(err)
 	}
 

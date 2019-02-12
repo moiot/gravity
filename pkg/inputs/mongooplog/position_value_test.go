@@ -105,6 +105,25 @@ func TestSetupInitialPosition(t *testing.T) {
 
 			r.EqualValues(config.MongoPosition(200), *(oplogPositionValue.CurrentPosition))
 			r.EqualValues(config.MongoPosition(100), *(oplogPositionValue.StartPosition))
+
+			// Test clear position
+			r.NoError(cache.Clear())
+
+			_, exists, err = cache.Get()
+			r.NoError(err)
+			r.False(exists)
+
+			r.NoError(SetupInitialPosition(cache, &newStart))
+			position, exists, err = cache.Get()
+			r.NoError(err)
+			r.True(exists)
+			r.Equal(config.Stream, position.Stage)
+			r.Equal(pipelineName, position.Name)
+
+			v, err := Deserialize(position.Value)
+			r.NoError(err)
+			r.EqualValues(newStart, v.StartPosition)
+
 		})
 
 	})

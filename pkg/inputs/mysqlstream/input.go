@@ -47,7 +47,7 @@ type MySQLBinlogInputPluginConfig struct {
 	BinlogSyncerTimeout  string `mapstructure:"-"json:"-"`
 }
 
-type mysqlInputPlugin struct {
+type mysqlStreamInput struct {
 	pipelineName string
 	cfg          *MySQLBinlogInputPluginConfig
 
@@ -68,10 +68,10 @@ type mysqlInputPlugin struct {
 }
 
 func init() {
-	registry.RegisterPlugin(registry.InputPlugin, "mysqlstream", &mysqlInputPlugin{}, false)
+	registry.RegisterPlugin(registry.InputPlugin, "mysqlstream", &mysqlStreamInput{}, false)
 }
 
-func (plugin *mysqlInputPlugin) Configure(pipelineName string, configInput map[string]interface{}) error {
+func (plugin *mysqlStreamInput) Configure(pipelineName string, configInput map[string]interface{}) error {
 	plugin.pipelineName = pipelineName
 	pluginConfig := MySQLBinlogInputPluginConfig{}
 	err := mapstructure.Decode(configInput, &pluginConfig)
@@ -91,7 +91,7 @@ func (plugin *mysqlInputPlugin) Configure(pipelineName string, configInput map[s
 	return nil
 }
 
-func (plugin *mysqlInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
+func (plugin *mysqlStreamInput) NewPositionCache() (position_store.PositionCacheInterface, error) {
 	// position cache
 	positionRepo, err := position_store.NewMySQLRepo(
 		plugin.probeDBConfig,
@@ -115,7 +115,7 @@ func (plugin *mysqlInputPlugin) NewPositionCache() (position_store.PositionCache
 	return positionCache, nil
 }
 
-func (plugin *mysqlInputPlugin) Start(emitter core.Emitter, positionCache position_store.PositionCacheInterface) error {
+func (plugin *mysqlStreamInput) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
 	sourceDB, err := utils.CreateDBConnection(plugin.cfg.Source)
 	if err != nil {
 		log.Fatalf("[gravity] failed to create source connection %v", errors.ErrorStack(err))
@@ -153,6 +153,7 @@ func (plugin *mysqlInputPlugin) Start(emitter core.Emitter, positionCache positi
 		sourceSchemaStore,
 		sourceDB,
 		emitter,
+		router,
 		plugin.binlogChecker,
 		nil)
 	if err != nil {
@@ -166,23 +167,23 @@ func (plugin *mysqlInputPlugin) Start(emitter core.Emitter, positionCache positi
 	return nil
 }
 
-func (plugin *mysqlInputPlugin) Identity() uint32 {
+func (plugin *mysqlStreamInput) Identity() uint32 {
 	return plugin.binlogTailer.gravityServerID
 }
 
-func (plugin *mysqlInputPlugin) Stage() config.InputMode {
+func (plugin *mysqlStreamInput) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *mysqlInputPlugin) SendDeadSignal() error {
-	return mysql_test.SendDeadSignal(plugin.binlogTailer.sourceDB, plugin.binlogTailer.gravityServerID)
+func (plugin *mysqlStreamInput) SendDeadSignal() error {
+	return mysql_test.SendDeadSignal(plugin.binlogTailer.sourceDB, plugin.pipelineName)
 }
 
-func (plugin *mysqlInputPlugin) Wait() {
+func (plugin *mysqlStreamInput) Wait() {
 	plugin.binlogTailer.Wait()
 }
 
-func (plugin *mysqlInputPlugin) Done(positionCache position_store.PositionCacheInterface) chan position_store.Position {
+func (plugin *mysqlStreamInput) Done(positionCache position_store.PositionCacheInterface) chan position_store.Position {
 	c := make(chan position_store.Position)
 	go func() {
 		plugin.binlogTailer.Wait()
@@ -197,29 +198,27 @@ func (plugin *mysqlInputPlugin) Done(positionCache position_store.PositionCacheI
 	return c
 }
 
-func (plugin *mysqlInputPlugin) Close() {
+func (plugin *mysqlStreamInput) Close() {
 
-	plugin.closeOnce.Do(func() {
-		log.Infof("[mysqlInputPlugin] closing...")
+	log.Infof("[mysqlStreamInput] closing...")
 
-		if plugin.binlogChecker != nil {
-			plugin.binlogChecker.Stop()
+	if plugin.binlogChecker != nil {
+		plugin.binlogChecker.Stop()
+	}
+
+	if plugin.binlogTailer != nil {
+		plugin.binlogTailer.Close()
+	}
+
+	if plugin.sourceSchemaStore != nil {
+		plugin.sourceSchemaStore.Close()
+	}
+
+	if plugin.sourceDB != nil {
+		if err := plugin.sourceDB.Close(); err != nil {
+			log.Errorf("[mysqlStreamInput.Close] error close db. %s", errors.Trace(err))
 		}
+	}
 
-		if plugin.binlogTailer != nil {
-			plugin.binlogTailer.Close()
-		}
-
-		if plugin.sourceSchemaStore != nil {
-			plugin.sourceSchemaStore.Close()
-		}
-
-		if plugin.sourceDB != nil {
-			if err := plugin.sourceDB.Close(); err != nil {
-				log.Errorf("[mysqlInputPlugin.Close] error close db. %s", errors.Trace(err))
-			}
-		}
-
-		log.Infof("[mysqlInputPlugin] closed")
-	})
+	log.Infof("[mysqlStreamInput] closed")
 }

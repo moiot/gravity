@@ -8,9 +8,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func IsEventBelongsToMyself(event *replication.RowsEvent, gravityID uint32) bool {
-	if id, ok := event.Rows[0][0].(int32); ok {
-		if id == int32(gravityID) {
+func IsEventBelongsToMyself(event *replication.RowsEvent, pipelineName string) bool {
+	if id, ok := event.Rows[0][0].(string); ok {
+		if id == pipelineName {
 			return true
 		}
 		return false
@@ -21,7 +21,8 @@ func IsEventBelongsToMyself(event *replication.RowsEvent, gravityID uint32) bool
 func extractSchemaNameFromDDLQueryEvent(p *parser.Parser, ev *replication.QueryEvent) (db, table string, node ast.StmtNode) {
 	stmt, err := p.ParseOneStmt(string(ev.Query), "", "")
 	if err != nil {
-		log.Fatalf("sql parser error: %v", err.Error())
+		log.Errorf("sql parser: %s. error: %v", string(ev.Query), err.Error())
+		return string(ev.Schema), "", nil
 	}
 
 	node = stmt

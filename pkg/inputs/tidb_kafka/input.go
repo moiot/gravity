@@ -152,7 +152,7 @@ func (plugin *tidbKafkaInput) SendDeadSignal() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	return mysql_test.SendDeadSignal(db, plugin.Identity())
+	return mysql_test.SendDeadSignal(db, plugin.pipelineName)
 }
 
 func (plugin *tidbKafkaInput) Wait() {

@@ -258,9 +258,9 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 		} else {
 			// Do not process MsgCloseInputStream, just close the sliding window
 			if msg.Type == core.MsgCloseInputStream {
-				window.Close()
 				delete(scheduler.slidingWindows, key)
 				scheduler.windowMutex.Unlock()
+				window.Close() // should release lock first, otherwise AckMsg might wait on the lock, lead to dead lock.
 				return nil
 			}
 		}

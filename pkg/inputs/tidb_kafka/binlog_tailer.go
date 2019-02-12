@@ -26,6 +26,7 @@ import (
 type BinlogTailer struct {
 	gravityServerID uint32
 
+	name           string
 	sourceTimeZone string
 	consumer       *sarama_cluster.Consumer
 	config         *gCfg.SourceTiDBConfig
@@ -192,7 +193,7 @@ func (t *BinlogTailer) createMsgs(
 				continue
 			}
 
-			if mysql_test.IsDeadSignal(schemaName, tableName) && data["id"] == t.gravityServerID {
+			if mysql_test.IsDeadSignal(schemaName, tableName) && data["id"].(string) == t.name {
 				t.consumer.Close()
 				return msgList, nil
 			}
@@ -352,6 +353,7 @@ func NewBinlogTailer(
 	}
 
 	tailer := &BinlogTailer{
+		name:            pipelineName,
 		gravityServerID: serverID,
 		consumer:        consumer,
 		config:          config,
