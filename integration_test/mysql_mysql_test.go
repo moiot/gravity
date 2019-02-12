@@ -203,7 +203,7 @@ func TestMySQLBatch(t *testing.T) {
 
 	r.NoError(server.Start())
 
-	<-server.Input.Done()
+	<-server.Input.Done(server.PositionCache)
 
 	// wait for some time to see if server is healthy
 	sliding_window.DefaultHealthyThreshold = 4
@@ -277,7 +277,7 @@ func TestMySQLBatchNoTableConfig(t *testing.T) {
 
 	r.NoError(server.Start())
 
-	<-server.Input.Done()
+	<-server.Input.Done(server.PositionCache)
 
 	// wait for some time to see if server is healthy
 	sliding_window.DefaultHealthyThreshold = 4
