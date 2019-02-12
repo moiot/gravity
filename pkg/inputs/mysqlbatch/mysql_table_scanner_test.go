@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moiot/gravity/pkg/utils"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
@@ -160,7 +162,7 @@ func TestFindInBatch(t *testing.T) {
 	r := require.New(t)
 
 	t.Run("terminates when there is no record in table", func(tt *testing.T) {
-		testDBName := mysql_test.TestCaseMd5Name(tt)
+		testDBName := utils.TestCaseMd5Name(tt)
 
 		dbCfg := mysql_test.SourceDBConfig()
 		positionRepo, err := position_store.NewMySQLRepo(dbCfg, "")

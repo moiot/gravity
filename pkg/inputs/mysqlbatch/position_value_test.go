@@ -17,7 +17,7 @@ func TestSetupInitialPosition(t *testing.T) {
 
 	t.Run("when position does not exist", func(tt *testing.T) {
 		// it get a start binlog position and save it
-		pipelineName := mysql_test.TestCaseMd5Name(tt)
+		pipelineName := utils.TestCaseMd5Name(tt)
 		cache, err := position_store.NewPositionCache(pipelineName, repo, 5*time.Second)
 		r.NoError(err)
 
@@ -38,7 +38,7 @@ func TestSetupInitialPosition(t *testing.T) {
 
 	t.Run("when position exists", func(tt *testing.T) {
 		// it does nothing
-		pipelineName := mysql_test.TestCaseMd5Name(tt)
+		pipelineName := utils.TestCaseMd5Name(tt)
 
 		batchPositionValue := BatchPositionValue{
 			Start: &utils.MySQLBinlogPosition{BinlogGTID: "abc:123"},

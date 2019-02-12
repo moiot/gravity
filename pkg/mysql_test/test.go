@@ -1,11 +1,8 @@
 package mysql_test
 
 import (
-	"crypto/md5"
 	"database/sql"
 	"fmt"
-	"io"
-	"testing"
 	"time"
 
 	"github.com/moiot/gravity/pkg/consts"
@@ -497,10 +494,4 @@ func SetMySQLGlobalVars(db *sql.DB) {
 			log.Fatalf("failed to set global settings, s: %v, err: %v", s, err.Error())
 		}
 	}
-}
-
-func TestCaseMd5Name(t *testing.T) string {
-	h := md5.New()
-	io.WriteString(h, t.Name())
-	return fmt.Sprintf("%x", h.Sum(nil))
 }

@@ -75,7 +75,7 @@ func (plugin *mongoInputPlugin) NewPositionCache() (position_store.PositionCache
 		return nil, errors.Trace(err)
 	}
 
-	if err := InitPositionCache(positionCache, plugin.cfg.StartPosition); err != nil {
+	if err := SetupInitialPosition(positionCache, plugin.cfg.StartPosition); err != nil {
 		return nil, errors.Trace(err)
 	}
 

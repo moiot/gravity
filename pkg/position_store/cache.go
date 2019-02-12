@@ -93,6 +93,7 @@ func (cache *defaultPositionCache) Put(position Position) error {
 	if err := position.Validate(); err != nil {
 		return errors.Trace(err)
 	}
+	position.Name = cache.pipelineName
 
 	if !cache.exist {
 		if err := cache.repo.Put(cache.pipelineName, position); err != nil {

@@ -40,10 +40,10 @@ func TestSetupInitialPosition(t *testing.T) {
 	t.Run("when there isn't any position in position repo", func(tt *testing.T) {
 		tt.Run("when start spec is nil", func(ttt *testing.T) {
 
-			cache, err := position_store.NewPositionCache(mysql_test.TestCaseMd5Name(ttt), repo, 5*time.Second)
+			cache, err := position_store.NewPositionCache(utils.TestCaseMd5Name(ttt), repo, 5*time.Second)
 			r.NoError(err)
 
-			db := mysql_test.MustSetupSourceDB(mysql_test.TestCaseMd5Name(ttt))
+			db := mysql_test.MustSetupSourceDB(utils.TestCaseMd5Name(ttt))
 			err = SetupInitialPosition(db, cache, nil)
 			r.NoError(err)
 
@@ -63,7 +63,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			//
 			// it should use the start spec as the start position and current position.
 			//
-			pipelineName := mysql_test.TestCaseMd5Name(ttt)
+			pipelineName := utils.TestCaseMd5Name(ttt)
 			startGTID := "abc:123"
 			currentGTID := "abc:789"
 			err := initRepo(repo, pipelineName, startGTID, currentGTID)
@@ -95,7 +95,7 @@ func TestSetupInitialPosition(t *testing.T) {
 	t.Run("when there is position in position repo", func(tt *testing.T) {
 		t.Run("when start spec is the same with position in repo", func(ttt *testing.T) {
 			// it should not change anything.
-			pipelineName := mysql_test.TestCaseMd5Name(ttt)
+			pipelineName := utils.TestCaseMd5Name(ttt)
 			startGTID := "abc:123"
 			currentGTID := "abc:456"
 
@@ -119,7 +119,7 @@ func TestSetupInitialPosition(t *testing.T) {
 
 		t.Run("when start spec is not the same with position in repo", func(ttt *testing.T) {
 			// it should use the start spec as the start position and current position.
-			pipelineName := mysql_test.TestCaseMd5Name(ttt)
+			pipelineName := utils.TestCaseMd5Name(ttt)
 			startGTID := "abc:123"
 			currentGTID := "abc:456"
 
