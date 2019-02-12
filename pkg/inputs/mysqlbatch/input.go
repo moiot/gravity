@@ -287,16 +287,16 @@ func (plugin *mysqlFullInput) waitFinish(positionCache position_store.PositionCa
 	}
 
 	if plugin.ctx.Err() == nil {
-		// It's better to flush the position here, so that the table position
+		// It's better to flush the streamPosition here, so that the table streamPosition
 		// state is persisted as soon as the table scan finishes.
 		if err := positionCache.Flush(); err != nil {
-			log.Fatalf("[mysqlFullInput] failed to flush position cache")
+			log.Fatalf("[mysqlFullInput] failed to flush streamPosition cache")
 		}
 
 		log.Infof("[plugin.waitFinish] table scanners done")
 		startBinlog, err := GetStartBinlog(positionCache)
 		if err != nil {
-			log.Fatalf("[mysqlFullInput] failed to get start position: %v", errors.ErrorStack(err))
+			log.Fatalf("[mysqlFullInput] failed to get start streamPosition: %v", errors.ErrorStack(err))
 		}
 
 		binlogPositions := helper.BinlogPositionsValue{
@@ -308,16 +308,16 @@ func (plugin *mysqlFullInput) waitFinish(positionCache position_store.PositionCa
 			log.Fatalf("[mysqlFullInput] failed to serialize binlog positions: %v", errors.ErrorStack(err))
 		}
 
-		// Notice that we should not change position stage in this plugin.
+		// Notice that we should not change streamPosition stage in this plugin.
 		// Changing the stage is done by two stage plugin.
-		position := position_store.Position{
+		streamPosition := position_store.Position{
 			Name:       plugin.pipelineName,
 			Stage:      config.Stream,
 			Value:      v,
 			UpdateTime: time.Now(),
 		}
 
-		plugin.doneC <- position
+		plugin.doneC <- streamPosition
 
 		close(plugin.doneC)
 	} else if plugin.ctx.Err() == context.Canceled {
