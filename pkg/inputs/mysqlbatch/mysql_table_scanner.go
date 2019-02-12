@@ -319,7 +319,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 		// we break the loop here in case the currentMinPos comes larger than the max we have in the beginning.
 		if maxReached {
 
-			log.Infof("[LoopInBatch] max reached")
+			log.Infof("[LoopInBatch] %s.%s max reached", tableDef.Schema, tableDef.Name)
 
 			if lastMsg != nil {
 				<-lastMsg.Done
@@ -329,7 +329,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 				if err := tableScanner.emitter.Emit(msg); err != nil {
 					log.Fatalf("[LoopInBatch] failed to emit close stream msg: %v", errors.ErrorStack(err))
 				}
-				log.Infof("[LoopInBatch] sent close input stream msg")
+				log.Infof("[LoopInBatch] sent close input stream msg for %s", *msg.InputStreamKey)
 			}
 			return
 		}
