@@ -706,7 +706,7 @@ func TestMySQLToMyBidirection(t *testing.T) {
 	r.Equal(2, ids[0])
 }
 
-func TestTagDDL(t *testing.T) {
+func TestMySQLTagDDL(t *testing.T) {
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -778,7 +778,7 @@ func TestTagDDL(t *testing.T) {
 	r.Equal(sql.ErrNoRows, err)
 }
 
-func TestDDL(t *testing.T) {
+func TestMySQLDDL(t *testing.T) {
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -871,7 +871,7 @@ func TestDDL(t *testing.T) {
 	server.Close()
 }
 
-func TestDDLNoRoute(t *testing.T) {
+func TestMySQLDDLNoRoute(t *testing.T) {
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name())
