@@ -2,6 +2,7 @@ package mysqlbatch
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/juju/errors"
 
@@ -40,6 +41,7 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 		log.Fatalf("[scanner_server] query error: %s", errors.Trace(err))
 	}
 
+	added := make(map[string]bool)
 	for i := range tableConfigs {
 		schemaName := tableConfigs[i].Schema
 		allTables, ok := allSchema[schemaName]
@@ -62,6 +64,7 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 					log.Infof("added for batch: %s.%s", schemaName, tableName)
 					tableDefs = append(tableDefs, tableDef)
 					retTableConfigs = append(retTableConfigs, tableConfigs[i])
+					added[fmt.Sprintf("%s.%s", schemaName, tableName)] = true
 				}
 			}
 		}
@@ -70,6 +73,9 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 	if router != nil {
 		for schemaName, tables := range allSchema {
 			for _, tableName := range tables {
+				if added[fmt.Sprintf("%s.%s", schemaName, tableName)] {
+					continue
+				}
 				msg := core.Msg{
 					Database: schemaName,
 					Table:    tableName,
