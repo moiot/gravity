@@ -113,7 +113,7 @@ func (plugin *mysqlFullInput) Configure(pipelineName string, data map[string]int
 		return errors.Trace(err)
 	}
 
-	plugin.probeDBConfig, plugin.probeSQLAnnotation = helper.GetProbCfg(plugin.cfg.SourceProbeCfg, plugin.cfg.Source)
+	plugin.probeDBConfig, plugin.probeSQLAnnotation = helper.GetProbCfg(cfg.SourceProbeCfg, cfg.Source)
 
 	plugin.cfg = &cfg
 	return nil
