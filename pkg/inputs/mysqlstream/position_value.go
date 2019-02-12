@@ -106,7 +106,7 @@ func GetCurrentPosition(cache position_store.PositionCacheInterface) (*utils.MyS
 		return nil, errors.Trace(err)
 	}
 
-	if positions.CurrentPosition != nil {
+	if positions.CurrentPosition == nil {
 		return nil, errors.Errorf("empty currentPosition")
 	}
 
@@ -128,12 +128,8 @@ func GetBinlogPositionsValue(cache position_store.PositionCacheInterface) (*util
 		return nil, nil, errors.Trace(err)
 	}
 
-	if positions.CurrentPosition != nil {
+	if positions.CurrentPosition == nil {
 		return nil, nil, errors.Errorf("empty currentPosition")
-	}
-
-	if positions.StartPosition != nil {
-		return nil, nil, errors.Errorf("empty start position")
 	}
 
 	return positions.StartPosition, positions.CurrentPosition, nil

@@ -79,7 +79,7 @@ func main() {
 
 	err = server.Start()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(errors.ErrorStack(err))
 	}
 
 	go func() {
