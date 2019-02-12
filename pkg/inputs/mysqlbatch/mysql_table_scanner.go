@@ -224,20 +224,23 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 	maxReached := false
 	var statement string
 
-	currentMinPos, exists, err := GetCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name))
+	currentPosition, exists, err := GetCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name))
 	if err != nil {
 		log.Fatalf("[LoopInBatch] failed to get current pos: %v", errors.ErrorStack(err))
 	}
+
 	if !exists {
-		if err := PutCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &min); err != nil {
-			log.Fatalf("[LoopInBatch] failed to put current pos: %v", errors.ErrorStack(err))
+		currentPosition = &min
+	} else {
+		if mysql.MySQLDataEquals(currentPosition.Value, max.Value) {
+			log.Infof("[LoopInBatch] already scanned")
+			return
 		}
-		currentMinPos = &min
 	}
 
-	log.Infof("[LoopInBatch] prepare current: %v", currentMinPos)
+	log.Infof("[LoopInBatch] prepare current: %v", currentPosition)
 
-	currentMinValue := currentMinPos.Value
+	currentMinValue := currentPosition.Value
 	resultCount := 0
 
 	columnTypes, err := GetTableColumnTypes(db, tableDef.Schema, tableDef.Name)
@@ -307,7 +310,6 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 
 		batchIdx++
 
-		var lastMsg *core.Msg
 		// process this batch's data
 		for i := 0; i < rowIdx; i++ {
 			rowPtrs := rowsBatchDataPtrs[i]
@@ -319,27 +321,26 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 			if err := tableScanner.emitter.Emit(msg); err != nil {
 				log.Fatalf("[LoopInBatch] failed to emit job: %v", errors.ErrorStack(err))
 			}
-
-			lastMsg = msg
 		}
 
-		log.Infof("[LoopInBatch] sourceDB: %s, table: %s, currentMinPos: %v, maxMapString.column: %v, maxMapString.value: %v, maxMapString.type: %v, resultCount: %v",
+		log.Infof("[LoopInBatch] sourceDB: %s, table: %s, currentPosition: %v, maxMapString.column: %v, maxMapString.value: %v, maxMapString.type: %v, resultCount: %v",
 			tableDef.Schema, tableDef.Name, currentMinValue, maxMapString["column"], maxMapString["value"], maxMapString["type"], resultCount)
 
-		// we break the loop here in case the currentMinPos comes larger than the max we have in the beginning.
+		// we break the loop here in case the currentPosition comes larger than the max we have in the beginning.
 		if maxReached {
 
 			log.Infof("[LoopInBatch] max reached")
 
-			if lastMsg != nil {
-				<-lastMsg.Done
+			// close the stream
+			msg := NewCloseInputStreamMsg(tableDef)
+			if err := tableScanner.emitter.Emit(msg); err != nil {
+				log.Fatalf("[LoopInBatch] failed to emit close stream msg: %v", errors.ErrorStack(err))
+			}
+			log.Infof("[LoopInBatch] sent close input stream msg")
+			<-msg.Done
 
-				// close the stream
-				msg := NewCloseInputStreamMsg(tableDef)
-				if err := tableScanner.emitter.Emit(msg); err != nil {
-					log.Fatalf("[LoopInBatch] failed to emit close stream msg: %v", errors.ErrorStack(err))
-				}
-				log.Infof("[LoopInBatch] sent close input stream msg")
+			if err := tableScanner.positionCache.Flush(); err != nil {
+				log.Fatalf("[LoopInBatch] failed to flush position cache: %v", errors.ErrorStack(err))
 			}
 			return
 		}
@@ -415,10 +416,15 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 	log.Infof("[FindAll] finished dump table: %v", streamKey)
 
 	// close the stream
-	// msg := NewCloseInputStreamMsg(tableDef)
-	// if err := tableScanner.emitter.Emit(msg); err != nil {
-	// 	log.Fatalf("[FindAll] failed to emit close stream msg: %v", errors.ErrorStack(err))
-	// }
+	msg := NewCloseInputStreamMsg(tableDef)
+	if err := tableScanner.emitter.Emit(msg); err != nil {
+		log.Fatalf("[FindAll] failed to emit close stream msg: %v", errors.ErrorStack(err))
+	}
+	<-msg.Done
+
+	if err := tableScanner.positionCache.Flush(); err != nil {
+		log.Fatalf("[FindAll] failed to flush position cache, err: %v", errors.ErrorStack(err))
+	}
 	log.Infof("[FindAll] sent close input stream msg")
 }
 

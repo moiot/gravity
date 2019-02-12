@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juju/errors"
+
 	"github.com/moiot/gravity/pkg/utils"
 
 	"github.com/go-sql-driver/mysql"
@@ -153,14 +155,19 @@ func (submitter *fakeMsgSubmitter) SubmitMsg(msg *core.Msg) error {
 	if msg.Type == core.MsgDML {
 		submitter.msgs = append(submitter.msgs, msg)
 	}
+	if msg.AfterCommitCallback != nil {
+		if err := msg.AfterCommitCallback(msg); err != nil {
+			return errors.Trace(err)
+		}
+	}
 	close(msg.Done)
 	return nil
 }
 
-func TestFindInBatch(t *testing.T) {
+func TestTableScanner_Start(t *testing.T) {
 	r := require.New(t)
 
-	t.Run("terminates when there is no record in table", func(tt *testing.T) {
+	t.Run("it terminates", func(tt *testing.T) {
 		testDBName := utils.TestCaseMd5Name(tt)
 
 		dbCfg := mysql_test.SourceDBConfig()
@@ -191,7 +198,7 @@ func TestFindInBatch(t *testing.T) {
 				"id",
 			},
 			{
-				"sends one msg when source table have only one recor",
+				"sends one msg when source table have only one record",
 				func(db *sql.DB) {
 					args := map[string]interface{}{
 						"id":   1,
@@ -342,13 +349,13 @@ func TestFindInBatch(t *testing.T) {
 
 			throttle := time.NewTicker(100 * time.Millisecond)
 
-			positionCache, err := position_store.NewPositionCache(testDBName, positionRepo, 5*time.Second)
+			positionCache, err := position_store.NewPositionCache(testDBName, positionRepo, 10*time.Second)
 			r.NoError(err)
 
 			r.NoError(SetupInitialPosition(positionCache, db))
 
 			submitter := &fakeMsgSubmitter{}
-			emitter, err := emitter.NewEmitter(nil, submitter)
+			em, err := emitter.NewEmitter(nil, submitter)
 			r.NoError(err)
 
 			q := make(chan *TableWork, 1)
@@ -360,7 +367,7 @@ func TestFindInBatch(t *testing.T) {
 				q,
 				db,
 				positionCache,
-				emitter,
+				em,
 				throttle,
 				schemaStore,
 				&cfg,
@@ -369,9 +376,34 @@ func TestFindInBatch(t *testing.T) {
 			r.NoError(tableScanner.Start())
 			tableScanner.Wait()
 
+			// do it again, the submitter should not receive any message now.
+			submitter = &fakeMsgSubmitter{}
+			em, err = emitter.NewEmitter(nil, submitter)
+			r.NoError(err)
+
+			positionCache, err = position_store.NewPositionCache(testDBName, positionRepo, 10*time.Second)
+			r.NoError(err)
+
+			q = make(chan *TableWork, 1)
+			q <- &TableWork{TableDef: tableDefs[0], TableConfig: &tableConfigs[0], ScanColumn: c.scanColumn}
+			close(q)
+
+			tableScanner = NewTableScanner(
+				tt.Name(),
+				q,
+				db,
+				positionCache,
+				em,
+				throttle,
+				schemaStore,
+				&cfg,
+				context.Background(),
+			)
+			r.NoError(tableScanner.Start())
+			tableScanner.Wait()
+			r.Equalf(0, len(submitter.msgs), "test case: %v", c.name)
 		}
 	})
-
 }
 
 func TestInitTablePosition(t *testing.T) {
