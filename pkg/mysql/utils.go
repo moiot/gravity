@@ -3,6 +3,7 @@ package mysql
 import (
 	"database/sql"
 	"reflect"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -149,6 +150,8 @@ func NormalizeSQLType(a interface{}) interface{} {
 		return sql.NullInt64{Int64: int64(v), Valid: true}
 	case int:
 		return sql.NullInt64{Int64: int64(v), Valid: true}
+	case time.Time:
+		return mysql.NullTime{Time: v, Valid: true}
 	default:
 		return a
 	}

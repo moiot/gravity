@@ -23,6 +23,7 @@ const (
 	PlainString   = "string"
 	PlainInt      = "int"
 	PlainBytes    = "bytes"
+	PlainTime     = "time"
 	SQLNullInt64  = "sqlNullInt64"
 	SQLNullString = "sqlNullString"
 	SQLNullBool   = "sqlNullBool"
@@ -83,9 +84,12 @@ func (p TablePosition) MapString() (map[string]string, error) {
 
 	case mysql.NullTime:
 		if v.Valid {
-			pMapString["value"] = v.Time.String()
+			pMapString["value"] = v.Time.Format(time.RFC3339Nano)
 			pMapString["type"] = SQLNullTime
 		}
+	case time.Time:
+		pMapString["value"] = v.Format(time.RFC3339Nano)
+		pMapString["type"] = SQLNullTime
 	default:
 		return nil, errors.Errorf("[MapString] unknown type: %v, column: %v", reflect.TypeOf(v).String(), p.Column)
 	}
@@ -143,7 +147,7 @@ func (p *TablePosition) UnmarshalJSON(value []byte) error {
 		}
 		p.Value = b
 	case SQLNullTime:
-		t, err := time.Parse(time.RFC3339, pMapString["value"])
+		t, err := time.Parse(time.RFC3339Nano, pMapString["value"])
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -340,6 +344,13 @@ func PutMaxMin(cache position_store.PositionCacheInterface, fullTableName string
 
 	batchPositions.Max[fullTableName] = *max
 	batchPositions.Min[fullTableName] = *min
+
+	newV, err := Serialize(batchPositions)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	position.Value = newV
 
 	return errors.Trace(cache.Put(position))
 }

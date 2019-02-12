@@ -68,7 +68,7 @@ func (tableScanner *TableScanner) Start() error {
 					log.Fatalf("[TableScanner] InitTablePosition failed: %v", errors.ErrorStack(err))
 				}
 				if !exists {
-					log.Fatalf("[table_scanner] failed to find max min")
+					log.Fatalf("[table_scanner] failed to find max min, table: %v", utils.TableIdentity(work.TableDef.Schema, work.TableDef.Name))
 				}
 
 				log.Infof("positionCache.GetMaxMin: max value type: %v, max %v; min value type: %v, min %v", reflect.TypeOf(max.Value), max, reflect.TypeOf(min.Value), min)
@@ -135,7 +135,7 @@ func (tableScanner *TableScanner) InitTablePosition(tableDef *schema_store.Table
 			if err := PutMaxMin(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &maxPos, &minPos); err != nil {
 				return errors.Trace(err)
 			}
-			log.Infof("[InitTablePosition] PutMaxMin: max value type: %v, max: %v; min value type: %v, min: %v", reflect.TypeOf(maxPos.Value), maxPos, reflect.TypeOf(minPos.Value), minPos)
+			log.Infof("[InitTablePosition] table: %v, PutMaxMin: max value type: %v, max: %v; min value type: %v, min: %v", utils.TableIdentity(tableDef.Schema, tableDef.Name), reflect.TypeOf(maxPos.Value), maxPos, reflect.TypeOf(minPos.Value), minPos)
 		}
 		log.Infof("[InitTablePosition] schema: %v, table: %v, scanColumn: %v", tableDef.Schema, tableDef.Name, scanColumn)
 

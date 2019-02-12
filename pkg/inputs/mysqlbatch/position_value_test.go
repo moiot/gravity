@@ -66,3 +66,7 @@ func TestSetupInitialPosition(t *testing.T) {
 	})
 
 }
+
+func TestSerialize(t *testing.T) {
+
+}
