@@ -122,7 +122,7 @@ func TestSetupInitialPosition(t *testing.T) {
 
 			v, err := Deserialize(position.Value)
 			r.NoError(err)
-			r.EqualValues(newStart, v.StartPosition)
+			r.EqualValues(newStart, *(v.StartPosition))
 
 		})
 
