@@ -207,7 +207,7 @@ func TestMySQLBatch(t *testing.T) {
 
 	// wait for some time to see if server is healthy
 	sliding_window.DefaultHealthyThreshold = 4
-	time.Sleep(5)
+	time.Sleep(6)
 
 	r.True(server.Scheduler.Healthy())
 

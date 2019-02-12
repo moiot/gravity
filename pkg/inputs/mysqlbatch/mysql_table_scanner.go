@@ -89,7 +89,7 @@ func (tableScanner *TableScanner) Start() error {
 						tableScanner.cfg.TableScanBatch)
 
 					if tableScanner.ctx.Err() == nil {
-						log.Infof("[table_worker] LoopInBatch done with table %s", work.TableDef.Name)
+						log.Infof("[table_worker] LoopInBatch done with table %s", utils.TableIdentity(work.TableDef.Schema, work.TableDef.Name))
 					} else if tableScanner.ctx.Err() == context.Canceled {
 						log.Infof("[TableScanner] LoopInBatch canceled")
 						return
@@ -233,7 +233,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 		currentPosition = &min
 	} else {
 		if mysql.MySQLDataEquals(currentPosition.Value, max.Value) {
-			log.Infof("[LoopInBatch] already scanned")
+			log.Infof("[LoopInBatch] already scanned: %v", utils.TableIdentity(tableDef.Schema, tableDef.Name))
 			return
 		}
 	}
@@ -329,7 +329,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 		// we break the loop here in case the currentPosition comes larger than the max we have in the beginning.
 		if maxReached {
 
-			log.Infof("[LoopInBatch] max reached")
+			log.Infof("[LoopInBatch] finish table: %v", utils.TableIdentity(tableDef.Schema, tableDef.Name))
 
 			if err := waitAndCloseStream(tableDef, tableScanner.emitter); err != nil {
 				log.Fatalf("[LoopInBatch] failed to emit close stream closeMsg: %v", errors.ErrorStack(err))
