@@ -331,13 +331,9 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 
 			log.Infof("[LoopInBatch] max reached")
 
-			// close the stream
-			msg := NewCloseInputStreamMsg(tableDef)
-			if err := tableScanner.emitter.Emit(msg); err != nil {
-				log.Fatalf("[LoopInBatch] failed to emit close stream msg: %v", errors.ErrorStack(err))
+			if err := waitAndCloseStream(tableDef, tableScanner.emitter); err != nil {
+				log.Fatalf("[LoopInBatch] failed to emit close stream closeMsg: %v", errors.ErrorStack(err))
 			}
-			log.Infof("[LoopInBatch] sent close input stream msg")
-			<-msg.Done
 
 			if err := tableScanner.positionCache.Flush(); err != nil {
 				log.Fatalf("[LoopInBatch] failed to flush position cache: %v", errors.ErrorStack(err))
@@ -398,7 +394,6 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 	}
 
 	// set the current and max position to be the same
-	// TODO add method to flush position
 	p := TablePosition{Column: "*", Type: PlainInt, Value: len(allData)}
 
 	if err := PutCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &p); err != nil {
@@ -416,16 +411,14 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 	log.Infof("[FindAll] finished dump table: %v", streamKey)
 
 	// close the stream
-	msg := NewCloseInputStreamMsg(tableDef)
-	if err := tableScanner.emitter.Emit(msg); err != nil {
-		log.Fatalf("[FindAll] failed to emit close stream msg: %v", errors.ErrorStack(err))
+	if err := waitAndCloseStream(tableDef, tableScanner.emitter); err != nil {
+		log.Fatalf("[FindAll] failed to emit close stream closeMsg: %v", errors.ErrorStack(err))
 	}
-	<-msg.Done
 
 	if err := tableScanner.positionCache.Flush(); err != nil {
 		log.Fatalf("[FindAll] failed to flush position cache, err: %v", errors.ErrorStack(err))
 	}
-	log.Infof("[FindAll] sent close input stream msg")
+	log.Infof("[FindAll] sent close input stream closeMsg")
 }
 
 func (tableScanner *TableScanner) AfterMsgCommit(msg *core.Msg) error {
@@ -534,4 +527,19 @@ func String2Val(s string, scanType string) interface{} {
 		log.Infof("[LoopInBatch] scanColumn not supported")
 	}
 	return currentMin
+}
+
+func waitAndCloseStream(tableDef *schema_store.Table, em core.Emitter) error {
+	barrierMsg := NewBarrierMsg(tableDef)
+	if err := em.Emit(barrierMsg); err != nil {
+		return errors.Trace(err)
+	}
+	<-barrierMsg.Done
+
+	closeMsg := NewCloseInputStreamMsg(tableDef)
+	if err := em.Emit(closeMsg); err != nil {
+		return errors.Trace(err)
+	}
+	<-closeMsg.Done
+	return nil
 }

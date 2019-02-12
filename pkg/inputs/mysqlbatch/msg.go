@@ -92,10 +92,20 @@ func NewCreateTableMsg(parser *parser.Parser, table *schema_store.Table, createT
 	return &msg
 }
 
-func NewCloseInputStreamMsg(sourceTableDef *schema_store.Table) *core.Msg {
+func NewBarrierMsg(tableDef *schema_store.Table) *core.Msg {
+	msg := core.Msg{
+		Type:            core.MsgCtl,
+		InputStreamKey:  utils.NewStringPtr(utils.TableIdentity(tableDef.Schema, tableDef.Name)),
+		OutputStreamKey: utils.NewStringPtr(""),
+		Done:            make(chan struct{}),
+	}
+	return &msg
+}
+
+func NewCloseInputStreamMsg(tableDef *schema_store.Table) *core.Msg {
 	msg := core.Msg{
 		Type:            core.MsgCloseInputStream,
-		InputStreamKey:  utils.NewStringPtr(utils.TableIdentity(sourceTableDef.Schema, sourceTableDef.Name)),
+		InputStreamKey:  utils.NewStringPtr(utils.TableIdentity(tableDef.Schema, tableDef.Name)),
 		OutputStreamKey: utils.NewStringPtr(""),
 		Done:            make(chan struct{}),
 	}
