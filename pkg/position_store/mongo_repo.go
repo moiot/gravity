@@ -85,6 +85,11 @@ func (repo *mongoPositionRepo) Delete(pipelineName string) error {
 	return errors.Trace(collection.Remove(bson.M{"name": pipelineName}))
 }
 
+func (repo *mongoPositionRepo) Close() error {
+	repo.session.Close()
+	return nil
+}
+
 func NewMongoPositionRepo(session *mgo.Session) (PositionRepo, error) {
 	session.SetMode(mgo.Primary, true)
 	collection := session.DB(mongoPositionDB).C(mongoPositionCollection)

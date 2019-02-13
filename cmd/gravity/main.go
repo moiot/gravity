@@ -205,32 +205,14 @@ func statusHandler(server *app.Server, name, hash string) func(http.ResponseWrit
 	}
 }
 
-func resetHandler(server *app.Server, pipelineConfig config.PipelineConfigV3) func(http.ResponseWriter, *http.Request) {
+func resetHandler(server *app.Server, _ config.PipelineConfigV3) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		server.Close()
-
-		server, err := app.NewServer(pipelineConfig)
-		if err != nil {
-			log.Errorf("[reset] fail to new server, err: %s", err)
-			http.Error(writer, fmt.Sprintf("fail to new server, err: %s", err), 500)
-			return
-		}
 		if err := server.PositionCache.Clear(); err != nil {
 			log.Errorf("[reset] failed to clear position, err: %v", errors.ErrorStack(err))
 			http.Error(writer, fmt.Sprintf("failed to clear position, err: %v", errors.ErrorStack(err)), 500)
 			return
 		}
-
-		server, err = app.NewServer(pipelineConfig)
-		if err != nil {
-			log.Errorf("[reset] fail to new server, err: %s", err)
-			http.Error(writer, fmt.Sprintf("fail to new server, err: %s", err), 500)
-			return
-		}
-		if err := server.Start(); err != nil {
-			log.Errorf("[reset] fail to start server, err: %s", err)
-			http.Error(writer, fmt.Sprintf("fail to start server, err: %s", err), 500)
-			return
-		}
+		server.Close()
+		os.Exit(1)
 	}
 }

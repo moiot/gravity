@@ -79,6 +79,10 @@ func (repo *mysqlPositionRepo) Delete(pipelineName string) error {
 	return errors.Trace(err)
 }
 
+func (repo *mysqlPositionRepo) Close() error {
+	return errors.Trace(repo.db.Close())
+}
+
 func NewMySQLRepo(dbConfig *utils.DBConfig, annotation string) (PositionRepo, error) {
 	db, err := utils.CreateDBConnection(dbConfig)
 	if err != nil {

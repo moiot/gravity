@@ -19,6 +19,10 @@ func (repo *memRepo) Delete(pipelineName string) error {
 	return nil
 }
 
+func (repo *memRepo) Close() error {
+	return nil
+}
+
 func NewMemoRepo() PositionRepo {
 	return &memRepo{positions: make(map[string]Position)}
 }

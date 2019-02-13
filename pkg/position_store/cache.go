@@ -49,6 +49,7 @@ type defaultPositionCache struct {
 	dirty         bool
 	repo          PositionRepo
 
+	closed   bool
 	position Position
 	sync.Mutex
 
@@ -81,10 +82,18 @@ func (cache *defaultPositionCache) Start() error {
 }
 
 func (cache *defaultPositionCache) Close() {
+	cache.Lock()
+	defer cache.Unlock()
+	if cache.closed {
+		return
+	}
+
 	log.Infof("[defaultPositionCache] closing")
 	close(cache.closeC)
 	cache.wg.Wait()
+	cache.repo.Close()
 	log.Infof("[defaultPositionCache] closed")
+	cache.closed = true
 }
 
 func (cache *defaultPositionCache) Put(position Position) error {
@@ -142,9 +151,18 @@ func (cache *defaultPositionCache) Flush() error {
 	return nil
 }
 
+// Clear stops flush position and then delete the position record.
 func (cache *defaultPositionCache) Clear() error {
 	cache.Lock()
 	defer cache.Unlock()
+
+	if cache.closed {
+		return nil
+	}
+
+	close(cache.closeC)
+	cache.wg.Wait()
+
 	position := Position{
 		Name:  cache.pipelineName,
 		Stage: config.Unknown,
@@ -155,9 +173,12 @@ func (cache *defaultPositionCache) Clear() error {
 		return errors.Trace(err)
 	}
 
+	cache.repo.Close()
+
 	cache.position = position
 	cache.dirty = false
 	cache.exist = false
+	cache.closed = true
 	return nil
 }
 
