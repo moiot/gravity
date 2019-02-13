@@ -23,7 +23,7 @@ func Test_mysqlInputPlugin_Configure(t *testing.T) {
 	err := json.Unmarshal([]byte(raw), &m)
 	r.NoError(err)
 
-	p := mysqlStreamInput{}
+	p := mysqlStreamInputPlugin{}
 	err = p.Configure("123", m)
 	r.NoError(err)
 

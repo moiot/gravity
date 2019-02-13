@@ -66,7 +66,7 @@ func (cfg *PluginConfig) ValidateAndSetDefault() error {
 	return nil
 }
 
-type mysqlFullInput struct {
+type mysqlBatchInputPlugin struct {
 	pipelineName string
 	cfg          *PluginConfig
 
@@ -100,10 +100,10 @@ type TableWork struct {
 }
 
 func init() {
-	registry.RegisterPlugin(registry.InputPlugin, "mysqlbatch", &mysqlFullInput{}, false)
+	registry.RegisterPlugin(registry.InputPlugin, "mysqlbatch", &mysqlBatchInputPlugin{}, false)
 }
 
-func (plugin *mysqlFullInput) Configure(pipelineName string, data map[string]interface{}) error {
+func (plugin *mysqlBatchInputPlugin) Configure(pipelineName string, data map[string]interface{}) error {
 	plugin.pipelineName = pipelineName
 
 	cfg := PluginConfig{}
@@ -121,7 +121,7 @@ func (plugin *mysqlFullInput) Configure(pipelineName string, data map[string]int
 	return nil
 }
 
-func (plugin *mysqlFullInput) NewPositionCache() (position_store.PositionCacheInterface, error) {
+func (plugin *mysqlBatchInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
 	positionRepo, err := position_store.NewMySQLRepo(
 		plugin.probeDBConfig,
 		plugin.probeSQLAnnotation)
@@ -147,7 +147,7 @@ func (plugin *mysqlFullInput) NewPositionCache() (position_store.PositionCacheIn
 	return positionCache, nil
 }
 
-func (plugin *mysqlFullInput) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
+func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
 	cfg := plugin.cfg
 	plugin.positionCache = positionCache
 
@@ -235,26 +235,26 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter, router core.Router, po
 	return nil
 }
 
-func (plugin *mysqlFullInput) Stage() config.InputMode {
+func (plugin *mysqlBatchInputPlugin) Stage() config.InputMode {
 	return config.Batch
 }
 
-func (plugin *mysqlFullInput) SendDeadSignal() error {
+func (plugin *mysqlBatchInputPlugin) SendDeadSignal() error {
 	plugin.Close()
 	return nil
 }
 
-func (plugin *mysqlFullInput) Done() chan position_store.Position {
+func (plugin *mysqlBatchInputPlugin) Done() chan position_store.Position {
 	return plugin.doneC
 }
 
-func (plugin *mysqlFullInput) Wait() {
+func (plugin *mysqlBatchInputPlugin) Wait() {
 	for i := range plugin.tableScanners {
 		plugin.tableScanners[i].Wait()
 	}
 }
 
-func (plugin *mysqlFullInput) Close() {
+func (plugin *mysqlBatchInputPlugin) Close() {
 
 	plugin.closeOnce.Do(func() {
 		log.Infof("[scanner server] closing...")
@@ -279,12 +279,12 @@ func (plugin *mysqlFullInput) Close() {
 			plugin.sourceSchemaStore.Close()
 		}
 
-		log.Infof("[mysqlFullInput] closed")
+		log.Infof("[mysqlBatchInputPlugin] closed")
 	})
 
 }
 
-func (plugin *mysqlFullInput) waitFinish(positionCache position_store.PositionCacheInterface) {
+func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.PositionCacheInterface) {
 	for idx := range plugin.tableScanners {
 		plugin.tableScanners[idx].Wait()
 	}
@@ -293,13 +293,13 @@ func (plugin *mysqlFullInput) waitFinish(positionCache position_store.PositionCa
 		// It's better to flush the streamPosition here, so that the table streamPosition
 		// state is persisted as soon as the table scan finishes.
 		if err := positionCache.Flush(); err != nil {
-			log.Fatalf("[mysqlFullInput] failed to flush streamPosition cache")
+			log.Fatalf("[mysqlBatchInputPlugin] failed to flush streamPosition cache")
 		}
 
 		log.Infof("[plugin.waitFinish] table scanners done")
 		startBinlog, err := GetStartBinlog(positionCache)
 		if err != nil {
-			log.Fatalf("[mysqlFullInput] failed to get start streamPosition: %v", errors.ErrorStack(err))
+			log.Fatalf("[mysqlBatchInputPlugin] failed to get start streamPosition: %v", errors.ErrorStack(err))
 		}
 
 		binlogPositions := helper.BinlogPositionsValue{
@@ -308,7 +308,7 @@ func (plugin *mysqlFullInput) waitFinish(positionCache position_store.PositionCa
 		}
 		v, err := helper.SerializeBinlogPositionValue(&binlogPositions)
 		if err != nil {
-			log.Fatalf("[mysqlFullInput] failed to serialize binlog positions: %v", errors.ErrorStack(err))
+			log.Fatalf("[mysqlBatchInputPlugin] failed to serialize binlog positions: %v", errors.ErrorStack(err))
 		}
 
 		// Notice that we should not change streamPosition stage in this plugin.

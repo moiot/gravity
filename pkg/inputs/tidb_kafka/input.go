@@ -25,7 +25,7 @@ var (
 	BinlogCheckInterval = time.Second
 )
 
-type tidbKafkaInput struct {
+type tidbKafkaStreamInputPlugin struct {
 	pipelineName string
 
 	emitter core.Emitter
@@ -42,10 +42,10 @@ type tidbKafkaInput struct {
 }
 
 func init() {
-	registry.RegisterPlugin(registry.InputPlugin, "tidbkafka", &tidbKafkaInput{}, false)
+	registry.RegisterPlugin(registry.InputPlugin, "tidbkafka", &tidbKafkaStreamInputPlugin{}, false)
 }
 
-func (plugin *tidbKafkaInput) Configure(pipelineName string, data map[string]interface{}) error {
+func (plugin *tidbKafkaStreamInputPlugin) Configure(pipelineName string, data map[string]interface{}) error {
 	plugin.pipelineName = pipelineName
 
 	cfg := config.SourceTiDBConfig{}
@@ -70,7 +70,7 @@ func (plugin *tidbKafkaInput) Configure(pipelineName string, data map[string]int
 	return nil
 }
 
-func (plugin *tidbKafkaInput) NewPositionCache() (position_store.PositionCacheInterface, error) {
+func (plugin *tidbKafkaStreamInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
 	positionRepo, err := position_store.NewMySQLRepo(
 		plugin.cfg.OffsetStoreConfig.SourceMySQL,
 		plugin.cfg.OffsetStoreConfig.Annotation)
@@ -85,7 +85,7 @@ func (plugin *tidbKafkaInput) NewPositionCache() (position_store.PositionCacheIn
 	return positionCache, nil
 }
 
-func (plugin *tidbKafkaInput) Start(emitter core.Emitter, positionCache position_store.PositionCacheInterface) error {
+func (plugin *tidbKafkaStreamInputPlugin) Start(emitter core.Emitter, positionCache position_store.PositionCacheInterface) error {
 	plugin.emitter = emitter
 	plugin.gravityServerID = utils.GenerateRandomServerID()
 	plugin.positionCache = positionCache
@@ -128,11 +128,11 @@ func (plugin *tidbKafkaInput) Start(emitter core.Emitter, positionCache position
 	return nil
 }
 
-func (plugin *tidbKafkaInput) Stage() config.InputMode {
+func (plugin *tidbKafkaStreamInputPlugin) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *tidbKafkaInput) Done() chan position_store.Position {
+func (plugin *tidbKafkaStreamInputPlugin) Done() chan position_store.Position {
 	c := make(chan position_store.Position)
 	go func() {
 		plugin.binlogTailer.Wait()
@@ -140,14 +140,14 @@ func (plugin *tidbKafkaInput) Done() chan position_store.Position {
 		if err != nil && exist {
 			c <- position
 		} else {
-			log.Fatalf("[tidbKafkaInput] failed to get position, exist: %v, err: %v", exist, errors.ErrorStack(err))
+			log.Fatalf("[tidbKafkaStreamInputPlugin] failed to get position, exist: %v, err: %v", exist, errors.ErrorStack(err))
 		}
 		close(c)
 	}()
 	return c
 }
 
-func (plugin *tidbKafkaInput) SendDeadSignal() error {
+func (plugin *tidbKafkaStreamInputPlugin) SendDeadSignal() error {
 	db, err := utils.CreateDBConnection(plugin.cfg.SourceDB)
 	if err != nil {
 		return errors.Trace(err)
@@ -155,15 +155,15 @@ func (plugin *tidbKafkaInput) SendDeadSignal() error {
 	return mysql_test.SendDeadSignal(db, plugin.pipelineName)
 }
 
-func (plugin *tidbKafkaInput) Wait() {
+func (plugin *tidbKafkaStreamInputPlugin) Wait() {
 	plugin.binlogTailer.Wait()
 }
 
-func (plugin *tidbKafkaInput) Identity() uint32 {
+func (plugin *tidbKafkaStreamInputPlugin) Identity() uint32 {
 	return plugin.gravityServerID
 }
 
-func (plugin *tidbKafkaInput) Close() {
+func (plugin *tidbKafkaStreamInputPlugin) Close() {
 	log.Infof("[mysql_binlog_server] stop...")
 
 	plugin.binlogTailer.Close()

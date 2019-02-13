@@ -67,7 +67,7 @@ func main() {
 
 	server, err := app.NewServer(cfg.PipelineConfig)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(errors.ErrorStack(err))
 	}
 
 	if cfg.ClearPosition {

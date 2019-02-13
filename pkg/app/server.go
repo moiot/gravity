@@ -31,7 +31,7 @@ type Server struct {
 	sync.Mutex
 }
 
-func Parse(pipelineConfig config.PipelineConfigV3) (*Server, error) {
+func ParsePlugins(pipelineConfig config.PipelineConfigV3) (*Server, error) {
 	pipelineConfig = pipelineConfig.DeepCopy()
 
 	server := Server{}
@@ -101,18 +101,17 @@ func Parse(pipelineConfig config.PipelineConfigV3) (*Server, error) {
 }
 
 func NewServer(pipelineConfig config.PipelineConfigV3) (*Server, error) {
-	server, err := Parse(pipelineConfig)
+	server, err := ParsePlugins(pipelineConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	// position store
-	newer, ok := server.Input.(core.PositionCacheCreator)
+	i := server.Input
+	newer, ok := i.(core.PositionCacheCreator)
 	if !ok {
 		return nil, errors.Errorf("input plugin is not a position cache creator")
 	}
-
-	newer.NewPositionCache()
 
 	if p, err := newer.NewPositionCache(); err != nil {
 		return nil, errors.Trace(err)
