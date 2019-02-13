@@ -49,9 +49,11 @@ type defaultPositionCache struct {
 	dirty         bool
 	repo          PositionRepo
 
-	closed   bool
-	position Position
-	sync.Mutex
+	closeMutex sync.Mutex
+	closed     bool
+
+	position      Position
+	positionMutex sync.Mutex
 
 	closeC chan struct{}
 	wg     sync.WaitGroup
@@ -82,8 +84,9 @@ func (cache *defaultPositionCache) Start() error {
 }
 
 func (cache *defaultPositionCache) Close() {
-	cache.Lock()
-	defer cache.Unlock()
+	cache.closeMutex.Lock()
+	defer cache.closeMutex.Unlock()
+
 	if cache.closed {
 		return
 	}
@@ -97,8 +100,8 @@ func (cache *defaultPositionCache) Close() {
 }
 
 func (cache *defaultPositionCache) Put(position Position) error {
-	cache.Lock()
-	defer cache.Unlock()
+	cache.positionMutex.Lock()
+	defer cache.positionMutex.Unlock()
 	if err := position.Validate(); err != nil {
 		return errors.Trace(err)
 	}
@@ -118,8 +121,8 @@ func (cache *defaultPositionCache) Put(position Position) error {
 }
 
 func (cache *defaultPositionCache) Get() (Position, bool, error) {
-	cache.Lock()
-	defer cache.Unlock()
+	cache.positionMutex.Lock()
+	defer cache.positionMutex.Unlock()
 
 	if !cache.exist {
 		position, exist, err := cache.repo.Get(cache.pipelineName)
@@ -136,8 +139,8 @@ func (cache *defaultPositionCache) Get() (Position, bool, error) {
 }
 
 func (cache *defaultPositionCache) Flush() error {
-	cache.Lock()
-	defer cache.Unlock()
+	cache.positionMutex.Lock()
+	defer cache.positionMutex.Unlock()
 
 	if !cache.dirty {
 		return nil
@@ -153,8 +156,8 @@ func (cache *defaultPositionCache) Flush() error {
 
 // Clear stops flush position and then delete the position record.
 func (cache *defaultPositionCache) Clear() error {
-	cache.Lock()
-	defer cache.Unlock()
+	cache.closeMutex.Lock()
+	defer cache.closeMutex.Unlock()
 
 	if cache.closed {
 		return nil
