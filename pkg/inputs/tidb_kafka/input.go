@@ -34,9 +34,9 @@ type tidbKafkaInput struct {
 
 	cfg *config.SourceTiDBConfig
 
-	ctx    context.Context
-	cancel context.CancelFunc
-
+	ctx           context.Context
+	cancel        context.CancelFunc
+	positionCache position_store.PositionCacheInterface
 	binlogTailer  *BinlogTailer
 	binlogChecker binlog_checker.BinlogChecker
 }
@@ -88,7 +88,7 @@ func (plugin *tidbKafkaInput) NewPositionCache() (position_store.PositionCacheIn
 func (plugin *tidbKafkaInput) Start(emitter core.Emitter, positionCache position_store.PositionCacheInterface) error {
 	plugin.emitter = emitter
 	plugin.gravityServerID = utils.GenerateRandomServerID()
-
+	plugin.positionCache = positionCache
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
 
 	cfg := plugin.cfg
@@ -132,11 +132,11 @@ func (plugin *tidbKafkaInput) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *tidbKafkaInput) Done(positionCache position_store.PositionCacheInterface) chan position_store.Position {
+func (plugin *tidbKafkaInput) Done() chan position_store.Position {
 	c := make(chan position_store.Position)
 	go func() {
 		plugin.binlogTailer.Wait()
-		position, exist, err := positionCache.Get()
+		position, exist, err := plugin.positionCache.Get()
 		if err != nil && exist {
 			c <- position
 		} else {
