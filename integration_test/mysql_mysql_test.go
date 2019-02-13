@@ -203,7 +203,7 @@ func TestMySQLBatch(t *testing.T) {
 
 	r.NoError(server.Start())
 
-	<-server.Input.Done(server.PositionCache)
+	<-server.Input.Done()
 
 	// wait for some time to see if server is healthy
 	sliding_window.DefaultHealthyThreshold = 4
@@ -277,7 +277,7 @@ func TestMySQLBatchNoTableConfig(t *testing.T) {
 
 	r.NoError(server.Start())
 
-	<-server.Input.Done(server.PositionCache)
+	<-server.Input.Done()
 
 	// wait for some time to see if server is healthy
 	sliding_window.DefaultHealthyThreshold = 4
@@ -372,7 +372,7 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 
 	r.NoError(server.Start())
 
-	<-server.Input.Done(server.PositionCache)
+	<-server.Input.Done()
 
 	// wait for some time to see if server is healthy
 	sliding_window.DefaultHealthyThreshold = 4
@@ -768,7 +768,7 @@ func TestMySQLTagDDL(t *testing.T) {
 	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
-	<-server.Input.Done(server.PositionCache)
+	<-server.Input.Done()
 
 	server.Close()
 
@@ -866,7 +866,7 @@ func TestMySQLDDL(t *testing.T) {
 	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
-	<-server.Input.Done(server.PositionCache)
+	<-server.Input.Done()
 
 	server.Close()
 }
@@ -942,7 +942,7 @@ func TestMySQLDDLNoRoute(t *testing.T) {
 	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
-	<-server.Input.Done(server.PositionCache)
+	<-server.Input.Done()
 
 	server.Close()
 }

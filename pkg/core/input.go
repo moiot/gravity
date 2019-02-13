@@ -6,11 +6,10 @@ import (
 )
 
 type Input interface {
-	NewPositionCache() (position_store.PositionCacheInterface, error)
 	Start(emitter Emitter, router Router, positionCache position_store.PositionCacheInterface) error
 	Close()
 	Stage() config.InputMode
-	Done(positionCache position_store.PositionCacheInterface) chan position_store.Position
+	Done() chan position_store.Position
 	SendDeadSignal() error // for test only
 	Wait()
 }

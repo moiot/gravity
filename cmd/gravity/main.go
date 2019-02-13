@@ -114,7 +114,7 @@ func main() {
 
 	if cfg.PipelineConfig.InputPlugin.Mode == config.Batch {
 		go func(server *app.Server) {
-			<-server.Input.Done(server.PositionCache)
+			<-server.Input.Done()
 			server.Close()
 			os.Exit(0)
 		}(server)

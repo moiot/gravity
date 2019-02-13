@@ -59,6 +59,7 @@ type mysqlStreamInput struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
+	positionCache position_store.PositionCacheInterface
 	binlogChecker binlog_checker.BinlogChecker
 	binlogTailer  *BinlogTailer
 
@@ -122,6 +123,8 @@ func (plugin *mysqlStreamInput) NewPositionCache() (position_store.PositionCache
 }
 
 func (plugin *mysqlStreamInput) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
+	plugin.positionCache = positionCache
+
 	sourceDB, err := utils.CreateDBConnection(plugin.cfg.Source)
 	if err != nil {
 		log.Fatalf("[gravity] failed to create source connection %v", errors.ErrorStack(err))
@@ -189,11 +192,11 @@ func (plugin *mysqlStreamInput) Wait() {
 	plugin.binlogTailer.Wait()
 }
 
-func (plugin *mysqlStreamInput) Done(positionCache position_store.PositionCacheInterface) chan position_store.Position {
+func (plugin *mysqlStreamInput) Done() chan position_store.Position {
 	c := make(chan position_store.Position)
 	go func() {
 		plugin.binlogTailer.Wait()
-		position, exist, err := positionCache.Get()
+		position, exist, err := plugin.positionCache.Get()
 		if err == nil && exist {
 			c <- position
 		} else {

@@ -42,7 +42,11 @@ func (i *TwoStageInputPlugin) NewPositionCache() (position_store.PositionCacheIn
 	caches := twoStagePositionCache{}
 	caches.current = &atomic.Value{}
 
-	fullPositionCache, err := i.full.NewPositionCache()
+	newer, ok := i.full.(core.PositionCacheCreator)
+	if !ok {
+		return nil, errors.Errorf("full is not position cache creator")
+	}
+	fullPositionCache, err := newer.NewPositionCache()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -55,7 +59,12 @@ func (i *TwoStageInputPlugin) NewPositionCache() (position_store.PositionCacheIn
 
 	stage := position.Stage
 	if stage == config.Stream {
-		if incrementalPositionStore, err := i.incremental.NewPositionCache(); err != nil {
+		newer, ok := i.incremental.(core.PositionCacheCreator)
+		if !ok {
+			return nil, errors.Errorf("incremental is not position cache creator")
+		}
+
+		if incrementalPositionStore, err := newer.NewPositionCache(); err != nil {
 			return nil, errors.Trace(err)
 		} else {
 			caches.incremental = incrementalPositionStore
@@ -80,7 +89,7 @@ func (i *TwoStageInputPlugin) Start(emitter core.Emitter, router core.Router, po
 
 		go func() {
 
-			pos, ok := <-i.full.Done(positionCache)
+			pos, ok := <-i.full.Done()
 			if !ok {
 				log.Info("[TwoStageInputPlugin] full stage done")
 				return
@@ -103,7 +112,11 @@ func (i *TwoStageInputPlugin) Start(emitter core.Emitter, router core.Router, po
 			pos.Stage = config.Stream
 
 			// setup incremental position store first
-			incPositionStore, err := i.incremental.NewPositionCache()
+			newer, ok := i.incremental.(core.PositionCacheCreator)
+			if !ok {
+				log.Fatalf("[TwoStageInputPlugin] incremental is not a position cache creator")
+			}
+			incPositionStore, err := newer.NewPositionCache()
 			if err != nil {
 				log.Fatalf("[TwoStageInputPlugin] failed to create incrmental position store: %v", errors.ErrorStack(err))
 			}
@@ -169,11 +182,11 @@ func (i *TwoStageInputPlugin) Stage() config.InputMode {
 	return i.positionCache.current.Load().(config.InputMode)
 }
 
-func (i *TwoStageInputPlugin) Done(positionCache position_store.PositionCacheInterface) chan position_store.Position {
+func (i *TwoStageInputPlugin) Done() chan position_store.Position {
 	if i.Stage() == config.Stream {
-		return i.incremental.Done(positionCache)
+		return i.incremental.Done()
 	} else {
-		return i.full.Done(positionCache)
+		return i.full.Done()
 	}
 }
 

@@ -31,12 +31,12 @@ type mongoInputPlugin struct {
 	emitter core.Emitter
 	wg      sync.WaitGroup
 
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	mongoSession *mgo.Session
-	oplogTailer  *OplogTailer
-	oplogChecker *OplogChecker
+	ctx           context.Context
+	cancel        context.CancelFunc
+	positionCache position_store.PositionCacheInterface
+	mongoSession  *mgo.Session
+	oplogTailer   *OplogTailer
+	oplogChecker  *OplogChecker
 }
 
 func init() {
@@ -84,6 +84,7 @@ func (plugin *mongoInputPlugin) NewPositionCache() (position_store.PositionCache
 
 func (plugin *mongoInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
 	plugin.emitter = emitter
+	plugin.positionCache = positionCache
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
 
 	session, err := mongo.CreateMongoSession(plugin.cfg.Source)
@@ -132,11 +133,11 @@ func (plugin *mongoInputPlugin) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *mongoInputPlugin) Done(positionCache position_store.PositionCacheInterface) chan position_store.Position {
+func (plugin *mongoInputPlugin) Done() chan position_store.Position {
 	c := make(chan position_store.Position)
 	go func() {
 		plugin.Wait()
-		position, exist, err := positionCache.Get()
+		position, exist, err := plugin.positionCache.Get()
 		if err != nil && exist {
 			c <- position
 		} else {

@@ -83,6 +83,8 @@ type mysqlFullInput struct {
 
 	throttle *time.Ticker
 
+	positionCache position_store.PositionCacheInterface
+
 	tableScanners []*TableScanner
 
 	// startBinlogPos utils.MySQLBinlogPosition
@@ -147,6 +149,7 @@ func (plugin *mysqlFullInput) NewPositionCache() (position_store.PositionCacheIn
 
 func (plugin *mysqlFullInput) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
 	cfg := plugin.cfg
+	plugin.positionCache = positionCache
 
 	sourceDB, err := utils.CreateDBConnection(cfg.Source)
 	if err != nil {
@@ -241,7 +244,7 @@ func (plugin *mysqlFullInput) SendDeadSignal() error {
 	return nil
 }
 
-func (plugin *mysqlFullInput) Done(_ position_store.PositionCacheInterface) chan position_store.Position {
+func (plugin *mysqlFullInput) Done() chan position_store.Position {
 	return plugin.doneC
 }
 

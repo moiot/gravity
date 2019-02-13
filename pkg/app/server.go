@@ -107,7 +107,14 @@ func NewServer(pipelineConfig config.PipelineConfigV3) (*Server, error) {
 	}
 
 	// position store
-	if p, err := server.Input.NewPositionCache(); err != nil {
+	newer, ok := server.Input.(core.PositionCacheCreator)
+	if !ok {
+		return nil, errors.Errorf("input plugin is not a position cache creator")
+	}
+
+	newer.NewPositionCache()
+
+	if p, err := newer.NewPositionCache(); err != nil {
 		return nil, errors.Trace(err)
 	} else {
 		server.PositionCache = p

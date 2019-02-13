@@ -2,7 +2,6 @@ package mysqlstream
 
 import (
 	"database/sql"
-	"sync"
 	"time"
 
 	"github.com/juju/errors"
@@ -84,12 +83,7 @@ func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCache
 	return errors.Trace(positionCache.Flush())
 }
 
-var mu sync.Mutex
-
 func GetCurrentPositionValue(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, error) {
-	mu.Lock()
-	defer mu.Unlock()
-
 	_, current, err := getBinlogPositionsValue(cache)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -98,9 +92,6 @@ func GetCurrentPositionValue(cache position_store.PositionCacheInterface) (*util
 }
 
 func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, currentPosition *utils.MySQLBinlogPosition) error {
-	mu.Lock()
-	defer mu.Unlock()
-
 	start, _, err := getBinlogPositionsValue(cache)
 	if err != nil {
 		return errors.Trace(err)
