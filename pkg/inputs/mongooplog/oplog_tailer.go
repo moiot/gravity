@@ -102,13 +102,13 @@ func (tailer *OplogTailer) Run() {
 
 	log.Infof("[oplog_tailer] isMaster: %v", result)
 
-	positionValue, err := GetPosition(tailer.positionCache)
+	positionValue, err := GetPositionValue(tailer.positionCache)
 	if err != nil {
 		log.Fatalf("[oplogTailer] failed to get position: %v", errors.Trace(err))
 	}
 
 	after := func(session *mgo.Session, options *gtm.Options) bson.MongoTimestamp {
-		positionValue, err := GetPosition(tailer.positionCache)
+		positionValue, err := GetPositionValue(tailer.positionCache)
 		if err != nil {
 			log.Fatalf("[oplogTailer] failed to get position: %v", errors.Trace(err))
 		}
@@ -224,7 +224,7 @@ func (tailer *OplogTailer) AfterMsgCommit(msg *core.Msg) error {
 		return errors.Errorf("invalid InputContext")
 	}
 
-	if err := PutCurrentPosition(tailer.positionCache, &position); err != nil {
+	if err := UpdateCurrentPositionValue(tailer.positionCache, &position); err != nil {
 		return errors.Trace(err)
 	}
 	return nil

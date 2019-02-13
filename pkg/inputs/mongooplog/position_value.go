@@ -1,6 +1,7 @@
 package mongooplog
 
 import (
+	"sync"
 	"time"
 
 	"github.com/json-iterator/go"
@@ -50,7 +51,7 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 
 		positionValue := OplogPositionValue{
 			CurrentPosition: currentPosition,
-			StartPosition: startPositionInSpec,
+			StartPosition:   startPositionInSpec,
 		}
 		v, err := Serialize(&positionValue)
 		if err != nil {
@@ -99,7 +100,12 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 	return errors.Trace(cache.Flush())
 }
 
-func GetPosition(cache position_store.PositionCacheInterface) (*OplogPositionValue, error) {
+var mu sync.Mutex
+
+func GetPositionValue(cache position_store.PositionCacheInterface) (*OplogPositionValue, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	position, exist, err := cache.Get()
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -117,7 +123,10 @@ func GetPosition(cache position_store.PositionCacheInterface) (*OplogPositionVal
 	return oplogPositionValue, nil
 }
 
-func PutCurrentPosition(cache position_store.PositionCacheInterface, positionValue *config.MongoPosition) error {
+func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, positionValue *config.MongoPosition) error {
+	mu.Lock()
+	defer mu.Unlock()
+
 	position, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)
@@ -139,23 +148,5 @@ func PutCurrentPosition(cache position_store.PositionCacheInterface, positionVal
 	}
 	position.Value = v
 
-	return errors.Trace(cache.Put(position))
-}
-
-func PutPositions(cache position_store.PositionCacheInterface, positionValues *OplogPositionValue) error {
-	position, exist, err := cache.Get()
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	if !exist {
-		return errors.Errorf("empty position")
-	}
-
-	v, err := Serialize(positionValues)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	position.Value = v
 	return errors.Trace(cache.Put(position))
 }

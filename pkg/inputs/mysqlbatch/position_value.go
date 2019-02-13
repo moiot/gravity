@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"reflect"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/moiot/gravity/pkg/config"
@@ -235,7 +236,12 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB 
 	return nil
 }
 
+var mu sync.Mutex
+
 func GetStartBinlog(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	position, exist, err := cache.Get()
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -254,6 +260,9 @@ func GetStartBinlog(cache position_store.PositionCacheInterface) (*utils.MySQLBi
 }
 
 func GetCurrentPos(cache position_store.PositionCacheInterface, fullTableName string) (*TablePosition, bool, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	position, exist, err := cache.Get()
 	if err != nil {
 		return nil, false, errors.Trace(err)
@@ -276,6 +285,9 @@ func GetCurrentPos(cache position_store.PositionCacheInterface, fullTableName st
 }
 
 func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName string, pos *TablePosition) error {
+	mu.Lock()
+	defer mu.Unlock()
+
 	position, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)
@@ -300,6 +312,9 @@ func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName st
 }
 
 func GetMaxMin(cache position_store.PositionCacheInterface, fullTableName string) (*TablePosition, *TablePosition, bool, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	position, exist, err := cache.Get()
 	if err != nil {
 		return nil, nil, false, errors.Trace(err)
@@ -328,6 +343,9 @@ func GetMaxMin(cache position_store.PositionCacheInterface, fullTableName string
 }
 
 func PutMaxMin(cache position_store.PositionCacheInterface, fullTableName string, max *TablePosition, min *TablePosition) error {
+	mu.Lock()
+	defer mu.Unlock()
+
 	position, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)

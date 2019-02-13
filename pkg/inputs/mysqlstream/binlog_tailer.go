@@ -172,7 +172,7 @@ func (tailer *BinlogTailer) Start() error {
 		tryReSync = true
 	)
 
-	currentPosition, err := GetCurrentPosition(tailer.positionCache)
+	currentPosition, err := GetCurrentPositionValue(tailer.positionCache)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -205,7 +205,11 @@ func (tailer *BinlogTailer) Start() error {
 			// If the timeout happens, then we need to try to reopen the binlog syncer.
 			if err == context.DeadlineExceeded {
 				log.Info("[binlogTailer] BinlogSyncerTimeout try to reopen")
-				gtid, err := GetCurrentGTID(tailer.positionCache)
+				p, err := GetCurrentPositionValue(tailer.positionCache)
+				if err != nil {
+					log.Fatalf("[binlogTailer] failed to get current position, err: %v", errors.ErrorStack(err))
+				}
+				gtid := p.BinlogGTID
 				if err != nil {
 					log.Fatalf("[binlogTailer] failed to deserialize position, err: %v", errors.ErrorStack(err))
 				}
@@ -223,7 +227,7 @@ func (tailer *BinlogTailer) Start() error {
 					time.Sleep(RetryTimeout)
 
 					db := utils.NewMySQLDB(tailer.sourceDB)
-					currentPosition, err := GetCurrentPosition(tailer.positionCache)
+					currentPosition, err := GetCurrentPositionValue(tailer.positionCache)
 					if err != nil {
 						log.Fatalf("[binlogTailer] failed getCurrentPosition, err: %v", errors.ErrorStack(err))
 					}
@@ -250,7 +254,7 @@ func (tailer *BinlogTailer) Start() error {
 						log.Fatalf("[binlogTailer] failed reopenBinlogSyncer")
 					}
 
-					currentPosition, err = GetCurrentPosition(tailer.positionCache)
+					currentPosition, err = GetCurrentPositionValue(tailer.positionCache)
 					if err != nil {
 						log.Fatalf("[binlogTailer] failed to getCurrentPosition, err: %v", errors.ErrorStack(err))
 					}
@@ -553,23 +557,7 @@ func (tailer *BinlogTailer) AfterMsgCommit(msg *core.Msg) error {
 	ctx := msg.InputContext.(inputContext)
 	if ctx.op == xid || ctx.op == ddl {
 
-		startPosition, currentPosition, err := GetBinlogPositionsValue(tailer.positionCache)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		*currentPosition = ctx.position
-
-		v, err := helper.SerializeBinlogPositionValue(&helper.BinlogPositionsValue{StartPosition: startPosition, CurrentPosition: currentPosition})
-		if err != nil {
-			return errors.Trace(err)
-		}
-
-		position := position_store.Position{
-			Name:  tailer.pipelineName,
-			Stage: config.Stream,
-			Value: v,
-		}
-		if err := tailer.positionCache.Put(position); err != nil {
+		if err := UpdateCurrentPositionValue(tailer.positionCache, &(ctx.position)); err != nil {
 			return errors.Trace(err)
 		}
 	}

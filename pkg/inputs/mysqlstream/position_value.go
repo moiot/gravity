@@ -2,6 +2,7 @@ package mysqlstream
 
 import (
 	"database/sql"
+	"sync"
 	"time"
 
 	"github.com/juju/errors"
@@ -83,37 +84,55 @@ func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCache
 	return errors.Trace(positionCache.Flush())
 }
 
-func GetCurrentGTID(cache position_store.PositionCacheInterface) (string, error) {
-	currentPosition, err := GetCurrentPosition(cache)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	return currentPosition.BinlogGTID, nil
-}
+var mu sync.Mutex
 
-func GetCurrentPosition(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, error) {
-	position, exist, err := cache.Get()
+func GetCurrentPositionValue(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	_, current, err := getBinlogPositionsValue(cache)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-
-	if !exist {
-		return nil, errors.Errorf("empty position")
-	}
-
-	positions, err := helper.DeserializeBinlogPositionValue(position.Value)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	if positions.CurrentPosition == nil {
-		return nil, errors.Errorf("empty currentPosition")
-	}
-
-	return positions.CurrentPosition, nil
+	return current, nil
 }
 
-func GetBinlogPositionsValue(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, *utils.MySQLBinlogPosition, error) {
+func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, currentPosition *utils.MySQLBinlogPosition) error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	start, _, err := getBinlogPositionsValue(cache)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	v, err := helper.SerializeBinlogPositionValue(&helper.BinlogPositionsValue{StartPosition: start, CurrentPosition: currentPosition})
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	position := position_store.Position{
+		Stage: config.Stream,
+		Value: v,
+	}
+
+	if err := cache.Put(position); err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+func ToGoMySQLPosition(p utils.MySQLBinlogPosition) (gomysql.Position, gomysql.MysqlGTIDSet, error) {
+	gtidSet, err := gomysql.ParseMysqlGTIDSet(p.BinlogGTID)
+	if err != nil {
+		return gomysql.Position{}, gomysql.MysqlGTIDSet{}, errors.Trace(err)
+	}
+	mysqlGTIDSet := *gtidSet.(*gomysql.MysqlGTIDSet)
+	return gomysql.Position{Name: p.BinLogFileName, Pos: p.BinLogFilePos}, mysqlGTIDSet, nil
+}
+
+func getBinlogPositionsValue(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, *utils.MySQLBinlogPosition, error) {
 	position, exist, err := cache.Get()
 	if err != nil {
 		return nil, nil, errors.Trace(err)
@@ -133,13 +152,4 @@ func GetBinlogPositionsValue(cache position_store.PositionCacheInterface) (*util
 	}
 
 	return positions.StartPosition, positions.CurrentPosition, nil
-}
-
-func ToGoMySQLPosition(p utils.MySQLBinlogPosition) (gomysql.Position, gomysql.MysqlGTIDSet, error) {
-	gtidSet, err := gomysql.ParseMysqlGTIDSet(p.BinlogGTID)
-	if err != nil {
-		return gomysql.Position{}, gomysql.MysqlGTIDSet{}, errors.Trace(err)
-	}
-	mysqlGTIDSet := *gtidSet.(*gomysql.MysqlGTIDSet)
-	return gomysql.Position{Name: p.BinLogFileName, Pos: p.BinLogFilePos}, mysqlGTIDSet, nil
 }
