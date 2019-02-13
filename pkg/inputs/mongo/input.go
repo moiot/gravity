@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"github.com/juju/errors"
+	"github.com/moiot/gravity/pkg/position_store"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
@@ -44,6 +45,15 @@ func (i *input) Configure(pipelineName string, data map[string]interface{}) erro
 	}
 
 	return nil
+}
+
+func (i *input) NewPositionCache() (position_store.PositionCacheInterface, error) {
+	newer, ok := i.Input.(core.PositionCacheCreator)
+	if !ok {
+		return nil, errors.Errorf("not a PositionCacheCreator")
+	}
+
+	return newer.NewPositionCache()
 }
 
 // TODO: remove duplicate with inputs/mysql

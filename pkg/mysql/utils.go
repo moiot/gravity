@@ -3,6 +3,7 @@ package mysql
 import (
 	"database/sql"
 	"reflect"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -124,6 +125,11 @@ func MySQLDataEquals(a interface{}, b interface{}) bool {
 		log.Fatalf("MySQLDataEquals normalized type not match, a type: %v, b type: %v", reflect.TypeOf(a), reflect.TypeOf(b))
 	}
 
+	if reflect.TypeOf(normalizedA) == reflect.TypeOf(mysql.NullTime{}) {
+		t1 := normalizedA.(mysql.NullTime).Time
+		t2 := normalizedB.(mysql.NullTime).Time
+		return t1.Equal(t2)
+	}
 	return reflect.DeepEqual(normalizedA, normalizedB)
 }
 
@@ -149,6 +155,8 @@ func NormalizeSQLType(a interface{}) interface{} {
 		return sql.NullInt64{Int64: int64(v), Valid: true}
 	case int:
 		return sql.NullInt64{Int64: int64(v), Valid: true}
+	case time.Time:
+		return mysql.NullTime{Time: v, Valid: true}
 	default:
 		return a
 	}

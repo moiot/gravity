@@ -114,8 +114,6 @@ func TestMongoJson(t *testing.T) {
 	server, err := app.NewServer(pipelineConfig)
 	r.NoError(err)
 
-	server.Input.PositionStore().Clear()
-
 	r.NoError(server.Start())
 
 	session, err := mongo.CreateMongoSession(&mongoCfg)

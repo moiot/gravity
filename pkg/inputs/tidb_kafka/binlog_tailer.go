@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_store"
+
 	"github.com/Shopify/sarama"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
@@ -125,7 +127,7 @@ func (t *BinlogTailer) createMsgs(
 	if binlog.Type == pb.BinlogType_DDL {
 		ddlStmt := string(binlog.DdlData.DdlQuery)
 		if strings.Contains(ddlStmt, consts.DDLTag) {
-			log.Infof("ignore internal ddl: ", ddlStmt)
+			log.Infof("ignore internal ddl: %v", ddlStmt)
 			return msgList, nil
 		} else {
 			//TODO support ddl for tidb
@@ -266,15 +268,17 @@ func (t *BinlogTailer) dispatchMsg(msg *core.Msg) error {
 }
 
 func NewBinlogTailer(
-	name string,
+	pipelineName string,
 	serverID uint32,
+	positionCache position_store.PositionCacheInterface,
 	config *gCfg.SourceTiDBConfig,
 	emitter core.Emitter,
 	binlogChecker binlog_checker.BinlogChecker,
 ) (*BinlogTailer, error) {
 
 	srcKafkaCfg := config.SourceKafka
-	osf := NewKafkaOffsetStoreFactory(config.OffsetStoreConfig)
+
+	osf := NewKafkaOffsetStoreFactory(pipelineName, positionCache)
 	kafkaConfig := sarama_cluster.NewConfig()
 	kafkaConfig.Version = kafka.MsgVersion
 	// if no previous offset committed, use the oldest offset
@@ -349,7 +353,7 @@ func NewBinlogTailer(
 	}
 
 	tailer := &BinlogTailer{
-		name:            name,
+		name:            pipelineName,
 		gravityServerID: serverID,
 		consumer:        consumer,
 		config:          config,

@@ -248,13 +248,16 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 
 	if scheduler.cfg.SlidingWindowSize > 0 {
 		key := *msg.InputStreamKey
-
 		scheduler.windowMutex.Lock()
 		window, ok := scheduler.slidingWindows[key]
 		if !ok {
 			window = sliding_window.NewStaticSlidingWindow(scheduler.cfg.SlidingWindowSize, scheduler.pipelineName)
 			scheduler.slidingWindows[key] = window
-			log.Infof("[batchScheduler.SubmitMsg] added new sliding window, key=%s", key)
+			log.Infof("[batchScheduler.SubmitMsg] added new sliding window, key=%s, type=%s", key, msg.Type)
+			if msg.DdlMsg != nil {
+				log.Infof("[batchScheduler.SubmitMsg] added new sliding window, ddl: %v", msg.DdlMsg.Statement)
+			}
+
 		} else {
 			// Do not process MsgCloseInputStream, just close the sliding window
 			if msg.Type == core.MsgCloseInputStream {
@@ -262,6 +265,8 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 				log.Infof("[batchScheduler.SubmitMsg] deleted new sliding window, key=%s", key)
 				scheduler.windowMutex.Unlock()
 				window.Close() // should release lock first, otherwise AckMsg might wait on the lock, lead to dead lock.
+				close(msg.Done)
+				log.Infof("[batchScheduler.SubmitMsg] closed stream: %v", key)
 				return nil
 			}
 		}

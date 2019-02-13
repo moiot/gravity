@@ -25,14 +25,14 @@ var (
 		Namespace: "drc_v2",
 		Subsystem: "scheduler_worker_pool",
 		Name:      "processed_msg_count",
-		Help:      "processed msg count of this worker",
+		Help:      "processed msg count of worker",
 	}, []string{metrics.PipelineTag})
 
 	WorkerPoolMsgExecLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "drc_v2",
 		Subsystem: "scheduler_worker_pool",
 		Name:      "msg_exec_latency",
-		Help:      "latency of process a job",
+		Help:      "latency of process a message",
 		Buckets:   prometheus.ExponentialBuckets(0.001, 3, 10),
 	}, []string{metrics.PipelineTag})
 

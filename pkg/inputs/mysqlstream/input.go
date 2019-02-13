@@ -3,16 +3,18 @@ package mysqlstream
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"sync"
 	"time"
+
+	"github.com/moiot/gravity/pkg/core"
+
+	"github.com/moiot/gravity/pkg/inputs/helper"
 
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
-	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/inputs/helper/binlog_checker"
 	"github.com/moiot/gravity/pkg/mysql_test"
 	"github.com/moiot/gravity/pkg/position_store"
@@ -30,17 +32,12 @@ var (
 
 const inputStreamKey = "mysqlstream"
 
-type SourceProbeCfg struct {
-	SourceMySQL *utils.DBConfig `mapstructure:"mysql"json:"mysql"`
-	Annotation  string          `mapstructure:"annotation"json:"annotation"`
-}
-
 type MySQLBinlogInputPluginConfig struct {
 	Source                  *utils.DBConfig            `mapstructure:"source" toml:"source" json:"source"`
 	IgnoreBiDirectionalData bool                       `mapstructure:"ignore-bidirectional-data" toml:"ignore-bidirectional-data" json:"ignore-bidirectional-data"`
 	StartPosition           *utils.MySQLBinlogPosition `mapstructure:"start-position" toml:"start-position" json:"start-position"`
 
-	SourceProbeCfg *SourceProbeCfg `mapstructure:"source-probe-config"json:"source-probe-config"`
+	SourceProbeCfg *helper.SourceProbeCfg `mapstructure:"source-probe-config"json:"source-probe-config"`
 
 	//
 	// internal configurations that is not exposed to users
@@ -50,7 +47,7 @@ type MySQLBinlogInputPluginConfig struct {
 	BinlogSyncerTimeout  string `mapstructure:"-"json:"-"`
 }
 
-type mysqlStreamInput struct {
+type mysqlStreamInputPlugin struct {
 	pipelineName string
 	cfg          *MySQLBinlogInputPluginConfig
 
@@ -62,20 +59,20 @@ type mysqlStreamInput struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
+	positionCache position_store.PositionCacheInterface
 	binlogChecker binlog_checker.BinlogChecker
 	binlogTailer  *BinlogTailer
 
 	sourceSchemaStore schema_store.SchemaStore
-	positionStore     position_store.PositionStore
 
 	closeOnce sync.Once
 }
 
 func init() {
-	registry.RegisterPlugin(registry.InputPlugin, "mysqlstream", &mysqlStreamInput{}, false)
+	registry.RegisterPlugin(registry.InputPlugin, "mysqlstream", &mysqlStreamInputPlugin{}, false)
 }
 
-func (plugin *mysqlStreamInput) Configure(pipelineName string, configInput map[string]interface{}) error {
+func (plugin *mysqlStreamInputPlugin) Configure(pipelineName string, configInput map[string]interface{}) error {
 	plugin.pipelineName = pipelineName
 	pluginConfig := MySQLBinlogInputPluginConfig{}
 	err := mapstructure.Decode(configInput, &pluginConfig)
@@ -89,73 +86,45 @@ func (plugin *mysqlStreamInput) Configure(pipelineName string, configInput map[s
 	}
 
 	// probe connection settings
-	var probeDBConfig *utils.DBConfig
-	var probeSQLAnnotation string
-	if pluginConfig.SourceProbeCfg != nil {
-		if pluginConfig.SourceProbeCfg.SourceMySQL != nil {
-			probeDBConfig = pluginConfig.SourceProbeCfg.SourceMySQL
-		} else {
-			probeDBConfig = pluginConfig.Source
-		}
-		probeSQLAnnotation = pluginConfig.SourceProbeCfg.Annotation
-	} else {
-		probeDBConfig = pluginConfig.Source
-	}
-
-	if probeSQLAnnotation != "" {
-		probeSQLAnnotation = fmt.Sprintf("/*%s*/", probeSQLAnnotation)
-	}
-
-	plugin.probeDBConfig = probeDBConfig
-	plugin.probeSQLAnnotation = probeSQLAnnotation
-
+	plugin.probeDBConfig, plugin.probeSQLAnnotation = helper.GetProbCfg(pluginConfig.SourceProbeCfg, pluginConfig.Source)
 	plugin.cfg = &pluginConfig
 
 	return nil
 }
 
-func (plugin *mysqlStreamInput) Stage() config.InputMode {
-	return config.Stream
-}
-
-func (plugin *mysqlStreamInput) NewPositionStore() (position_store.PositionStore, error) {
-	positionStore, err := position_store.NewMySQLBinlogDBPositionStore(
-		plugin.pipelineName,
+func (plugin *mysqlStreamInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
+	// position cache
+	positionRepo, err := position_store.NewMySQLRepo(
 		plugin.probeDBConfig,
-		plugin.probeSQLAnnotation,
-		plugin.cfg.StartPosition,
+		plugin.probeSQLAnnotation)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	positionCache, err := position_store.NewPositionCache(
+		plugin.pipelineName,
+		positionRepo,
+		position_store.DefaultFlushPeriod,
 	)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	plugin.positionStore = positionStore
-	return positionStore, nil
+	sourceDB, err := utils.CreateDBConnection(plugin.cfg.Source)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer sourceDB.Close()
+
+	if err := SetupInitialPosition(sourceDB, positionCache, plugin.cfg.StartPosition); err != nil {
+		return nil, errors.Trace(err)
+	}
+	return positionCache, nil
 }
 
-func (plugin *mysqlStreamInput) PositionStore() position_store.PositionStore {
-	return plugin.positionStore
-}
+func (plugin *mysqlStreamInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
+	plugin.positionCache = positionCache
 
-func (plugin *mysqlStreamInput) SendDeadSignal() error {
-	return mysql_test.SendDeadSignal(plugin.binlogTailer.sourceDB, plugin.pipelineName)
-}
-
-func (plugin *mysqlStreamInput) Wait() {
-	plugin.binlogTailer.Wait()
-}
-
-func (plugin *mysqlStreamInput) Done() chan position_store.Position {
-	c := make(chan position_store.Position)
-	go func() {
-		plugin.binlogTailer.Wait()
-		c <- plugin.positionStore.Position()
-		close(c)
-	}()
-	return c
-}
-
-func (plugin *mysqlStreamInput) Start(emitter core.Emitter, router core.Router) error {
 	sourceDB, err := utils.CreateDBConnection(plugin.cfg.Source)
 	if err != nil {
 		log.Fatalf("[gravity] failed to create source connection %v", errors.ErrorStack(err))
@@ -189,7 +158,7 @@ func (plugin *mysqlStreamInput) Start(emitter core.Emitter, router core.Router) 
 		plugin.pipelineName,
 		plugin.cfg,
 		gravityServerID,
-		plugin.positionStore.(position_store.MySQLPositionStore),
+		positionCache,
 		sourceSchemaStore,
 		sourceDB,
 		emitter,
@@ -207,29 +176,58 @@ func (plugin *mysqlStreamInput) Start(emitter core.Emitter, router core.Router) 
 	return nil
 }
 
-func (plugin *mysqlStreamInput) Close() {
+func (plugin *mysqlStreamInputPlugin) Identity() uint32 {
+	return plugin.binlogTailer.gravityServerID
+}
 
-	plugin.closeOnce.Do(func() {
-		log.Infof("[mysqlStreamInput] closing...")
+func (plugin *mysqlStreamInputPlugin) Stage() config.InputMode {
+	return config.Stream
+}
 
-		if plugin.binlogChecker != nil {
-			plugin.binlogChecker.Stop()
+func (plugin *mysqlStreamInputPlugin) SendDeadSignal() error {
+	return mysql_test.SendDeadSignal(plugin.binlogTailer.sourceDB, plugin.pipelineName)
+}
+
+func (plugin *mysqlStreamInputPlugin) Wait() {
+	plugin.binlogTailer.Wait()
+}
+
+func (plugin *mysqlStreamInputPlugin) Done() chan position_store.Position {
+	c := make(chan position_store.Position)
+	go func() {
+		plugin.binlogTailer.Wait()
+		position, exist, err := plugin.positionCache.Get()
+		if err == nil && exist {
+			c <- position
+		} else {
+			log.Fatalf("[mysqlInputPlugin] failed get position exist: %v, err: %v", exist, errors.ErrorStack(err))
 		}
+		close(c)
+	}()
+	return c
+}
 
-		if plugin.binlogTailer != nil {
-			plugin.binlogTailer.Close()
+func (plugin *mysqlStreamInputPlugin) Close() {
+
+	log.Infof("[mysqlStreamInputPlugin] closing...")
+
+	if plugin.binlogChecker != nil {
+		plugin.binlogChecker.Stop()
+	}
+
+	if plugin.binlogTailer != nil {
+		plugin.binlogTailer.Close()
+	}
+
+	if plugin.sourceSchemaStore != nil {
+		plugin.sourceSchemaStore.Close()
+	}
+
+	if plugin.sourceDB != nil {
+		if err := plugin.sourceDB.Close(); err != nil {
+			log.Errorf("[mysqlStreamInputPlugin.Close] error close db. %s", errors.Trace(err))
 		}
+	}
 
-		if plugin.sourceSchemaStore != nil {
-			plugin.sourceSchemaStore.Close()
-		}
-
-		if plugin.sourceDB != nil {
-			if err := plugin.sourceDB.Close(); err != nil {
-				log.Errorf("[mysqlStreamInput.Close] error close db. %s", errors.Trace(err))
-			}
-		}
-
-		log.Infof("[mysqlStreamInput] closed")
-	})
+	log.Infof("[mysqlStreamInputPlugin] closed")
 }

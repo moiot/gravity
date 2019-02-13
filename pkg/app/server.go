@@ -22,7 +22,7 @@ type Server struct {
 	filters       []core.IFilter
 	Emitter       core.Emitter
 	Scheduler     core.Scheduler
-	PositionStore position_store.PositionStore
+	PositionCache position_store.PositionCacheInterface
 	Output        core.Output
 
 	// When Input is done, server will be closed, when config changed, server will also be closed;
@@ -31,7 +31,7 @@ type Server struct {
 	sync.Mutex
 }
 
-func Parse(pipelineConfig config.PipelineConfigV3) (*Server, error) {
+func ParsePlugins(pipelineConfig config.PipelineConfigV3) (*Server, error) {
 	pipelineConfig = pipelineConfig.DeepCopy()
 
 	server := Server{}
@@ -101,16 +101,22 @@ func Parse(pipelineConfig config.PipelineConfigV3) (*Server, error) {
 }
 
 func NewServer(pipelineConfig config.PipelineConfigV3) (*Server, error) {
-	server, err := Parse(pipelineConfig)
+	server, err := ParsePlugins(pipelineConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	// position store
-	if p, err := server.Input.NewPositionStore(); err != nil {
+	i := server.Input
+	newer, ok := i.(core.PositionCacheCreator)
+	if !ok {
+		return nil, errors.Errorf("input plugin is not a position cache creator")
+	}
+
+	if p, err := newer.NewPositionCache(); err != nil {
 		return nil, errors.Trace(err)
 	} else {
-		server.PositionStore = p
+		server.PositionCache = p
 	}
 	return server, nil
 }
@@ -155,12 +161,13 @@ func (s *Server) Start() error {
 		return errors.Trace(err)
 	}
 
-	if err := s.PositionStore.Start(); err != nil {
+	if err := s.PositionCache.Start(); err != nil {
 		return errors.Trace(err)
 	}
 
 	log.Infof("[Server] start input")
-	if err := s.Input.Start(s.Emitter, s.Output.GetRouter()); err != nil {
+
+	if err := s.Input.Start(s.Emitter, s.Output.GetRouter(), s.PositionCache); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -188,7 +195,7 @@ func (s *Server) Close() {
 	s.Output.Close()
 	log.Infof("[Server] output closed")
 
-	s.PositionStore.Close()
+	s.PositionCache.Close()
 	log.Infof("[Server] position store closed")
 
 	log.Infof("[Server] stopped")

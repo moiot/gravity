@@ -4,12 +4,14 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
+
+	"github.com/moiot/gravity/pkg/utils"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/schema_store"
-	"github.com/moiot/gravity/pkg/utils"
 )
 
 // GetTables returns a list of table definition based on the schema, table name patterns

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moiot/gravity/pkg/inputs/helper"
+
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
 	log "github.com/sirupsen/logrus"
@@ -19,13 +21,17 @@ import (
 )
 
 type TableConfig struct {
-	Schema string   `mapstructure:"schema" toml:"schema" json:"schema"`
-	Table  []string `mapstructure:"table" toml:"table" json:"table"`
+	Schema string `mapstructure:"schema" toml:"schema" json:"schema"`
+	// Table is an array of string, each string is a glob expression
+	// that describes the table name
+	Table []string `mapstructure:"table" toml:"table" json:"table"`
 }
 
 type PluginConfig struct {
 	Source      *utils.DBConfig `mapstructure:"source" toml:"source" json:"source"` // keep same with mysql binlog config to make most cases simple
 	SourceSlave *utils.DBConfig `mapstructure:"source-slave" toml:"source-slave" json:"source-slave"`
+
+	SourceProbeCfg *helper.SourceProbeCfg `mapstructure:"source-probe-config"json:"source-probe-config"`
 
 	TableConfigs []TableConfig `mapstructure:"table-configs"json:"table-configs"`
 
@@ -60,12 +66,15 @@ func (cfg *PluginConfig) ValidateAndSetDefault() error {
 	return nil
 }
 
-type mysqlFullInput struct {
+type mysqlBatchInputPlugin struct {
 	pipelineName string
 	cfg          *PluginConfig
 
 	sourceDB *sql.DB
 	scanDB   *sql.DB
+
+	probeDBConfig      *utils.DBConfig
+	probeSQLAnnotation string
 
 	sourceSchemaStore schema_store.SchemaStore
 
@@ -74,12 +83,12 @@ type mysqlFullInput struct {
 
 	throttle *time.Ticker
 
-	positionStore position_store.PositionStore
+	positionCache position_store.PositionCacheInterface
 
 	tableScanners []*TableScanner
 
-	startBinlogPos utils.MySQLBinlogPosition
-	doneC          chan position_store.Position
+	// startBinlogPos utils.MySQLBinlogPosition
+	doneC chan position_store.Position
 
 	closeOnce sync.Once
 }
@@ -87,13 +96,14 @@ type mysqlFullInput struct {
 type TableWork struct {
 	TableDef    *schema_store.Table
 	TableConfig *TableConfig
+	ScanColumn  string
 }
 
 func init() {
-	registry.RegisterPlugin(registry.InputPlugin, "mysqlbatch", &mysqlFullInput{}, false)
+	registry.RegisterPlugin(registry.InputPlugin, "mysqlbatch", &mysqlBatchInputPlugin{}, false)
 }
 
-func (plugin *mysqlFullInput) Configure(pipelineName string, data map[string]interface{}) error {
+func (plugin *mysqlBatchInputPlugin) Configure(pipelineName string, data map[string]interface{}) error {
 	plugin.pipelineName = pipelineName
 
 	cfg := PluginConfig{}
@@ -105,12 +115,41 @@ func (plugin *mysqlFullInput) Configure(pipelineName string, data map[string]int
 		return errors.Trace(err)
 	}
 
+	plugin.probeDBConfig, plugin.probeSQLAnnotation = helper.GetProbCfg(cfg.SourceProbeCfg, cfg.Source)
+
 	plugin.cfg = &cfg
 	return nil
 }
 
-func (plugin *mysqlFullInput) Start(emitter core.Emitter, router core.Router) error {
+func (plugin *mysqlBatchInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
+	positionRepo, err := position_store.NewMySQLRepo(
+		plugin.probeDBConfig,
+		plugin.probeSQLAnnotation)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	positionCache, err := position_store.NewPositionCache(plugin.pipelineName, positionRepo, position_store.DefaultFlushPeriod)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	sourceDB, err := utils.CreateDBConnection(plugin.cfg.Source)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer sourceDB.Close()
+
+	if err := SetupInitialPosition(positionCache, sourceDB); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return positionCache, nil
+}
+
+func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
 	cfg := plugin.cfg
+	plugin.positionCache = positionCache
 
 	sourceDB, err := utils.CreateDBConnection(cfg.Source)
 	if err != nil {
@@ -146,28 +185,24 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter, router core.Router) er
 		return errors.Trace(err)
 	}
 
-	ps := plugin.positionStore.(position_store.MySQLTablePositionStore)
-	pos, ok := ps.GetStartBinlogPos()
-	if !ok {
-		log.Infof("[Server] init master binlog position")
-
-		dbUtil := utils.NewMySQLDB(plugin.sourceDB)
-		binlogFilePos, gtid, err := dbUtil.GetMasterStatus()
+	// Detect any potential error before any work is done, so that we can check the error early.
+	scanColumns := make([]string, len(tableDefs))
+	var allErrors []error
+	for i, t := range tableDefs {
+		column, err := DetectScanColumn(plugin.scanDB, t.Schema, t.Name, plugin.cfg.MaxFullDumpCount)
 		if err != nil {
-			return errors.Annotatef(err, "failed to show master status")
+			log.Errorf("failed to detect scan column, schema: %v, table: %v", t.Schema, t.Name)
+			allErrors = append(allErrors, err)
 		}
-
-		p := position_store.SerializeMySQLBinlogPosition(binlogFilePos, gtid)
-		ps.PutStartBinlogPos(p)
-		plugin.startBinlogPos = p
-
-	} else {
-		plugin.startBinlogPos = pos
+		scanColumns[i] = column
+	}
+	if len(allErrors) > 0 {
+		return errors.Errorf("failed detect %d tables scan column", len(allErrors))
 	}
 
 	tableQueue := make(chan *TableWork, len(tableDefs))
 	for i := 0; i < len(tableDefs); i++ {
-		work := TableWork{TableDef: tableDefs[i], TableConfig: &tableConfigs[i]}
+		work := TableWork{TableDef: tableDefs[i], TableConfig: &tableConfigs[i], ScanColumn: scanColumns[i]}
 		tableQueue <- &work
 	}
 	close(tableQueue)
@@ -177,7 +212,7 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter, router core.Router) er
 			plugin.pipelineName,
 			tableQueue,
 			scanDB,
-			ps,
+			positionCache,
 			emitter,
 			plugin.throttle,
 			sourceSchemaStore,
@@ -195,50 +230,31 @@ func (plugin *mysqlFullInput) Start(emitter core.Emitter, router core.Router) er
 		}
 	}
 
-	go plugin.waitFinish()
+	go plugin.waitFinish(positionCache)
 
 	return nil
 }
 
-func (plugin *mysqlFullInput) Stage() config.InputMode {
+func (plugin *mysqlBatchInputPlugin) Stage() config.InputMode {
 	return config.Batch
 }
 
-func (plugin *mysqlFullInput) NewPositionStore() (position_store.PositionStore, error) {
-
-	positionStore, err := position_store.NewMySQLTableDBPositionStore(
-		plugin.pipelineName,
-		plugin.cfg.Source,
-		"",
-	)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	plugin.positionStore = positionStore
-	return positionStore, nil
-}
-
-func (plugin *mysqlFullInput) PositionStore() position_store.PositionStore {
-	return plugin.positionStore
-}
-
-func (plugin *mysqlFullInput) SendDeadSignal() error {
+func (plugin *mysqlBatchInputPlugin) SendDeadSignal() error {
 	plugin.Close()
 	return nil
 }
 
-func (plugin *mysqlFullInput) Done() chan position_store.Position {
+func (plugin *mysqlBatchInputPlugin) Done() chan position_store.Position {
 	return plugin.doneC
 }
 
-func (plugin *mysqlFullInput) Wait() {
+func (plugin *mysqlBatchInputPlugin) Wait() {
 	for i := range plugin.tableScanners {
 		plugin.tableScanners[i].Wait()
 	}
 }
 
-func (plugin *mysqlFullInput) Close() {
+func (plugin *mysqlBatchInputPlugin) Close() {
 
 	plugin.closeOnce.Do(func() {
 		log.Infof("[scanner server] closing...")
@@ -263,30 +279,49 @@ func (plugin *mysqlFullInput) Close() {
 			plugin.sourceSchemaStore.Close()
 		}
 
-		log.Infof("[mysqlFullInput] closed")
+		log.Infof("[mysqlBatchInputPlugin] closed")
 	})
 
 }
 
-func (plugin *mysqlFullInput) waitFinish() {
+func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.PositionCacheInterface) {
 	for idx := range plugin.tableScanners {
 		plugin.tableScanners[idx].Wait()
 	}
 
 	if plugin.ctx.Err() == nil {
-		log.Infof("[plugin.waitFinish] table scanners done")
-		position := position_store.PipelineGravityMySQLPosition{
-			CurrentPosition: &utils.MySQLBinlogPosition{},
-			StartPosition:   &utils.MySQLBinlogPosition{},
+		// It's better to flush the streamPosition here, so that the table streamPosition
+		// state is persisted as soon as the table scan finishes.
+		if err := positionCache.Flush(); err != nil {
+			log.Fatalf("[mysqlBatchInputPlugin] failed to flush streamPosition cache")
 		}
-		*position.StartPosition = plugin.startBinlogPos
-		*position.CurrentPosition = plugin.startBinlogPos
-		plugin.doneC <- position_store.Position{
+
+		log.Infof("[plugin.waitFinish] table scanners done")
+		startBinlog, err := GetStartBinlog(positionCache)
+		if err != nil {
+			log.Fatalf("[mysqlBatchInputPlugin] failed to get start streamPosition: %v", errors.ErrorStack(err))
+		}
+
+		binlogPositions := helper.BinlogPositionsValue{
+			StartPosition:   startBinlog,
+			CurrentPosition: startBinlog,
+		}
+		v, err := helper.SerializeBinlogPositionValue(&binlogPositions)
+		if err != nil {
+			log.Fatalf("[mysqlBatchInputPlugin] failed to serialize binlog positions: %v", errors.ErrorStack(err))
+		}
+
+		// Notice that we should not change streamPosition stage in this plugin.
+		// Changing the stage is done by two stage plugin.
+		streamPosition := position_store.Position{
 			Name:       plugin.pipelineName,
 			Stage:      config.Stream,
-			Raw:        position,
+			Value:      v,
 			UpdateTime: time.Now(),
 		}
+
+		plugin.doneC <- streamPosition
+
 		close(plugin.doneC)
 	} else if plugin.ctx.Err() == context.Canceled {
 		log.Infof("[plugin.waitFinish] table scanner cancelled")

@@ -5,9 +5,10 @@
 package mock_binlog_checker
 
 import (
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
 	binlog_checker "github.com/moiot/gravity/pkg/inputs/helper/binlog_checker"
-	reflect "reflect"
 )
 
 // MockBinlogChecker is a mock of BinlogChecker interface
@@ -35,7 +36,6 @@ func (m *MockBinlogChecker) EXPECT() *MockBinlogCheckerMockRecorder {
 
 // IsEventBelongsToMySelf mocks base method
 func (m *MockBinlogChecker) IsEventBelongsToMySelf(arg0 binlog_checker.Row) bool {
-	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsEventBelongsToMySelf", arg0)
 	ret0, _ := ret[0].(bool)
 	return ret0
@@ -43,25 +43,21 @@ func (m *MockBinlogChecker) IsEventBelongsToMySelf(arg0 binlog_checker.Row) bool
 
 // IsEventBelongsToMySelf indicates an expected call of IsEventBelongsToMySelf
 func (mr *MockBinlogCheckerMockRecorder) IsEventBelongsToMySelf(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsEventBelongsToMySelf", reflect.TypeOf((*MockBinlogChecker)(nil).IsEventBelongsToMySelf), arg0)
 }
 
 // MarkActive mocks base method
 func (m *MockBinlogChecker) MarkActive(arg0 binlog_checker.Row) {
-	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "MarkActive", arg0)
 }
 
 // MarkActive indicates an expected call of MarkActive
 func (mr *MockBinlogCheckerMockRecorder) MarkActive(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkActive", reflect.TypeOf((*MockBinlogChecker)(nil).MarkActive), arg0)
 }
 
 // Start mocks base method
 func (m *MockBinlogChecker) Start() error {
-	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Start")
 	ret0, _ := ret[0].(error)
 	return ret0
@@ -69,18 +65,15 @@ func (m *MockBinlogChecker) Start() error {
 
 // Start indicates an expected call of Start
 func (mr *MockBinlogCheckerMockRecorder) Start() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockBinlogChecker)(nil).Start))
 }
 
 // Stop mocks base method
 func (m *MockBinlogChecker) Stop() {
-	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Stop")
 }
 
 // Stop indicates an expected call of Stop
 func (mr *MockBinlogCheckerMockRecorder) Stop() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockBinlogChecker)(nil).Stop))
 }
