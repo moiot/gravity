@@ -159,17 +159,17 @@ func (p *TablePosition) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-type TableStats struct {
-	EstimatedRowCount int64 `json:"estimated-count"`
-	ScannedCount      int64 `json:"scanned-count"`
+type TableProgress struct {
+	Max               *TablePosition `toml:"max" json:"max"`
+	Min               *TablePosition `toml:"min" json:"min"`
+	Current           *TablePosition `toml:"current" json:"current"`
+	EstimatedRowCount int64          `json:"estimated-count"`
+	ScannedCount      int64          `json:"scanned-count"`
 }
 
 type BatchPositionValue struct {
-	Start   *utils.MySQLBinlogPosition `toml:"start-binlog" json:"start-binlog"`
-	Min     map[string]TablePosition   `toml:"min" json:"min"`
-	Max     map[string]TablePosition   `toml:"max" json:"max"`
-	Current map[string]TablePosition   `toml:"current" json:"current"`
-	Stats   map[string]TableStats      `toml:"stats" json:"stats"`
+	Start      *utils.MySQLBinlogPosition `toml:"start-binlog" json:"start-binlog"`
+	TableStats map[string]TableProgress   `toml:"table-stats" json:"table-stats"`
 }
 
 func Serialize(positions *BatchPositionValue) (string, error) {
@@ -186,22 +186,9 @@ func Deserialize(value string) (*BatchPositionValue, error) {
 		return nil, errors.Trace(err)
 	}
 
-	if positionValue.Min == nil {
-		positionValue.Min = make(map[string]TablePosition)
+	if positionValue.TableStats == nil {
+		positionValue.TableStats = make(map[string]TableProgress)
 	}
-
-	if positionValue.Max == nil {
-		positionValue.Max = make(map[string]TablePosition)
-	}
-
-	if positionValue.Current == nil {
-		positionValue.Current = make(map[string]TablePosition)
-	}
-
-	if positionValue.Stats == nil {
-		positionValue.Stats = make(map[string]TableStats)
-	}
-
 	return &positionValue, nil
 }
 
@@ -287,11 +274,16 @@ func GetCurrentPos(cache position_store.PositionCacheInterface, fullTableName st
 		return nil, false, errors.Trace(err)
 	}
 
-	current, ok := batchPositions.Current[fullTableName]
+	stats, ok := batchPositions.TableStats[fullTableName]
 	if !ok {
+		return nil, false, errors.Errorf("empty stats for table: %v", fullTableName)
+	}
+
+	if stats.Current != nil {
+		return stats.Current, true, nil
+	} else {
 		return nil, false, nil
 	}
-	return &current, true, nil
 }
 
 func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName string, pos *TablePosition) error {
@@ -312,7 +304,13 @@ func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName st
 		return errors.Trace(err)
 	}
 
-	batchPositions.Current[fullTableName] = *pos
+	stats, ok := batchPositions.TableStats[fullTableName]
+	if !ok {
+		return errors.Errorf("empty stats for table: %v", fullTableName)
+	}
+
+	stats.Current = pos
+	batchPositions.TableStats[fullTableName] = stats
 
 	v, err := Serialize(batchPositions)
 	if err != nil {
@@ -340,9 +338,12 @@ func IncrementScanCount(cache position_store.PositionCacheInterface, fullTableNa
 		return errors.Trace(err)
 	}
 
-	stats := batchPositions.Stats[fullTableName]
+	stats, ok := batchPositions.TableStats[fullTableName]
+	if !ok {
+		return errors.Errorf("empty stats for table: %v", fullTableName)
+	}
 	stats.ScannedCount++
-	batchPositions.Stats[fullTableName] = stats
+	batchPositions.TableStats[fullTableName] = stats
 
 	v, err := Serialize(batchPositions)
 	if err != nil {
@@ -370,9 +371,14 @@ func PutEstimatedCount(cache position_store.PositionCacheInterface, fullTableNam
 		return errors.Trace(err)
 	}
 
-	stats := batchPositions.Stats[fullTableName]
+	stats, ok := batchPositions.TableStats[fullTableName]
+	if !ok {
+		batchPositions.TableStats[fullTableName] = TableProgress{}
+		stats = batchPositions.TableStats[fullTableName]
+	}
+
 	stats.EstimatedRowCount = estimatedCount
-	batchPositions.Stats[fullTableName] = stats
+	batchPositions.TableStats[fullTableName] = stats
 
 	v, err := Serialize(batchPositions)
 	if err != nil {
@@ -400,17 +406,12 @@ func GetMaxMin(cache position_store.PositionCacheInterface, fullTableName string
 		return nil, nil, false, errors.Trace(err)
 	}
 
-	max, ok := batchPositions.Max[fullTableName]
+	stats, ok := batchPositions.TableStats[fullTableName]
 	if !ok {
 		return nil, nil, false, nil
 	}
 
-	min, ok := batchPositions.Min[fullTableName]
-	if !ok {
-		return nil, nil, false, nil
-	}
-
-	return &max, &min, true, nil
+	return stats.Max, stats.Min, stats.Min != nil && stats.Max != nil, nil
 }
 
 func PutMaxMin(cache position_store.PositionCacheInterface, fullTableName string, max *TablePosition, min *TablePosition) error {
@@ -431,8 +432,14 @@ func PutMaxMin(cache position_store.PositionCacheInterface, fullTableName string
 		return errors.Trace(err)
 	}
 
-	batchPositions.Max[fullTableName] = *max
-	batchPositions.Min[fullTableName] = *min
+	stats, ok := batchPositions.TableStats[fullTableName]
+	if !ok {
+		batchPositions.TableStats[fullTableName] = TableProgress{}
+		stats = batchPositions.TableStats[fullTableName]
+	}
+	stats.Max = max
+	stats.Min = min
+	batchPositions.TableStats[fullTableName] = stats
 
 	newV, err := Serialize(batchPositions)
 	if err != nil {
