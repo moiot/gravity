@@ -286,7 +286,7 @@ func GetCurrentPos(cache position_store.PositionCacheInterface, fullTableName st
 	}
 }
 
-func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName string, pos *TablePosition) error {
+func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName string, pos *TablePosition, incScanCount bool) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -310,39 +310,9 @@ func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName st
 	}
 
 	stats.Current = pos
-	batchPositions.TableStats[fullTableName] = stats
-
-	v, err := Serialize(batchPositions)
-	if err != nil {
-		return errors.Trace(err)
+	if incScanCount {
+		stats.ScannedCount++
 	}
-	position.Value = v
-	return errors.Trace(cache.Put(position))
-}
-
-func IncrementScanCount(cache position_store.PositionCacheInterface, fullTableName string) error {
-	mu.Lock()
-	defer mu.Unlock()
-
-	position, exist, err := cache.Get()
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	if !exist {
-		return errors.Errorf("empty position")
-	}
-
-	batchPositions, err := Deserialize(position.Value)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	stats, ok := batchPositions.TableStats[fullTableName]
-	if !ok {
-		return errors.Errorf("empty stats for table: %v", fullTableName)
-	}
-	stats.ScannedCount++
 	batchPositions.TableStats[fullTableName] = stats
 
 	v, err := Serialize(batchPositions)

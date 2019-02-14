@@ -402,7 +402,7 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 	// set the current and max position to be the same
 	p := TablePosition{Column: "*", Type: PlainInt, Value: len(allData)}
 
-	if err := PutCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &p); err != nil {
+	if err := PutCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &p, false); err != nil {
 		log.Fatalf("[FindAll] failed to put current pos: %v", errors.ErrorStack(err))
 	}
 
@@ -433,13 +433,10 @@ func (tableScanner *TableScanner) AfterMsgCommit(msg *core.Msg) error {
 		return errors.Errorf("type invalid")
 	}
 
-	if err := PutCurrentPos(tableScanner.positionCache, *msg.InputStreamKey, &p); err != nil {
+	if err := PutCurrentPos(tableScanner.positionCache, *msg.InputStreamKey, &p, true); err != nil {
 		return errors.Trace(err)
 	}
 
-	if err := IncrementScanCount(tableScanner.positionCache, *msg.InputStreamKey); err != nil {
-		return errors.Trace(err)
-	}
 	return nil
 }
 
