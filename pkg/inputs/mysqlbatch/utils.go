@@ -71,7 +71,7 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 		}
 	}
 
-	if router != nil {
+	if len(tableConfigs) == 0 && router != nil {
 		for schemaName, tables := range allSchema {
 			for _, tableName := range tables {
 				if added[fmt.Sprintf("%s.%s", schemaName, tableName)] {
