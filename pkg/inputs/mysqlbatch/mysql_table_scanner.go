@@ -5,16 +5,18 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
-	"strconv"
 	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/moiot/gravity/pkg/metrics"
 
 	"github.com/juju/errors"
 	"github.com/pingcap/parser"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mysql"
 	"github.com/moiot/gravity/pkg/position_store"
 	"github.com/moiot/gravity/pkg/schema_store"
@@ -275,7 +277,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 		rowIdx := 0
 		for rows.Next() {
 
-			metrics.ScannerJobFetchedCount.WithLabelValues(pipelineName).Add(1)
+			JobFetchedCount.WithLabelValues(pipelineName).Add(1)
 
 			resultCount++
 
@@ -306,7 +308,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 			return
 		}
 
-		metrics.ScannerBatchQueryDuration.WithLabelValues(pipelineName).Observe(time.Now().Sub(queryStartTime).Seconds())
+		BatchQueryDuration.WithLabelValues(pipelineName).Observe(time.Now().Sub(queryStartTime).Seconds())
 
 		batchIdx++
 
@@ -513,20 +515,26 @@ func NewTableScanner(
 	return &tableScanner
 }
 
-func String2Val(s string, scanType string) interface{} {
-	var currentMin interface{}
-	var err error
-	if scanType == "string" {
-		currentMin = s
-	} else if scanType == "int" {
-		currentMin, err = strconv.Atoi(s)
-		if err != nil {
-			log.Fatalf("[LoopInBatch] failed to convert string to int: %v", err)
-		}
-	} else {
-		log.Infof("[LoopInBatch] scanColumn not supported")
-	}
-	return currentMin
+var (
+	BatchQueryDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "gravity",
+			Subsystem: "output",
+			Name:      "batch_query_duration",
+			Help:      "bucketed histogram of batch fetch duration time",
+			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
+		}, []string{metrics.PipelineTag})
+
+	JobFetchedCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "gravity",
+		Subsystem: "output",
+		Name:      "job_fetched_count",
+		Help:      "Number of data rows fetched by scanner",
+	}, []string{metrics.PipelineTag})
+)
+
+func init() {
+	prometheus.MustRegister(BatchQueryDuration, JobFetchedCount)
 }
 
 func waitAndCloseStream(tableDef *schema_store.Table, em core.Emitter) error {

@@ -13,7 +13,6 @@ import (
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
-	"github.com/moiot/gravity/pkg/metrics"
 	pb "github.com/moiot/gravity/pkg/protocol/tidb"
 	"github.com/moiot/gravity/pkg/utils"
 	"github.com/moiot/gravity/pkg/utils/retry"
@@ -99,9 +98,6 @@ func (checker *binlogChecker) probe() {
 		sentOffset := checker.lastProbeSentOffset + 1
 		checker.lastProbeSentOffset = sentOffset
 
-		metrics.GravityBinlogProbeLagGauge.WithLabelValues(checker.pipelineName).Set(float64(checker.lastProbeSentOffset - checker.lastProbeReceivedOffset.Get()))
-		metrics.GravityBinlogProbeSentGauge.WithLabelValues(checker.pipelineName).Set(float64(checker.lastProbeSentOffset))
-
 		queryWithPlaceHolder := fmt.Sprintf(
 			"%sUPDATE %s SET offset = ?, update_time_at_gravity = ? WHERE name = ?",
 			checker.annotation,
@@ -162,13 +158,7 @@ func (checker *binlogChecker) IsEventBelongsToMySelf(row Row) bool {
 // update_time_at_source DATETIME(6) NOT NULL ON UPDATE CURRENT_TIMESTAMP
 // )
 func (checker *binlogChecker) MarkActive(row Row) {
-	pipelineName := checker.pipelineName
-
 	checker.lastProbeReceivedOffset.Set(row.Offset)
-
-	metrics.GravityBinlogProbeReceivedGauge.WithLabelValues(pipelineName).Set(float64(row.Offset))
-	metrics.GravityBinlogDurationFromGravity.WithLabelValues(pipelineName).Observe(time.Since(row.UpdateTimeAtGravity).Seconds())
-	metrics.GravityBinlogDurationFromSource.WithLabelValues(pipelineName).Observe(time.Since(row.UpdateTimeAtSource).Seconds())
 }
 
 func ParseMySQLRowEvent(event *replication.RowsEvent) (Row, error) {

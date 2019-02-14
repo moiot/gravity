@@ -10,11 +10,8 @@ import (
 
 	"github.com/serialx/hashring"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/mgo.v2"
+	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-
-	"github.com/moiot/gravity/pkg/metrics"
-	"github.com/moiot/gravity/pkg/protocol"
 )
 
 type OrderingGuarantee int
@@ -61,10 +58,9 @@ type Op struct {
 	// Data is the change filed in oplog
 	Data map[string]interface{} `json:"data"`
 	// Row is the data of this row
-	Row                   map[string]interface{} `json:"row"`
-	Timestamp             bson.MongoTimestamp    `json:"-"`
-	Source                QuerySource            `json:"source"`
-	protocol.KafkaMsgMeta `json:"-"`
+	Row       map[string]interface{} `json:"row"`
+	Timestamp bson.MongoTimestamp    `json:"-"`
+	Source    QuerySource            `json:"source"`
 }
 
 type OpLog struct {
@@ -401,14 +397,12 @@ func TailOps(ctx *OpCtx, session *mgo.Session, channels []OpChan, options *Optio
 		var entry OpLog
 	Seek:
 		for {
-			startTime := time.Now()
 			r := iter.Next(&entry)
 			if r == false {
 				if err := iter.Err(); err != nil {
 					ctx.ErrC <- err
 				}
 			}
-			metrics.GravityOplogFetchDuration.WithLabelValues(ctx.pipelineName).Observe(time.Now().Sub(startTime).Seconds())
 			op := &Op{
 				Id:        "",
 				Operation: "",
@@ -417,7 +411,6 @@ func TailOps(ctx *OpCtx, session *mgo.Session, channels []OpChan, options *Optio
 				Timestamp: bson.MongoTimestamp(0),
 				Source:    OplogQuerySource,
 			}
-			op.KafkaMsgMeta.AddTimestamp(protocol.MsgStartTime)
 
 			if op.ParseLogEntry(&entry, options) {
 				if options.Filter == nil || options.Filter(op) {
@@ -460,7 +453,6 @@ func TailOps(ctx *OpCtx, session *mgo.Session, channels []OpChan, options *Optio
 			ctx.ErrC <- err
 		}
 		if iter.Timeout() {
-			metrics.GravityOplogTimeoutCountHistogram.WithLabelValues(ctx.pipelineName).Observe(1)
 			select {
 			case <-ctx.stopC:
 				return nil

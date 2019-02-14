@@ -11,7 +11,7 @@ import (
 	"syscall"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -177,7 +177,7 @@ func statusHandler(server *app.Server, name, hash string) func(http.ResponseWrit
 		position, exist, err := server.PositionCache.Get()
 		if err != nil || !exist {
 			writer.WriteHeader(http.StatusInternalServerError)
-			log.Error("[statusHandler] failed to get position, exist: %v, err: %v", exist, errors.ErrorStack(err))
+			log.Errorf("[statusHandler] failed to get position, exist: %v, err: %v", exist, errors.ErrorStack(err))
 			return
 		}
 

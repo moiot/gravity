@@ -1,26 +1,22 @@
 package batch_table_scheduler
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
-	"github.com/moiot/gravity/pkg/schedulers/metrics"
-	"github.com/moiot/gravity/pkg/utils/retry"
-
-	"github.com/mitchellh/mapstructure"
-
-	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/registry"
-
 	"github.com/juju/errors"
+	"github.com/mitchellh/mapstructure"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
-
-	"fmt"
-
+	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/metrics"
+	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/sliding_window"
 	"github.com/moiot/gravity/pkg/utils"
+	"github.com/moiot/gravity/pkg/utils/retry"
 )
 
 const (
@@ -37,6 +33,29 @@ var DefaultConfig = map[string]interface{}{
 	"nr-retries":          DefaultNrRetries,
 	"retry-sleep":         DefaultRetrySleepString,
 }
+
+var (
+	WorkerPoolWorkerCountGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "gravity",
+		Subsystem: "scheduler",
+		Name:      "nr_worker",
+		Help:      "number of workers",
+	}, []string{metrics.PipelineTag})
+
+	WorkerPoolJobBatchSizeGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "gravity",
+		Subsystem: "scheduler",
+		Name:      "batch_size",
+		Help:      "batch size",
+	}, []string{metrics.PipelineTag, "idx"})
+
+	WorkerPoolSlidingWindowRatio = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "gravity",
+		Subsystem: "scheduler",
+		Name:      "sliding_window_ratio",
+		Help:      "sliding window ratio",
+	}, []string{metrics.PipelineTag, "input_stream_key"})
+)
 
 // batch_scheduler package implements scheduler that dispatch job to workers that
 // can handle batch of job.
@@ -61,27 +80,6 @@ type BatchSchedulerConfig struct {
 	NrRetries         int           `mapstructure:"nr-retries" json:"nr-retries"`
 	RetrySleepString  string        `mapstructure:"retry-sleep" json:"retry-sleep"`
 	RetrySleep        time.Duration `mapstructure:"-" json:"-"`
-}
-
-type slidingWindowItem struct {
-	core.Msg
-}
-
-func (item *slidingWindowItem) SequenceNumber() int64 {
-	return *item.InputSequence
-}
-
-func (item *slidingWindowItem) BeforeWindowMoveForward() {
-	if item.AfterCommitCallback != nil {
-		if err := item.AfterCommitCallback(&(item.Msg)); err != nil {
-			log.Fatalf("callback failed: %v", errors.ErrorStack(err))
-		}
-	}
-	close(item.Done)
-}
-
-func (item *slidingWindowItem) EventTime() time.Time {
-	return item.Timestamp
 }
 
 type batchScheduler struct {
@@ -110,6 +108,10 @@ type batchScheduler struct {
 
 func init() {
 	registry.RegisterPlugin(registry.SchedulerPlugin, BatchTableSchedulerName, &batchScheduler{}, false)
+
+	prometheus.MustRegister(WorkerPoolWorkerCountGauge)
+	prometheus.MustRegister(WorkerPoolJobBatchSizeGauge)
+	prometheus.MustRegister(WorkerPoolSlidingWindowRatio)
 }
 
 func (scheduler *batchScheduler) Configure(pipelineName string, configData map[string]interface{}) error {
@@ -137,7 +139,7 @@ func (scheduler *batchScheduler) Configure(pipelineName string, configData map[s
 
 	scheduler.cfg = &schedulerConfig
 
-	metrics.WorkerPoolWorkerCountGauge.WithLabelValues(pipelineName).Set(float64(schedulerConfig.NrWorker))
+	WorkerPoolWorkerCountGauge.WithLabelValues(pipelineName).Set(float64(schedulerConfig.NrWorker))
 
 	log.Infof("[batchScheduler] %+v", schedulerConfig)
 	return nil
@@ -188,12 +190,13 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 			defer scheduler.workerWg.Done()
 
 			for msgBatch := range q {
-
-				metrics.WorkerPoolJobBatchSizeGauge.WithLabelValues(scheduler.pipelineName, workerIndex).
-					Set(float64(len(msgBatch)))
-
-				execStartTime := time.Now()
-
+				metrics.QueueLength.WithLabelValues(scheduler.pipelineName, "worker", workerIndex).Set(float64(len(q)))
+				WorkerPoolJobBatchSizeGauge.WithLabelValues(scheduler.pipelineName, workerIndex).Set(float64(len(msgBatch)))
+				metrics.Scheduler2OutputCounter.WithLabelValues(core.PipelineName).Add(float64(len(msgBatch)))
+				now := time.Now()
+				for _, m := range msgBatch {
+					m.EnterOutput = now
+				}
 				if scheduler.syncOutput != nil {
 					err := retry.Do(func() error {
 						return scheduler.syncOutput.Execute(msgBatch)
@@ -202,10 +205,6 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 					if err != nil {
 						log.Fatalf("[batchScheduler] output exec error: %v", errors.ErrorStack(err))
 					}
-
-					metrics.WorkerPoolMsgExecLatency.
-						WithLabelValues(scheduler.pipelineName).
-						Observe(time.Since(execStartTime).Seconds())
 
 					// synchronous output should ack msg here.
 					for _, msg := range msgBatch {
@@ -219,18 +218,7 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 						log.Fatalf("[batchScheduler] err: %v", errors.ErrorStack(err))
 					}
 
-					metrics.WorkerPoolMsgExecLatency.
-						WithLabelValues(scheduler.pipelineName).
-						Observe(time.Since(execStartTime).Seconds())
 				}
-
-				metrics.WorkerPoolProcessedMsgCount.
-					WithLabelValues(scheduler.pipelineName).
-					Add(float64(len(msgBatch)))
-
-				metrics.WorkerPoolQueueSizeGauge.
-					WithLabelValues(scheduler.pipelineName, workerIndex).
-					Set(float64(len(q)))
 			}
 
 		}(scheduler.workerQueues[i], fmt.Sprintf("%d", i))
@@ -242,6 +230,7 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 }
 
 func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
+	msg.EnterScheduler = time.Now()
 	if msg.Type == core.MsgDML && msg.Table == "" {
 		return errors.Errorf("batch-table-scheduler requires a valid table name for dml msg")
 	}
@@ -251,7 +240,7 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 		scheduler.windowMutex.Lock()
 		window, ok := scheduler.slidingWindows[key]
 		if !ok {
-			window = sliding_window.NewStaticSlidingWindow(scheduler.cfg.SlidingWindowSize, scheduler.pipelineName)
+			window = sliding_window.NewStaticSlidingWindow(scheduler.cfg.SlidingWindowSize)
 			scheduler.slidingWindows[key] = window
 			log.Infof("[batchScheduler.SubmitMsg] added new sliding window, key=%s, type=%s", key, msg.Type)
 			if msg.DdlMsg != nil {
@@ -272,17 +261,21 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 		}
 		scheduler.windowMutex.Unlock()
 
-		item := &slidingWindowItem{*msg}
-		window.AddWindowItem(item)
+		window.AddWindowItem(msg)
 	}
 
-	return scheduler.dispatchMsg(msg, scheduler.cfg.MaxBatchPerWorker, scheduler.cfg.NrWorker)
+	err := scheduler.dispatchMsg(msg, scheduler.cfg.MaxBatchPerWorker, scheduler.cfg.NrWorker)
+	msg.LeaveSubmitter = time.Now()
+	metrics.SchedulerSubmitHistogram.WithLabelValues(core.PipelineName).Observe(msg.LeaveSubmitter.Sub(msg.EnterScheduler).Seconds())
+	return err
 }
 
 func (scheduler *batchScheduler) AckMsg(msg *core.Msg) error {
-	item := &slidingWindowItem{*msg}
+	msg.EnterAcker = time.Now()
+	metrics.OutputHistogram.WithLabelValues(core.PipelineName).Observe(msg.EnterAcker.Sub(msg.EnterOutput).Seconds())
+
 	if scheduler.cfg.MaxBatchPerWorker > 1 {
-		k := workingSetKey(item.Table, *item.OutputStreamKey)
+		k := workingSetKey(msg.Table, *msg.OutputStreamKey)
 		if err := scheduler.workingSet.ack(k); err != nil {
 			return errors.Trace(err)
 		}
@@ -291,22 +284,18 @@ func (scheduler *batchScheduler) AckMsg(msg *core.Msg) error {
 	if scheduler.cfg.SlidingWindowSize > 0 {
 
 		scheduler.windowMutex.Lock()
-		window := scheduler.slidingWindows[*item.InputStreamKey]
+		window := scheduler.slidingWindows[*msg.InputStreamKey]
 		scheduler.windowMutex.Unlock()
 
-		window.AckWindowItem(item.SequenceNumber())
+		window.AckWindowItem(msg.SequenceNumber())
 
-		metrics.WorkerPoolSlidingWindowSize.
-			WithLabelValues(scheduler.pipelineName, *item.InputStreamKey).
-			Set(float64(window.Size()))
-
-		metrics.WorkerPoolSlidingWindowRatio.
-			WithLabelValues(scheduler.pipelineName, *item.InputStreamKey).
-			Set(float64(window.WaitingQueueLen() / window.Size()))
+		metrics.QueueLength.WithLabelValues(scheduler.pipelineName, "sliding-window", *msg.InputStreamKey).Set(float64(window.Size()))
+		WorkerPoolSlidingWindowRatio.WithLabelValues(scheduler.pipelineName, *msg.InputStreamKey).Set(float64(window.WaitingQueueLen() / window.Size()))
 	}
 
-	msg.MsgAckTime = time.Now()
-	core.AddMetrics(scheduler.pipelineName, msg)
+	msg.LeaveScheduler = time.Now()
+	metrics.SchedulerTotalHistogram.WithLabelValues(core.PipelineName).Observe(msg.LeaveScheduler.Sub(msg.EnterScheduler).Seconds())
+	metrics.SchedulerAckHistogram.WithLabelValues(core.PipelineName).Observe(msg.LeaveScheduler.Sub(msg.EnterAcker).Seconds())
 	return nil
 }
 
@@ -359,11 +348,12 @@ func (scheduler *batchScheduler) dispatchMsg(msg *core.Msg, maxBatchPerWorker in
 
 	scheduler.bufferWg.Add(1)
 
-	go func(c chan *core.Msg) {
+	go func(c chan *core.Msg, key string) {
 		defer scheduler.bufferWg.Done()
 
 		var batch []*core.Msg
 		for msg := range c {
+			metrics.QueueLength.WithLabelValues(core.PipelineName, "table-buffer", key).Set(float64(len(c)))
 			batch = append(batch, msg)
 			if scheduler.needFlush(c, batch, maxBatchPerWorker) {
 				// if we found any job in the working set, we need to wait.
@@ -402,7 +392,7 @@ func (scheduler *batchScheduler) dispatchMsg(msg *core.Msg, maxBatchPerWorker in
 			}
 
 		}
-	}(scheduler.buffers[tableKey])
+	}(scheduler.buffers[tableKey], tableKey)
 
 	scheduler.buffers[tableKey] <- msg
 

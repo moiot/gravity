@@ -6,30 +6,21 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/juju/errors"
-	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
-
+	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/metrics"
+
+	"github.com/juju/errors"
+	log "github.com/sirupsen/logrus"
 )
-
-type itemWithTime struct {
-	WindowItem
-	addTime int64
-}
-
-func newItemWithEnqueueTime(item WindowItem) itemWithTime {
-	return itemWithTime{WindowItem: item, addTime: time.Now().UnixNano()}
-}
 
 type staticSlidingWindow struct {
 	cap int
 
 	// waitingItemC is used to holds sequence window,
 	// the size of this queue determines the window size of the sliding window
-	waitingItemC chan itemWithTime
+	waitingItemC chan WindowItem
 
-	nextItemToCommit *itemWithTime
+	nextItemToCommit WindowItem
 
 	readyC chan int64
 
@@ -53,16 +44,12 @@ type staticSlidingWindow struct {
 	// lastCommitEventTime is the time when the last event
 	// happens at the source, for example, mysql binlog timestamp.
 	lastCommitEventTime int64
-
-	processHistogram prometheus.Observer
-	eventHistogram   prometheus.Observer
 }
 
 func (w *staticSlidingWindow) AddWindowItem(item WindowItem) {
-	i := newItemWithEnqueueTime(item)
-	atomic.StoreInt64(&w.lastEnqueueProcessTime, i.addTime)
-	atomic.StoreInt64(&w.lastEnqueueEventTime, i.EventTime().UnixNano())
-	w.waitingItemC <- i
+	atomic.StoreInt64(&w.lastEnqueueProcessTime, item.ProcessTime().UnixNano())
+	atomic.StoreInt64(&w.lastEnqueueEventTime, item.EventTime().UnixNano())
+	w.waitingItemC <- item
 }
 
 func (w *staticSlidingWindow) AckWindowItem(seq int64) {
@@ -116,7 +103,7 @@ func (w *staticSlidingWindow) Close() {
 	// log.Infof("[staticSlidingWindow] closed")
 }
 
-func (w *staticSlidingWindow) removeItemFromSequence() (*itemWithTime, error) {
+func (w *staticSlidingWindow) removeItemFromSequence() (WindowItem, error) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -126,7 +113,7 @@ func (w *staticSlidingWindow) removeItemFromSequence() (*itemWithTime, error) {
 			if !ok {
 				return nil, errors.Errorf("no more sequence")
 			}
-			return &nextItem, nil
+			return nextItem, nil
 
 		case <-ticker.C:
 			w.reportWatermarkDelay()
@@ -178,7 +165,7 @@ func (w *staticSlidingWindow) start() {
 
 				// now we are ready to commit
 				w.nextItemToCommit.BeforeWindowMoveForward()
-				atomic.StoreInt64(&w.lastCommitProcessTime, w.nextItemToCommit.addTime)
+				atomic.StoreInt64(&w.lastCommitProcessTime, w.nextItemToCommit.ProcessTime().UnixNano())
 				atomic.StoreInt64(&w.lastCommitEventTime, w.nextItemToCommit.EventTime().UnixNano())
 				w.reportWatermarkDelay()
 
@@ -203,23 +190,21 @@ func (w *staticSlidingWindow) reportWatermarkDelay() {
 	watermark := w.Watermark()
 
 	// ProcessTime can be seen as the duration that event are in the queue.
-	w.processHistogram.Observe(time.Since(watermark.ProcessTime).Seconds())
+	metrics.End2EndProcessTimeHistogram.WithLabelValues(core.PipelineName).Observe(time.Since(watermark.ProcessTime).Seconds())
 
 	// EventTime can be seen as the end to end duration of event process time.
-	w.eventHistogram.Observe(time.Since(watermark.EventTime).Seconds())
+	metrics.End2EndEventTimeHistogram.WithLabelValues(core.PipelineName).Observe(time.Since(watermark.EventTime).Seconds())
 }
 
-func NewStaticSlidingWindow(windowSize int, name string) Window {
+func NewStaticSlidingWindow(windowSize int) Window {
 	h := &windowItemHeap{}
 	heap.Init(h)
 
 	w := &staticSlidingWindow{
 		cap:                   windowSize,
-		waitingItemC:          make(chan itemWithTime, windowSize),
+		waitingItemC:          make(chan WindowItem, windowSize),
 		readyCommitHeap:       h,
 		readyC:                make(chan int64),
-		processHistogram:      metrics.WaterMarkHistogram.WithLabelValues(name, "processTime"),
-		eventHistogram:        metrics.WaterMarkHistogram.WithLabelValues(name, "eventTime"),
 		lastCommitProcessTime: 1<<63 - 1,
 	}
 

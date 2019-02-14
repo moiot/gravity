@@ -2,7 +2,6 @@ package mongooplog
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -10,7 +9,6 @@ import (
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/moiot/gravity/pkg/consts"
-	"github.com/moiot/gravity/pkg/metrics"
 )
 
 const OplogCheckerCollectionName = "heartbeat"
@@ -26,35 +24,6 @@ type OplogHeartbeat struct {
 	ID   bson.ObjectId `bson:"_id,omitempty"`
 	Name string        `bson:"name"`
 	T    string        `bson:"t"`
-}
-
-func (checker *OplogChecker) MarkActive(source string, data map[string]interface{}) {
-	d, ok := data["$set"]
-	if !ok {
-		log.Errorf("[oplog_checker] data: %v", data)
-		return
-	}
-	typedData, ok := d.(map[string]interface{})
-	if !ok {
-		log.Errorf("[oplog_checker] set: %v", d)
-		return
-	}
-
-	t, ok := typedData["t"]
-	if !ok {
-		log.Errorf("[oplog_checker] typedData: %v", typedData)
-		return
-	}
-
-	timeString := fmt.Sprintf("%v", t)
-
-	oplogSentTime, err := time.Parse(time.RFC3339Nano, fmt.Sprintf("%v", timeString))
-	if err != nil {
-		log.Errorf("[oplog_checker] mark_active parse time error time: %v, err : %v", timeString, err)
-		return
-	}
-
-	metrics.GravityOplogLagLatency.WithLabelValues(checker.pipelineName, source).Observe(time.Now().Sub(oplogSentTime).Seconds())
 }
 
 func (checker *OplogChecker) Run() {

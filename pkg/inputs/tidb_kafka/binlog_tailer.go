@@ -5,8 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/moiot/gravity/pkg/position_store"
-
 	"github.com/Shopify/sarama"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
@@ -16,7 +14,9 @@ import (
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/inputs/helper/binlog_checker"
 	"github.com/moiot/gravity/pkg/kafka"
+	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mysql_test"
+	"github.com/moiot/gravity/pkg/position_store"
 	pb "github.com/moiot/gravity/pkg/protocol/tidb"
 	"github.com/moiot/gravity/pkg/sarama_cluster"
 	"github.com/moiot/gravity/pkg/schema_store"
@@ -125,6 +125,7 @@ func (t *BinlogTailer) createMsgs(
 ) ([]*core.Msg, error) {
 	var msgList []*core.Msg
 	if binlog.Type == pb.BinlogType_DDL {
+		metrics.InputCounter.WithLabelValues(t.name, "", "", string(core.MsgDDL), "").Add(1)
 		ddlStmt := string(binlog.DdlData.DdlQuery)
 		if strings.Contains(ddlStmt, consts.DDLTag) {
 			log.Infof("ignore internal ddl: %v", ddlStmt)
@@ -135,12 +136,16 @@ func (t *BinlogTailer) createMsgs(
 			return msgList, nil
 		}
 	}
+	received := time.Now()
 	for _, table := range binlog.DmlData.Tables {
 		schemaName := *table.SchemaName
 		tableName := *table.TableName
 		pkColumnList := buildPKColumnList(table.ColumnInfo)
 		for _, mutation := range table.Mutations {
 			msg := core.Msg{
+				Phase: core.Phase{
+					EnterInput: received,
+				},
 				Type:      core.MsgDML,
 				Database:  schemaName,
 				Table:     tableName,
@@ -192,6 +197,7 @@ func (t *BinlogTailer) createMsgs(
 				log.Warnf("unexpected MutationType: %v", *mutation.Type)
 				continue
 			}
+			metrics.InputCounter.WithLabelValues(t.name, msg.Database, msg.Table, string(msg.Type), string(dmlMsg.Operation)).Add(1)
 
 			if mysql_test.IsDeadSignal(schemaName, tableName) && data["id"].(string) == t.name {
 				t.consumer.Close()
