@@ -102,3 +102,15 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 
 	return tableDefs, retTableConfigs
 }
+
+func DeleteEmptyTables(db *sql.DB, tables []*schema_store.Table, tableConfigs []TableConfig) ([]*schema_store.Table, []TableConfig) {
+	var retTables []*schema_store.Table
+	var retTableConfigs []TableConfig
+	for i, t := range tables {
+		if !utils.IsTableEmpty(db, t.Schema, t.Name) {
+			retTables = append(retTables, t)
+			retTableConfigs = append(retTableConfigs, tableConfigs[i])
+		}
+	}
+	return retTables, retTableConfigs
+}

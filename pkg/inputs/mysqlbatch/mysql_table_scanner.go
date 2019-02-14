@@ -53,15 +53,6 @@ func (tableScanner *TableScanner) Start() error {
 					log.Fatalf("[TableScanner] initTableDDL for %s.%s, err: %s", work.TableDef.Schema, work.TableDef.Name, err)
 				}
 
-				if utils.IsTableEmpty(tableScanner.db, work.TableDef.Schema, work.TableDef.Name) {
-					msg := NewCloseInputStreamMsg(work.TableDef)
-					if err := tableScanner.emitter.Emit(msg); err != nil {
-						log.Fatalf("[LoopInBatch] failed to emit close stream msg: %v", errors.ErrorStack(err))
-					}
-					log.Infof("[TableScanner] table %s.%s is empty.", work.TableDef.Schema, work.TableDef.Name)
-					continue
-				}
-
 				max, min, exists, err := GetMaxMin(tableScanner.positionCache, utils.TableIdentity(work.TableDef.Schema, work.TableDef.Name))
 				if err != nil {
 					log.Fatalf("[TableScanner] InitTablePosition failed: %v", errors.ErrorStack(err))

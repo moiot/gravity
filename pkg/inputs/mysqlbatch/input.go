@@ -3,7 +3,6 @@ package mysqlbatch
 import (
 	"context"
 	"database/sql"
-	"reflect"
 	"sync"
 	"time"
 
@@ -182,10 +181,12 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 	plugin.ctx = ctx
 	plugin.cancel = cancelFunc
 
-	tableDefs, tableConfigs := GetTables(sourceDB, sourceSchemaStore, cfg.TableConfigs, router)
+	tableDefs, tableConfigs := GetTables(scanDB, sourceSchemaStore, cfg.TableConfigs, router)
 	if err != nil {
 		return errors.Trace(err)
 	}
+
+	tableDefs, tableConfigs = DeleteEmptyTables(scanDB, tableDefs, tableConfigs)
 
 	// Detect any potential error before any work is done, so that we can check the error early.
 	scanColumns := make([]string, len(tableDefs))
@@ -345,7 +346,7 @@ func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInt
 	fullTableName := utils.TableIdentity(tableDef.Schema, tableDef.Name)
 	_, _, exists, err := GetMaxMin(positionCache, fullTableName)
 	if err != nil {
-		log.Fatalf("[tableScanner] failed to GetMaxMin: %v", errors.ErrorStack(err))
+		return errors.Trace(err)
 	}
 
 	if !exists {
@@ -363,13 +364,13 @@ func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInt
 			maxPos := TablePosition{Value: max, Type: scanType, Column: scanColumn}
 			minPos := TablePosition{Value: min, Type: scanType, Column: scanColumn}
 			if err := PutMaxMin(positionCache, fullTableName, &maxPos, &minPos); err != nil {
-				log.Fatalf("[InitTablePosition] failed to PutMaxMin, err: %v", errors.ErrorStack(err))
+				return errors.Trace(err)
 			}
-			log.Infof("[InitTablePosition] PutMaxMin: max value type: %v, max: %v; min value type: %v, min: %v", reflect.TypeOf(maxPos.Value), maxPos, reflect.TypeOf(minPos.Value), minPos)
+			log.Infof("[InitTablePosition] table: %v, PutMaxMin: maxPos: %+v, minPos: %+v", fullTableName, maxPos, minPos)
 		}
 
 		if err := PutEstimatedCount(positionCache, fullTableName, estimatedRowCount); err != nil {
-			log.Fatalf("[InitTablePosition] failed to put estimated count, err: %v", errors.ErrorStack(err))
+			return errors.Trace(err)
 		}
 
 		log.Infof("[InitTablePosition] schema: %v, table: %v, scanColumn: %v", tableDef.Schema, tableDef.Name, scanColumn)

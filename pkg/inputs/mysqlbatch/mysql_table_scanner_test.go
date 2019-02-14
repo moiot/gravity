@@ -354,6 +354,20 @@ func TestTableScanner_Start(t *testing.T) {
 
 			r.NoError(SetupInitialPosition(positionCache, db))
 
+			for i := range tableDefs {
+				// empty table should be ignored
+				if c.seedFunc == nil {
+					tableDefs, tableConfigs = DeleteEmptyTables(db, tableDefs, tableConfigs)
+					r.Equal(0, len(tableDefs))
+				} else {
+					r.NoError(InitTablePosition(db, positionCache, tableDefs[i], c.scanColumn, 100))
+				}
+			}
+
+			if len(tableDefs) == 0 {
+				continue
+			}
+
 			submitter := &fakeMsgSubmitter{}
 			em, err := emitter.NewEmitter(nil, submitter)
 			r.NoError(err)
