@@ -3,6 +3,7 @@ package mysqlbatch
 import (
 	"context"
 	"database/sql"
+	"reflect"
 	"sync"
 	"time"
 
@@ -203,6 +204,12 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 		return errors.Errorf("failed detect %d tables scan column", len(allErrors))
 	}
 
+	for i, t := range tableDefs {
+		if err := InitTablePosition(scanDB, positionCache, t, scanColumns[i], estimatedRowCount[i]); err != nil {
+			return errors.Trace(err)
+		}
+	}
+
 	tableQueue := make(chan *TableWork, len(tableDefs))
 	for i := 0; i < len(tableDefs); i++ {
 		work := TableWork{TableDef: tableDefs[i], TableConfig: &tableConfigs[i], ScanColumn: scanColumns[i], EstimatedRowCount: estimatedRowCount[i]}
@@ -332,4 +339,77 @@ func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.Pos
 	} else {
 		log.Fatalf("[plugin.waitFinish] unknown case: ctx.Err(): %v", plugin.ctx.Err())
 	}
+}
+
+func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInterface, tableDef *schema_store.Table, scanColumn string, estimatedRowCount int64) error {
+	fullTableName := utils.TableIdentity(tableDef.Schema, tableDef.Name)
+	_, _, exists, err := GetMaxMin(positionCache, fullTableName)
+	if err != nil {
+		log.Fatalf("[tableScanner] failed to GetMaxMin: %v", errors.ErrorStack(err))
+	}
+
+	if !exists {
+		log.Infof("[InitTablePosition] init table position")
+
+		var scanType string
+		if scanColumn == "*" {
+			maxPos := TablePosition{Column: scanColumn, Type: PlainInt, Value: 1}
+			minPos := TablePosition{Column: scanColumn, Type: PlainInt, Value: 0}
+			if err := PutMaxMin(positionCache, fullTableName, &maxPos, &minPos); err != nil {
+				return errors.Trace(err)
+			}
+		} else {
+			max, min := FindMaxMinValueFromDB(db, tableDef.Schema, tableDef.Name, scanColumn)
+			maxPos := TablePosition{Value: max, Type: scanType, Column: scanColumn}
+			minPos := TablePosition{Value: min, Type: scanType, Column: scanColumn}
+			if err := PutMaxMin(positionCache, fullTableName, &maxPos, &minPos); err != nil {
+				log.Fatalf("[InitTablePosition] failed to PutMaxMin, err: %v", errors.ErrorStack(err))
+			}
+			log.Infof("[InitTablePosition] PutMaxMin: max value type: %v, max: %v; min value type: %v, min: %v", reflect.TypeOf(maxPos.Value), maxPos, reflect.TypeOf(minPos.Value), minPos)
+		}
+
+		if err := PutEstimatedCount(positionCache, fullTableName, estimatedRowCount); err != nil {
+			log.Fatalf("[InitTablePosition] failed to put estimated count, err: %v", errors.ErrorStack(err))
+		}
+
+		log.Infof("[InitTablePosition] schema: %v, table: %v, scanColumn: %v", tableDef.Schema, tableDef.Name, scanColumn)
+
+	}
+	return nil
+}
+
+// DetectScanColumn find a column that we used to scan the table
+// SHOW INDEX FROM ..
+// Pick primary key, if there is only one primary key
+// If pk not found try using unique index
+// fail
+func DetectScanColumn(sourceDB *sql.DB, dbName string, tableName string, maxFullDumpRowsCount int64) (string, int64, error) {
+	rowsCount, err := utils.EstimateRowsCount(sourceDB, dbName, tableName)
+	if err != nil {
+		return "", 0, errors.Trace(err)
+	}
+
+	pks, err := utils.GetPrimaryKeys(sourceDB, dbName, tableName)
+	if err != nil {
+		return "", 0, errors.Trace(err)
+	}
+
+	if len(pks) == 1 {
+		return pks[0], rowsCount, nil
+	}
+
+	uniqueIndexes, err := utils.GetUniqueIndexesWithoutPks(sourceDB, dbName, tableName)
+	if err != nil {
+		return "", 0, errors.Trace(err)
+	}
+
+	if len(uniqueIndexes) > 0 {
+		return uniqueIndexes[0], rowsCount, nil
+	}
+
+	if rowsCount < maxFullDumpRowsCount {
+		return "*", rowsCount, nil
+	}
+
+	return "", rowsCount, errors.Errorf("no scan column can be found automatically for %s.%s", dbName, tableName)
 }
