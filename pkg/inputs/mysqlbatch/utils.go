@@ -111,14 +111,16 @@ func DeleteEmptyTables(db *sql.DB, tables []*schema_store.Table, tableConfigs []
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	for i, t := range tables {
+	for i := range tables {
 		wg.Add(1)
+
 		go func(idx int) {
 			defer wg.Done()
+
 			if !utils.IsTableEmpty(db, tables[idx].Schema, tables[idx].Name) {
 				mu.Lock()
 				defer mu.Unlock()
-				retTables = append(retTables, t)
+				retTables = append(retTables, tables[idx])
 				retTableConfigs = append(retTableConfigs, tableConfigs[idx])
 			}
 		}(i)
