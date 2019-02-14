@@ -159,11 +159,17 @@ func (p *TablePosition) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+type TableStats struct {
+	EstimatedRowCount int64 `json:"estimated-count"`
+	ScannedCount      int64 `json:"scanned-count"`
+}
+
 type BatchPositionValue struct {
 	Start   *utils.MySQLBinlogPosition `toml:"start-binlog" json:"start-binlog"`
 	Min     map[string]TablePosition   `toml:"min" json:"min"`
 	Max     map[string]TablePosition   `toml:"max" json:"max"`
 	Current map[string]TablePosition   `toml:"current" json:"current"`
+	Stats   map[string]TableStats      `toml:"stats" json:"stats"`
 }
 
 func Serialize(positions *BatchPositionValue) (string, error) {
@@ -190,6 +196,10 @@ func Deserialize(value string) (*BatchPositionValue, error) {
 
 	if positionValue.Current == nil {
 		positionValue.Current = make(map[string]TablePosition)
+	}
+
+	if positionValue.Stats == nil {
+		positionValue.Stats = make(map[string]TableStats)
 	}
 
 	return &positionValue, nil
@@ -302,7 +312,42 @@ func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName st
 		return errors.Trace(err)
 	}
 
+	// update current position and increment scan count
 	batchPositions.Current[fullTableName] = *pos
+	stats := batchPositions.Stats[fullTableName]
+	stats.ScannedCount++
+	batchPositions.Stats[fullTableName] = stats
+
+	v, err := Serialize(batchPositions)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	position.Value = v
+	return errors.Trace(cache.Put(position))
+}
+
+func PutEstimatedCount(cache position_store.PositionCacheInterface, fullTableName string, estimatedCount int64) error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	position, exist, err := cache.Get()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if !exist {
+		return errors.Errorf("empty position")
+	}
+
+	batchPositions, err := Deserialize(position.Value)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	stats := batchPositions.Stats[fullTableName]
+	stats.EstimatedRowCount = estimatedCount
+	batchPositions.Stats[fullTableName] = stats
+
 	v, err := Serialize(batchPositions)
 	if err != nil {
 		return errors.Trace(err)

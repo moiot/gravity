@@ -35,9 +35,9 @@ type PluginConfig struct {
 
 	TableConfigs []TableConfig `mapstructure:"table-configs"json:"table-configs"`
 
-	NrScanner        int `mapstructure:"nr-scanner" toml:"nr-scanner" json:"nr-scanner"`
-	TableScanBatch   int `mapstructure:"table-scan-batch" toml:"table-scan-batch" json:"table-scan-batch"`
-	MaxFullDumpCount int `mapstructure:"max-full-dump-count"  toml:"max-full-dump-count"  json:"max-full-dump-count"`
+	NrScanner        int   `mapstructure:"nr-scanner" toml:"nr-scanner" json:"nr-scanner"`
+	TableScanBatch   int   `mapstructure:"table-scan-batch" toml:"table-scan-batch" json:"table-scan-batch"`
+	MaxFullDumpCount int64 `mapstructure:"max-full-dump-count"  toml:"max-full-dump-count"  json:"max-full-dump-count"`
 
 	BatchPerSecondLimit int `mapstructure:"batch-per-second-limit" toml:"batch-per-second-limit" json:"batch-per-second-limit"`
 }
@@ -94,9 +94,10 @@ type mysqlBatchInputPlugin struct {
 }
 
 type TableWork struct {
-	TableDef    *schema_store.Table
-	TableConfig *TableConfig
-	ScanColumn  string
+	TableDef          *schema_store.Table
+	TableConfig       *TableConfig
+	ScanColumn        string
+	EstimatedRowCount int64
 }
 
 func init() {
@@ -187,14 +188,16 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 
 	// Detect any potential error before any work is done, so that we can check the error early.
 	scanColumns := make([]string, len(tableDefs))
+	estimatedRowCount := make([]int64, len(tableDefs))
 	var allErrors []error
 	for i, t := range tableDefs {
-		column, err := DetectScanColumn(plugin.scanDB, t.Schema, t.Name, plugin.cfg.MaxFullDumpCount)
+		column, rowCount, err := DetectScanColumn(plugin.scanDB, t.Schema, t.Name, plugin.cfg.MaxFullDumpCount)
 		if err != nil {
 			log.Errorf("failed to detect scan column, schema: %v, table: %v", t.Schema, t.Name)
 			allErrors = append(allErrors, err)
 		}
 		scanColumns[i] = column
+		estimatedRowCount[i] = rowCount
 	}
 	if len(allErrors) > 0 {
 		return errors.Errorf("failed detect %d tables scan column", len(allErrors))
@@ -202,7 +205,7 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 
 	tableQueue := make(chan *TableWork, len(tableDefs))
 	for i := 0; i < len(tableDefs); i++ {
-		work := TableWork{TableDef: tableDefs[i], TableConfig: &tableConfigs[i], ScanColumn: scanColumns[i]}
+		work := TableWork{TableDef: tableDefs[i], TableConfig: &tableConfigs[i], ScanColumn: scanColumns[i], EstimatedRowCount: estimatedRowCount[i]}
 		tableQueue <- &work
 	}
 	close(tableQueue)
