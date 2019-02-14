@@ -289,7 +289,7 @@ func (scheduler *batchScheduler) AckMsg(msg *core.Msg) error {
 
 		window.AckWindowItem(msg.SequenceNumber())
 
-		metrics.QueueLength.WithLabelValues(scheduler.pipelineName, "sliding-window", *msg.InputStreamKey).Set(float64(window.Size()))
+		metrics.QueueLength.WithLabelValues(scheduler.pipelineName, "sliding-window", *msg.InputStreamKey).Set(float64(window.WaitingQueueLen()))
 		WorkerPoolSlidingWindowRatio.WithLabelValues(scheduler.pipelineName, *msg.InputStreamKey).Set(float64(window.WaitingQueueLen() / window.Size()))
 	}
 
