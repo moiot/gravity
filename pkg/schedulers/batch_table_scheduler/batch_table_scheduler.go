@@ -60,7 +60,7 @@ type BatchSchedulerConfig struct {
 	SlidingWindowSize int           `mapstructure:"sliding-window-size"json:"sliding-window-size"`
 	NrRetries         int           `mapstructure:"nr-retries" json:"nr-retries"`
 	RetrySleepString  string        `mapstructure:"retry-sleep" json:"retry-sleep"`
-	HealthyThreshold  int           `yaml:"healthy-threshold" json:"healthy-threshold"`
+	HealthyThreshold  int           `mapstructure:"healthy-threshold" json:"healthy-threshold"`
 	RetrySleep        time.Duration `mapstructure:"-" json:"-"`
 }
 
