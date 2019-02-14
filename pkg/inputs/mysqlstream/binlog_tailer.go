@@ -237,7 +237,7 @@ func (tailer *BinlogTailer) Start() error {
 					}
 
 					log.Infof("retrySyncGTIDs done")
-					barrierMsg := NewBarrierMsg(int64(e.Header.Timestamp), tailer.AfterMsgCommit)
+					barrierMsg := NewBarrierMsg(tailer.AfterMsgCommit)
 					if err := tailer.emitter.Emit(barrierMsg); err != nil {
 						log.Fatalf("failed to emit barrier msg: %v", errors.ErrorStack(err))
 					}
@@ -449,7 +449,7 @@ func (tailer *BinlogTailer) Start() error {
 				}
 
 				// emit barrier msg
-				barrierMsg := NewBarrierMsg(int64(e.Header.Timestamp), tailer.AfterMsgCommit)
+				barrierMsg := NewBarrierMsg(tailer.AfterMsgCommit)
 				if err := tailer.emitter.Emit(barrierMsg); err != nil {
 					log.Fatalf("failed to emit barrier msg: %v", errors.ErrorStack(err))
 				}

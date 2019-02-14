@@ -337,10 +337,10 @@ func NewDDLMsg(
 	}
 }
 
-func NewBarrierMsg(ts int64, callback core.AfterMsgCommitFunc) *core.Msg {
+func NewBarrierMsg(callback core.AfterMsgCommitFunc) *core.Msg {
 	return &core.Msg{
 		Type:                core.MsgCtl,
-		Timestamp:           time.Unix(ts, 0),
+		Timestamp:           time.Now(),
 		Done:                make(chan struct{}),
 		InputContext:        inputContext{op: barrier},
 		InputStreamKey:      utils.NewStringPtr(inputStreamKey),
