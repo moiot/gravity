@@ -3,6 +3,7 @@ package mysqlbatch
 import (
 	"database/sql"
 	"fmt"
+	"sync"
 
 	"github.com/juju/errors"
 
@@ -101,4 +102,30 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 	}
 
 	return tableDefs, retTableConfigs
+}
+
+func DeleteEmptyTables(db *sql.DB, tables []*schema_store.Table, tableConfigs []TableConfig) ([]*schema_store.Table, []TableConfig) {
+	var retTables []*schema_store.Table
+	var retTableConfigs []TableConfig
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for i := range tables {
+		wg.Add(1)
+
+		go func(idx int) {
+			defer wg.Done()
+
+			if !utils.IsTableEmpty(db, tables[idx].Schema, tables[idx].Name) {
+				mu.Lock()
+				defer mu.Unlock()
+				retTables = append(retTables, tables[idx])
+				retTableConfigs = append(retTableConfigs, tableConfigs[idx])
+			}
+		}(i)
+
+	}
+	wg.Wait()
+	return retTables, retTableConfigs
 }

@@ -53,19 +53,6 @@ func (tableScanner *TableScanner) Start() error {
 					log.Fatalf("[TableScanner] initTableDDL for %s.%s, err: %s", work.TableDef.Schema, work.TableDef.Name, err)
 				}
 
-				if utils.IsTableEmpty(tableScanner.db, work.TableDef.Schema, work.TableDef.Name) {
-					msg := NewCloseInputStreamMsg(work.TableDef)
-					if err := tableScanner.emitter.Emit(msg); err != nil {
-						log.Fatalf("[LoopInBatch] failed to emit close stream msg: %v", errors.ErrorStack(err))
-					}
-					log.Infof("[TableScanner] table %s.%s is empty.", work.TableDef.Schema, work.TableDef.Name)
-					continue
-				}
-
-				err = tableScanner.InitTablePosition(work.TableDef, work.TableConfig, work.ScanColumn)
-				if err != nil {
-					log.Fatalf("[TableScanner] InitTablePosition failed: %v", errors.ErrorStack(err))
-				}
 				max, min, exists, err := GetMaxMin(tableScanner.positionCache, utils.TableIdentity(work.TableDef.Schema, work.TableDef.Name))
 				if err != nil {
 					log.Fatalf("[TableScanner] InitTablePosition failed: %v", errors.ErrorStack(err))
@@ -108,75 +95,8 @@ func (tableScanner *TableScanner) Start() error {
 	return nil
 }
 
-func (tableScanner *TableScanner) InitTablePosition(tableDef *schema_store.Table, tableConfig *TableConfig, scanColumn string) error {
-	_, _, exists, err := GetMaxMin(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name))
-	if err != nil {
-		log.Fatalf("[tableScanner] failed to GetMaxMin: %v", errors.ErrorStack(err))
-	}
-
-	if !exists {
-		log.Infof("[InitTablePosition] init table position")
-
-		var scanType string
-		if scanColumn == "*" {
-			maxPos := TablePosition{Column: scanColumn, Type: PlainInt, Value: 1}
-			minPos := TablePosition{Column: scanColumn, Type: PlainInt, Value: 0}
-			if err := PutMaxMin(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &maxPos, &minPos); err != nil {
-				return errors.Trace(err)
-			}
-		} else {
-			max, min := FindMaxMinValueFromDB(tableScanner.db, tableDef.Schema, tableDef.Name, scanColumn)
-			maxPos := TablePosition{Value: max, Type: scanType, Column: scanColumn}
-			minPos := TablePosition{Value: min, Type: scanType, Column: scanColumn}
-			if err := PutMaxMin(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &maxPos, &minPos); err != nil {
-				log.Fatalf("[InitTablePosition] failed to PutMaxMin, err: %v", errors.ErrorStack(err))
-			}
-			log.Infof("[InitTablePosition] PutMaxMin: max value type: %v, max: %v; min value type: %v, min: %v", reflect.TypeOf(maxPos.Value), maxPos, reflect.TypeOf(minPos.Value), minPos)
-		}
-		log.Infof("[InitTablePosition] schema: %v, table: %v, scanColumn: %v", tableDef.Schema, tableDef.Name, scanColumn)
-
-	}
-	return nil
-}
-
 func (tableScanner *TableScanner) Wait() {
 	tableScanner.wg.Wait()
-}
-
-// DetectScanColumn find a column that we used to scan the table
-// SHOW INDEX FROM ..
-// Pick primary key, if there is only one primary key
-// If pk not found try using unique index
-// fail
-func DetectScanColumn(sourceDB *sql.DB, dbName string, tableName string, maxFullDumpRowsCount int) (string, error) {
-	pks, err := utils.GetPrimaryKeys(sourceDB, dbName, tableName)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-
-	if len(pks) == 1 {
-		return pks[0], nil
-	}
-
-	uniqueIndexes, err := utils.GetUniqueIndexesWithoutPks(sourceDB, dbName, tableName)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-
-	if len(uniqueIndexes) > 0 {
-		return uniqueIndexes[0], nil
-	}
-
-	rowsCount, err := utils.EstimateRowsCount(sourceDB, dbName, tableName)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-
-	if rowsCount < maxFullDumpRowsCount {
-		return "*", nil
-	}
-
-	return "", errors.Errorf("no scan column can be found automatically for %s.%s", dbName, tableName)
 }
 
 func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColumn string) (interface{}, interface{}) {
@@ -396,7 +316,7 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 	// set the current and max position to be the same
 	p := TablePosition{Column: "*", Type: PlainInt, Value: len(allData)}
 
-	if err := PutCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &p); err != nil {
+	if err := PutCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &p, false); err != nil {
 		log.Fatalf("[FindAll] failed to put current pos: %v", errors.ErrorStack(err))
 	}
 
@@ -427,7 +347,7 @@ func (tableScanner *TableScanner) AfterMsgCommit(msg *core.Msg) error {
 		return errors.Errorf("type invalid")
 	}
 
-	if err := PutCurrentPos(tableScanner.positionCache, *msg.InputStreamKey, &p); err != nil {
+	if err := PutCurrentPos(tableScanner.positionCache, *msg.InputStreamKey, &p, true); err != nil {
 		return errors.Trace(err)
 	}
 

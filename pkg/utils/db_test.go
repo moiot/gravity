@@ -107,6 +107,6 @@ func TestDBUtils(t *testing.T) {
 
 		rowsCount, err := EstimateRowsCount(db, dbName, mysql_test.TestScanColumnTableIdPrimary)
 		assert.Nil(err)
-		assert.Equal(rowsCount, 1)
+		assert.Equal(int64(1), rowsCount)
 	})
 }
