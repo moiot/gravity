@@ -13,6 +13,7 @@ func TestPositionCache_New(t *testing.T) {
 
 	t.Run("when repo dont have any data", func(tt *testing.T) {
 		repo := NewMemoRepo()
+		repo.SetEncoderDecoder(StringEncoder, StringDecoder)
 		cache, err := NewPositionCache(t.Name(), repo, DefaultFlushPeriod)
 		r.NoError(err)
 
@@ -23,6 +24,7 @@ func TestPositionCache_New(t *testing.T) {
 
 	t.Run("when repo has some data", func(tt *testing.T) {
 		repo := NewMemoRepo()
+		repo.SetEncoderDecoder(StringEncoder, StringDecoder)
 		err := repo.Put(t.Name(), Position{Value: "test", Stage: config.Stream})
 		r.NoError(err)
 
@@ -43,7 +45,7 @@ func TestPositionCache_GetPut(t *testing.T) {
 
 	t.Run("when position is not valid", func(tt *testing.T) {
 		repo := NewMemoRepo()
-
+		repo.SetEncoderDecoder(StringEncoder, StringDecoder)
 		cache, err := NewPositionCache(t.Name(), repo, DefaultFlushPeriod)
 		r.NoError(err)
 
@@ -57,7 +59,7 @@ func TestPositionCache_GetPut(t *testing.T) {
 
 	t.Run("when position is valid", func(tt *testing.T) {
 		repo := NewMemoRepo()
-
+		repo.SetEncoderDecoder(StringEncoder, StringDecoder)
 		cache, err := NewPositionCache(t.Name(), repo, DefaultFlushPeriod)
 		r.NoError(err)
 
@@ -84,6 +86,8 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 
 	t.Run("it does not flush when time has not come", func(tt *testing.T) {
 		repo := NewMemoRepo()
+		repo.SetEncoderDecoder(StringEncoder, StringDecoder)
+
 		cache, err := NewPositionCache(t.Name(), repo, 5*time.Second)
 		r.NoError(err)
 
@@ -119,6 +123,8 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 
 	t.Run("it flush to repo when time comes", func(tt *testing.T) {
 		repo := NewMemoRepo()
+		repo.SetEncoderDecoder(StringEncoder, StringDecoder)
+
 		cache, err := NewPositionCache(t.Name(), repo, 1*time.Second)
 		r.NoError(err)
 

@@ -13,6 +13,7 @@ import (
 
 func TestSetupInitialPosition(t *testing.T) {
 	repo := position_store.NewMemoRepo()
+	repo.SetEncoderDecoder(OplogPositionValueEncoder, OplogPositionValueDecoder)
 	r := require.New(t)
 
 	t.Run("when the initial position is empty", func(tt *testing.T) {
@@ -30,10 +31,10 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.Equal(config.Stream, position.Stage)
 			r.Equal(pipelineName, position.Name)
 
-			oplogPosition, err := Deserialize(position.Value)
-			r.NoError(err)
-			r.Nil(oplogPosition.StartPosition)
-			r.EqualValues(config.MongoPosition(0), *(oplogPosition.CurrentPosition))
+			oplogPositionValue, ok := position.Value.(*OplogPositionValue)
+			r.True(ok)
+			r.Nil(oplogPositionValue.StartPosition)
+			r.EqualValues(config.MongoPosition(0), *(oplogPositionValue.CurrentPosition))
 		})
 
 		t.Run("when the start spec is not empty", func(ttt *testing.T) {
@@ -50,10 +51,10 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.NoError(err)
 			r.True(exists)
 
-			oplogPosition, err := Deserialize(position.Value)
-			r.NoError(err)
-			r.EqualValues(config.MongoPosition(100), *(oplogPosition.StartPosition))
-			r.EqualValues(config.MongoPosition(100), *(oplogPosition.CurrentPosition))
+			oplogPositionValue, ok := position.Value.(*OplogPositionValue)
+			r.True(ok)
+			r.EqualValues(config.MongoPosition(100), *(oplogPositionValue.StartPosition))
+			r.EqualValues(config.MongoPosition(100), *(oplogPositionValue.CurrentPosition))
 		})
 
 	})
@@ -76,8 +77,8 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.True(exists)
 			r.Equal(pipelineName, position.Name)
 
-			oplogPositionValue, err := Deserialize(position.Value)
-			r.NoError(err)
+			oplogPositionValue, ok := position.Value.(*OplogPositionValue)
+			r.True(ok)
 
 			r.EqualValues(config.MongoPosition(400), *(oplogPositionValue.CurrentPosition))
 			r.EqualValues(config.MongoPosition(400), *(oplogPositionValue.StartPosition))
@@ -100,8 +101,8 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.True(exists)
 			r.Equal(pipelineName, position.Name)
 
-			oplogPositionValue, err := Deserialize(position.Value)
-			r.NoError(err)
+			oplogPositionValue, ok := position.Value.(*OplogPositionValue)
+			r.True(ok)
 
 			r.EqualValues(config.MongoPosition(200), *(oplogPositionValue.CurrentPosition))
 			r.EqualValues(config.MongoPosition(100), *(oplogPositionValue.StartPosition))
@@ -120,9 +121,9 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.Equal(config.Stream, position.Stage)
 			r.Equal(pipelineName, position.Name)
 
-			v, err := Deserialize(position.Value)
-			r.NoError(err)
-			r.EqualValues(newStart, *(v.StartPosition))
+			oplogPositionValue, ok = position.Value.(*OplogPositionValue)
+			r.True(ok)
+			r.EqualValues(newStart, *(oplogPositionValue.StartPosition))
 
 		})
 
@@ -135,15 +136,10 @@ func initPosition(repo position_store.PositionRepo, pipelineName string, start *
 		CurrentPosition: current,
 	}
 
-	v, err := Serialize(&positionValue)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
 	position := position_store.Position{
 		Name:  pipelineName,
 		Stage: config.Stream,
-		Value: v,
+		Value: &positionValue,
 	}
 	return errors.Trace(repo.Put(pipelineName, position))
 }

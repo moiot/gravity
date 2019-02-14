@@ -157,12 +157,12 @@ func (tailer *BinlogTailer) Start() error {
 		return errors.Errorf("empty position")
 	}
 
-	binlogPositions, err := helper.DeserializeBinlogPositionValue(position.Value)
-	if err != nil {
-		return errors.Trace(err)
+	binlogPositionValue, ok := position.Value.(*helper.BinlogPositionsValue)
+	if !ok {
+		return errors.Errorf("invalid position type")
 	}
 
-	streamer, err := tailer.getBinlogStreamer(binlogPositions.CurrentPosition.BinlogGTID)
+	streamer, err := tailer.getBinlogStreamer(binlogPositionValue.CurrentPosition.BinlogGTID)
 
 	if err != nil {
 		return errors.Trace(err)

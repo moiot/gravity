@@ -35,7 +35,9 @@ type PositionEntity struct {
 }
 
 type mongoPositionRepo struct {
-	session *mgo.Session
+	session      *mgo.Session
+	valueEncoder PositionValueEncoder
+	valueDecoder PositionValueDecoder
 }
 
 func (repo *mongoPositionRepo) Get(pipelineName string) (Position, bool, error) {
@@ -56,24 +58,55 @@ func (repo *mongoPositionRepo) Get(pipelineName string) (Position, bool, error) 
 			return Position{}, true, errors.Trace(err)
 		}
 
-		v, err := myJson.MarshalToString(&oldPosition.MongoPosition)
+		s, err := myJson.MarshalToString(&oldPosition.MongoPosition)
 		if err != nil {
 			return Position{}, true, errors.Trace(err)
 		}
-		return Position{Name: pipelineName, Stage: config.InputMode(oldPosition.Stage), Value: v}, true, nil
 
+		vInterface, err := repo.valueDecoder(s)
+		if err != nil {
+			return Position{}, true, errors.Trace(err)
+		}
+
+		return Position{Name: pipelineName, Stage: config.InputMode(oldPosition.Stage), Value: vInterface}, true, nil
+
+	}
+	s, ok := position.Value.(string)
+	if !ok {
+		return Position{}, true, errors.Errorf("serialized value is not a string")
+	}
+
+	vInterface, err := repo.valueDecoder(s)
+	position.Value = vInterface
+	return position, true, nil
+}
+
+func (repo *mongoPositionRepo) GetWithRawValue(pipelineName string) (Position, bool, error) {
+	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
+	position := Position{}
+	err := collection.Find(bson.M{"name": pipelineName}).One(&position)
+	if err != nil {
+		if err == mgo.ErrNotFound {
+			return Position{}, false, nil
+		}
+		return Position{}, false, errors.Trace(err)
 	}
 	return position, true, nil
 }
 
 func (repo *mongoPositionRepo) Put(pipelineName string, position Position) error {
+	s, err := repo.valueEncoder(position.Value)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
-	_, err := collection.Upsert(
+	_, err = collection.Upsert(
 		bson.M{"name": pipelineName}, bson.M{
 			"$set": bson.M{
 				"version":     Version,
 				"stage":       string(position.Stage),
-				"value":       position.Value,
+				"value":       s,
 				"last_update": time.Now().Format(time.RFC3339Nano),
 			},
 		})
@@ -88,6 +121,11 @@ func (repo *mongoPositionRepo) Delete(pipelineName string) error {
 func (repo *mongoPositionRepo) Close() error {
 	repo.session.Close()
 	return nil
+}
+
+func (repo *mongoPositionRepo) SetEncoderDecoder(encoder PositionValueEncoder, decoder PositionValueDecoder) {
+	repo.valueEncoder = encoder
+	repo.valueDecoder = decoder
 }
 
 func NewMongoPositionRepo(session *mgo.Session) (PositionRepo, error) {

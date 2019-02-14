@@ -174,7 +174,7 @@ func healthzHandler(server *app.Server) func(http.ResponseWriter, *http.Request)
 
 func statusHandler(server *app.Server, name, hash string) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		position, exist, err := server.PositionCache.Get()
+		position, exist, err := server.PositionCache.GetWithRawValue()
 		if err != nil || !exist {
 			writer.WriteHeader(http.StatusInternalServerError)
 			log.Error("[statusHandler] failed to get position, exist: %v, err: %v", exist, errors.ErrorStack(err))
@@ -186,10 +186,15 @@ func statusHandler(server *app.Server, name, hash string) func(http.ResponseWrit
 			state = core.ReportStageFull
 		}
 
+		s, ok := position.Value.(string)
+		if !ok {
+			log.Errorf("[statusHandler] invalid raw value type")
+		}
+
 		ret := core.TaskReportStatus{
 			Name:       name,
 			ConfigHash: hash,
-			Position:   position.Value,
+			Position:   s,
 			Stage:      state,
 			Version:    utils.Version,
 		}

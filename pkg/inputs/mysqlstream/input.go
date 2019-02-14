@@ -100,6 +100,7 @@ func (plugin *mysqlStreamInputPlugin) NewPositionCache() (position_store.Positio
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	positionRepo.SetEncoderDecoder(helper.BinlogPositionValueEncoder, helper.BinlogPositionValueDecoder)
 
 	positionCache, err := position_store.NewPositionCache(
 		plugin.pipelineName,

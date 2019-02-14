@@ -134,7 +134,7 @@ func (i *TwoStageInputPlugin) Start(emitter core.Emitter, router core.Router, po
 			// start incremental plugin
 			err = i.incremental.Start(emitter, router, positionCache)
 			if err != nil {
-				log.Fatalf("[TwoStageInputPlugin] fail to start incremental. %s", err)
+				log.Fatalf("[TwoStageInputPlugin] fail to start incremental. %s", errors.ErrorStack(err))
 			}
 			log.Infof("[TwoStageInputPlugin] incremental stage started")
 		}()
@@ -241,6 +241,14 @@ func (s *twoStagePositionCache) Get() (position_store.Position, bool, error) {
 		return s.incremental.Get()
 	} else {
 		return s.full.Get()
+	}
+}
+
+func (s *twoStagePositionCache) GetWithRawValue() (position_store.Position, bool, error) {
+	if s.Stage() == config.Stream {
+		return s.incremental.GetWithRawValue()
+	} else {
+		return s.full.GetWithRawValue()
 	}
 }
 

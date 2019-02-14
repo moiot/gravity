@@ -113,13 +113,11 @@ func TestMsgEmit(t *testing.T) {
 			BinlogGTID:     gtidSet.String(),
 		},
 	}
-	v, err := helper.SerializeBinlogPositionValue(&positionValue)
-	assert.Nil(err)
 
 	p := position_store.Position{
 		Name:  "test",
 		Stage: config.Stream,
-		Value: v,
+		Value: &positionValue,
 	}
 	mockPositionCache := mock_position_store.NewMockPositionCacheInterface(mockCtrl)
 	mockPositionCache.EXPECT().Get().Return(p, true, nil).AnyTimes()

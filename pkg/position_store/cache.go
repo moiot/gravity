@@ -11,33 +11,12 @@ import (
 
 var DefaultFlushPeriod = 5 * time.Second
 
-type Position struct {
-	// Version is the schema version of position
-	Version string
-	// Name is the unique name of a pipeline
-	Name       string
-	Stage      config.InputMode
-	Value      string
-	UpdateTime time.Time
-}
-
-func (p Position) Validate() error {
-	if p.Stage != config.Stream && p.Stage != config.Batch {
-		return errors.Errorf("invalid position stage: %v", p.Stage)
-	}
-
-	if p.Value == "" {
-		return errors.Errorf("invalid position value: %v", p.Value)
-	}
-
-	return nil
-}
-
 type PositionCacheInterface interface {
 	Start() error
 	Close()
 	Put(position Position) error
 	Get() (position Position, exist bool, err error)
+	GetWithRawValue() (position Position, exist bool, err error)
 	Flush() error
 	Clear() error
 }
@@ -126,6 +105,24 @@ func (cache *defaultPositionCache) Get() (Position, bool, error) {
 
 	if !cache.exist {
 		position, exist, err := cache.repo.Get(cache.pipelineName)
+		if err != nil && exist {
+			cache.exist = true
+		}
+		return position, cache.exist, errors.Trace(err)
+	}
+
+	if err := cache.position.Validate(); err != nil {
+		return Position{}, true, errors.Trace(err)
+	}
+	return cache.position, true, nil
+}
+
+func (cache *defaultPositionCache) GetWithRawValue() (Position, bool, error) {
+	cache.positionMutex.Lock()
+	defer cache.positionMutex.Unlock()
+
+	if !cache.exist {
+		position, exist, err := cache.repo.GetWithRawValue(cache.pipelineName)
 		if err != nil && exist {
 			cache.exist = true
 		}

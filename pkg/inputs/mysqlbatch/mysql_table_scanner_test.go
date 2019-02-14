@@ -172,6 +172,7 @@ func TestTableScanner_Start(t *testing.T) {
 
 		dbCfg := mysql_test.SourceDBConfig()
 		positionRepo, err := position_store.NewMySQLRepo(dbCfg, "")
+		positionRepo.SetEncoderDecoder(EncodeBatchPositionValue, DecodeBatchPositionValue)
 		r.NoError(err)
 
 		testCases := []struct {

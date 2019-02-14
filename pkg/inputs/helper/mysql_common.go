@@ -20,13 +20,16 @@ type BinlogPositionsValue struct {
 	StartPosition   *utils.MySQLBinlogPosition `json:"start_position"`
 }
 
-func SerializeBinlogPositionValue(position *BinlogPositionsValue) (string, error) {
-	s, err := myJson.MarshalToString(position)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
+func BinlogPositionValueEncoder(v interface{}) (string, error) {
+	return myJson.MarshalToString(v)
+}
 
-	return s, nil
+func BinlogPositionValueDecoder(s string) (interface{}, error) {
+	return DeserializeBinlogPositionValue(s)
+}
+
+func SerializeBinlogPositionValue(position *BinlogPositionsValue) (string, error) {
+	return BinlogPositionValueEncoder(position)
 }
 
 func DeserializeBinlogPositionValue(value string) (*BinlogPositionsValue, error) {

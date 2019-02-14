@@ -15,12 +15,9 @@ import (
 
 func initRepo(repo position_store.PositionRepo, pipelineName string, startGTID string, currentGTID string) error {
 
-	positionValue, err := helper.SerializeBinlogPositionValue(&helper.BinlogPositionsValue{
+	positionValue := &helper.BinlogPositionsValue{
 		CurrentPosition: &utils.MySQLBinlogPosition{BinlogGTID: currentGTID},
 		StartPosition:   &utils.MySQLBinlogPosition{BinlogGTID: startGTID},
-	})
-	if err != nil {
-		return errors.Trace(err)
 	}
 
 	position := position_store.Position{
@@ -36,6 +33,7 @@ func TestSetupInitialPosition(t *testing.T) {
 	r := require.New(t)
 
 	repo := position_store.NewMemoRepo()
+	repo.SetEncoderDecoder(helper.BinlogPositionValueEncoder, helper.BinlogPositionValueDecoder)
 
 	t.Run("when there isn't any position in position repo", func(tt *testing.T) {
 		tt.Run("when start spec is nil", func(ttt *testing.T) {
@@ -53,8 +51,8 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.NoError(err)
 			r.True(exists)
 
-			positionValue, err := helper.DeserializeBinlogPositionValue(position.Value)
-			r.NoError(err)
+			positionValue, ok := position.Value.(*helper.BinlogPositionsValue)
+			r.True(ok)
 			r.Nil(positionValue.StartPosition)
 			r.NotNil(positionValue.CurrentPosition)
 		})
@@ -84,8 +82,8 @@ func TestSetupInitialPosition(t *testing.T) {
 			p, exists, err := cache.Get()
 			r.NoError(err)
 			r.True(exists)
-			newPositionValue, err := helper.DeserializeBinlogPositionValue(p.Value)
-			r.NoError(err)
+			newPositionValue, ok := p.Value.(*helper.BinlogPositionsValue)
+			r.True(ok)
 
 			r.Equal(newGTID, newPositionValue.StartPosition.BinlogGTID)
 			r.Equal(newGTID, newPositionValue.CurrentPosition.BinlogGTID)
@@ -111,8 +109,9 @@ func TestSetupInitialPosition(t *testing.T) {
 			p, exists, err := cache.Get()
 			r.NoError(err)
 			r.True(exists)
-			newPositionValue, err := helper.DeserializeBinlogPositionValue(p.Value)
-			r.NoError(err)
+
+			newPositionValue, ok := p.Value.(*helper.BinlogPositionsValue)
+			r.True(ok)
 			r.Equal(startGTID, newPositionValue.StartPosition.BinlogGTID)
 			r.Equal(currentGTID, newPositionValue.CurrentPosition.BinlogGTID)
 		})
@@ -136,8 +135,9 @@ func TestSetupInitialPosition(t *testing.T) {
 			p, exists, err := cache.Get()
 			r.NoError(err)
 			r.True(exists)
-			newPositionValue, err := helper.DeserializeBinlogPositionValue(p.Value)
-			r.NoError(err)
+
+			newPositionValue, ok := p.Value.(*helper.BinlogPositionsValue)
+			r.True(ok)
 			r.Equal(newGTID, newPositionValue.StartPosition.BinlogGTID)
 			r.Equal(newGTID, newPositionValue.CurrentPosition.BinlogGTID)
 		})

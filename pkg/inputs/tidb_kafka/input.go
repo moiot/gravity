@@ -78,6 +78,8 @@ func (plugin *tidbKafkaStreamInputPlugin) NewPositionCache() (position_store.Pos
 		return nil, errors.Trace(err)
 	}
 
+	positionRepo.SetEncoderDecoder(KafkaPositionValueEncoder, KafkaPositionValueDecoder)
+
 	positionCache, err := position_store.NewPositionCache(plugin.pipelineName, positionRepo, position_store.DefaultFlushPeriod)
 	if err != nil {
 		return nil, errors.Trace(err)

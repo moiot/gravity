@@ -123,12 +123,15 @@ func (plugin *mysqlBatchInputPlugin) Configure(pipelineName string, data map[str
 }
 
 func (plugin *mysqlBatchInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
+
 	positionRepo, err := position_store.NewMySQLRepo(
 		plugin.probeDBConfig,
 		plugin.probeSQLAnnotation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+
+	positionRepo.SetEncoderDecoder(EncodeBatchPositionValue, DecodeBatchPositionValue)
 
 	positionCache, err := position_store.NewPositionCache(plugin.pipelineName, positionRepo, position_store.DefaultFlushPeriod)
 	if err != nil {
@@ -313,13 +316,9 @@ func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.Pos
 			log.Fatalf("[mysqlBatchInputPlugin] failed to get start streamPosition: %v", errors.ErrorStack(err))
 		}
 
-		binlogPositions := helper.BinlogPositionsValue{
+		binlogPositionsValue := helper.BinlogPositionsValue{
 			StartPosition:   startBinlog,
 			CurrentPosition: startBinlog,
-		}
-		v, err := helper.SerializeBinlogPositionValue(&binlogPositions)
-		if err != nil {
-			log.Fatalf("[mysqlBatchInputPlugin] failed to serialize binlog positions: %v", errors.ErrorStack(err))
 		}
 
 		// Notice that we should not change streamPosition stage in this plugin.
@@ -327,7 +326,7 @@ func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.Pos
 		streamPosition := position_store.Position{
 			Name:       plugin.pipelineName,
 			Stage:      config.Stream,
-			Value:      v,
+			Value:      &binlogPositionsValue,
 			UpdateTime: time.Now(),
 		}
 

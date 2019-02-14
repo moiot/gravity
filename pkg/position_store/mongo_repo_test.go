@@ -4,6 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/json-iterator/go"
+	"github.com/juju/errors"
+
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo_test"
@@ -22,6 +25,8 @@ func TestMongoPositionRepo_Get(t *testing.T) {
 	repo, err := NewMongoPositionRepo(mongoSession)
 	r.NoError(err)
 
+	repo.SetEncoderDecoder(StringEncoder, StringDecoder)
+
 	t.Run("empty record", func(tt *testing.T) {
 		_, exist, err := repo.Get(tt.Name())
 		r.NoError(err)
@@ -39,6 +44,27 @@ func TestMongoPositionRepo_Get(t *testing.T) {
 	})
 
 	t.Run("compatible with old position schema", func(tt *testing.T) {
+		type OplogPositionsValue struct {
+			StartPosition   *config.MongoPosition `json:"start_position" bson:"start_position"`
+			CurrentPosition *config.MongoPosition `json:"current_position" bson:"current_position"`
+		}
+
+		var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
+
+		var encoder = func(v interface{}) (string, error) {
+			return myJson.MarshalToString(v)
+		}
+
+		var decoder = func(s string) (interface{}, error) {
+			v := OplogPositionsValue{}
+			if err := myJson.UnmarshalFromString(s, &v); err != nil {
+				return nil, errors.Trace(err)
+			}
+			return &v, nil
+		}
+
+		repo.SetEncoderDecoder(encoder, decoder)
+
 		collection := mongoSession.DB(mongoPositionDB).C(mongoPositionCollection)
 		// delete old data first
 		_, err := collection.RemoveAll(bson.M{"name": tt.Name()})
@@ -59,22 +85,25 @@ func TestMongoPositionRepo_Get(t *testing.T) {
 		r.NoError(err)
 		r.True(exists)
 
-		type OplogPositionsValue struct {
-			StartPosition   *config.MongoPosition `json:"start_position" bson:"start_position"`
-			CurrentPosition *config.MongoPosition `json:"current_position" bson:"current_position"`
-		}
-		pv := OplogPositionsValue{}
-		r.NoError(myJson.UnmarshalFromString(position.Value, &pv))
-		r.EqualValues(1, *pv.CurrentPosition)
-		r.EqualValues(1, *pv.StartPosition)
+		oplogPositionValue, ok := position.Value.(*OplogPositionsValue)
+		r.True(ok)
+		r.EqualValues(1, *oplogPositionValue.CurrentPosition)
+		r.EqualValues(1, *oplogPositionValue.StartPosition)
 
 		// update again
-		position.Value = "test2"
+		mp := config.MongoPosition(10)
+		position.Value = &OplogPositionsValue{
+			CurrentPosition: &mp,
+		}
+
 		r.NoError(repo.Put(tt.Name(), position))
 
 		p, exists, err := repo.Get(tt.Name())
 		r.NoError(err)
 		r.True(exists)
-		r.Equal("test2", p.Value)
+		opv, ok := p.Value.(*OplogPositionsValue)
+		r.True(ok)
+		r.EqualValues(config.MongoPosition(10), *opv.CurrentPosition)
+
 	})
 }

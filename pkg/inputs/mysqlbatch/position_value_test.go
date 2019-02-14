@@ -30,10 +30,11 @@ func TestSetupInitialPosition(t *testing.T) {
 		r.NoError(err)
 		r.True(exists)
 
-		positionValue, err := Deserialize(p.Value)
-		r.NoError(err)
-		r.NotNil(positionValue.Start)
-		r.NotEmpty(positionValue.Start.BinlogGTID)
+		batchPositionValue, ok := p.Value.(*BatchPositionValue)
+		r.True(ok)
+
+		r.NotNil(batchPositionValue.Start)
+		r.NotEmpty(batchPositionValue.Start.BinlogGTID)
 	})
 
 	t.Run("when position exists", func(tt *testing.T) {
@@ -44,10 +45,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			Start: &utils.MySQLBinlogPosition{BinlogGTID: "abc:123"},
 		}
 
-		v, err := Serialize(&batchPositionValue)
-		r.NoError(err)
-
-		r.NoError(repo.Put(pipelineName, position_store.Position{Name: pipelineName, Stage: config.Batch, Value: v}))
+		r.NoError(repo.Put(pipelineName, position_store.Position{Name: pipelineName, Stage: config.Batch, Value: &batchPositionValue}))
 
 		cache, err := position_store.NewPositionCache(pipelineName, repo, 5*time.Second)
 		r.NoError(err)
@@ -60,13 +58,9 @@ func TestSetupInitialPosition(t *testing.T) {
 		r.NoError(err)
 		r.True(exists)
 
-		newPositionValue, err := Deserialize(p.Value)
-		r.NoError(err)
+		newPositionValue, ok := p.Value.(*BatchPositionValue)
+		r.True(ok)
 		r.Equal("abc:123", newPositionValue.Start.BinlogGTID)
 	})
-
-}
-
-func TestSerialize(t *testing.T) {
 
 }

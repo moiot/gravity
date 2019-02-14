@@ -16,6 +16,8 @@ func TestMysqlPositionRepo_GetPut(t *testing.T) {
 	repo, err := NewMySQLRepo(dbCfg, "")
 	r.NoError(err)
 
+	repo.SetEncoderDecoder(StringEncoder, StringDecoder)
+
 	// delete it first
 	r.NoError(repo.Delete(t.Name()))
 
@@ -48,7 +50,7 @@ func TestMysqlPositionRepo_GetPut(t *testing.T) {
 	r.Equal(p2.Value, "test2")
 
 	// put an invalid value
-	position.Value = ""
+	position.Value = nil
 	err = repo.Put(t.Name(), position)
 	r.NotNil(err)
 }
