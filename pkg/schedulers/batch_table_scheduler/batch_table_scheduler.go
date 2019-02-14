@@ -60,6 +60,7 @@ type BatchSchedulerConfig struct {
 	SlidingWindowSize int           `mapstructure:"sliding-window-size"json:"sliding-window-size"`
 	NrRetries         int           `mapstructure:"nr-retries" json:"nr-retries"`
 	RetrySleepString  string        `mapstructure:"retry-sleep" json:"retry-sleep"`
+	HealthyThreshold  int           `yaml:"healthy-threshold" json:"healthy-threshold"`
 	RetrySleep        time.Duration `mapstructure:"-" json:"-"`
 }
 
@@ -133,6 +134,10 @@ func (scheduler *batchScheduler) Configure(pipelineName string, configData map[s
 		schedulerConfig.RetrySleep = d
 	} else {
 		schedulerConfig.RetrySleep = DefaultRetrySleep
+	}
+
+	if schedulerConfig.HealthyThreshold > 0 {
+		sliding_window.DefaultHealthyThreshold = float64(schedulerConfig.HealthyThreshold)
 	}
 
 	scheduler.cfg = &schedulerConfig
