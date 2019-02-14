@@ -272,7 +272,9 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 
 func (scheduler *batchScheduler) AckMsg(msg *core.Msg) error {
 	msg.EnterAcker = time.Now()
-	metrics.OutputHistogram.WithLabelValues(core.PipelineName).Observe(msg.EnterAcker.Sub(msg.EnterOutput).Seconds())
+	if msg.Type != core.MsgCtl { // control msg doesn't enter output
+		metrics.OutputHistogram.WithLabelValues(core.PipelineName).Observe(msg.EnterAcker.Sub(msg.EnterOutput).Seconds())
+	}
 
 	if scheduler.cfg.MaxBatchPerWorker > 1 {
 		k := workingSetKey(msg.Table, *msg.OutputStreamKey)
