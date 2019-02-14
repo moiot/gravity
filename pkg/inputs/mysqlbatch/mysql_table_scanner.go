@@ -437,6 +437,9 @@ func (tableScanner *TableScanner) AfterMsgCommit(msg *core.Msg) error {
 		return errors.Trace(err)
 	}
 
+	if err := IncrementScanCount(tableScanner.positionCache, *msg.InputStreamKey); err != nil {
+		return errors.Trace(err)
+	}
 	return nil
 }
 

@@ -312,8 +312,34 @@ func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName st
 		return errors.Trace(err)
 	}
 
-	// update current position and increment scan count
 	batchPositions.Current[fullTableName] = *pos
+
+	v, err := Serialize(batchPositions)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	position.Value = v
+	return errors.Trace(cache.Put(position))
+}
+
+func IncrementScanCount(cache position_store.PositionCacheInterface, fullTableName string) error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	position, exist, err := cache.Get()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if !exist {
+		return errors.Errorf("empty position")
+	}
+
+	batchPositions, err := Deserialize(position.Value)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	stats := batchPositions.Stats[fullTableName]
 	stats.ScannedCount++
 	batchPositions.Stats[fullTableName] = stats
