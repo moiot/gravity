@@ -30,19 +30,19 @@ func TestMongoPositionRepo_Get(t *testing.T) {
 	})
 
 	t.Run("insert one record", func(tt *testing.T) {
-		err := repo.Put(tt.Name(), &PositionWithValueString{Stage: string(config.Stream), Value: "test"})
+		err := repo.Put(tt.Name(), Position{Stage: config.Stream, ValueString: "test"})
 		r.NoError(err)
 
 		position, exists, err := repo.Get(tt.Name())
 		r.NoError(err)
 		r.True(exists)
-		r.Equal("test", position.Value)
+		r.Equal("test", position.ValueString)
 	})
 
 	t.Run("compatible with old position schema", func(tt *testing.T) {
 		type OplogPositionsValue struct {
-			StartPosition   *config.MongoPosition `json:"start_position" bson:"start_position"`
-			CurrentPosition *config.MongoPosition `json:"current_position" bson:"current_position"`
+			StartPosition   config.MongoPosition `json:"start_position" bson:"start_position"`
+			CurrentPosition config.MongoPosition `json:"current_position" bson:"current_position"`
 		}
 		var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
 		collection := mongoSession.DB(mongoPositionDB).C(mongoPositionCollection)
@@ -61,34 +61,34 @@ func TestMongoPositionRepo_Get(t *testing.T) {
 			})
 		r.NoError(err)
 
-		model, exists, err := repo.Get(tt.Name())
+		position, exists, err := repo.Get(tt.Name())
 		r.NoError(err)
 		r.True(exists)
 
 		oplogPositionValue := OplogPositionsValue{}
-		r.NoError(myJson.UnmarshalFromString(model.Value, &oplogPositionValue))
+		r.NoError(myJson.UnmarshalFromString(position.ValueString, &oplogPositionValue))
 
-		r.EqualValues(1, *oplogPositionValue.CurrentPosition)
-		r.EqualValues(1, *oplogPositionValue.StartPosition)
+		r.EqualValues(1, oplogPositionValue.CurrentPosition)
+		r.EqualValues(1, oplogPositionValue.StartPosition)
 
 		// update again
 		mp := config.MongoPosition(10)
-		oplogPositionValue.CurrentPosition = &mp
+		oplogPositionValue.CurrentPosition = mp
 		s, err := myJson.MarshalToString(oplogPositionValue)
 		r.NoError(err)
 
-		model.Value = s
+		position.ValueString = s
 
-		r.NoError(repo.Put(tt.Name(), model))
+		r.NoError(repo.Put(tt.Name(), position))
 
 		m, exists, err := repo.Get(tt.Name())
 		r.NoError(err)
 		r.True(exists)
 
 		newOplogValue := OplogPositionsValue{}
-		r.NoError(myJson.UnmarshalFromString(m.Value, &newOplogValue))
+		r.NoError(myJson.UnmarshalFromString(m.ValueString, &newOplogValue))
 
-		r.EqualValues(config.MongoPosition(10), *newOplogValue.CurrentPosition)
+		r.EqualValues(config.MongoPosition(10), newOplogValue.CurrentPosition)
 
 	})
 }

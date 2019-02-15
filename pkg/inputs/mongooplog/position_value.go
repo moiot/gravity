@@ -12,8 +12,8 @@ import (
 var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
 
 type OplogPositionValue struct {
-	StartPosition   *config.MongoPosition `json:"start_position" bson:"start_position"`
-	CurrentPosition *config.MongoPosition `json:"current_position" bson:"current_position"`
+	StartPosition   config.MongoPosition `json:"start_position" bson:"start_position"`
+	CurrentPosition config.MongoPosition `json:"current_position" bson:"current_position"`
 }
 
 func OplogPositionValueEncoder(v interface{}) (string, error) {
@@ -29,20 +29,20 @@ func OplogPositionValueDecoder(v string) (interface{}, error) {
 	if err := myJson.UnmarshalFromString(v, &positions); err != nil {
 		return nil, errors.Trace(err)
 	}
-	return &positions, nil
+	return positions, nil
 }
 
-func SetupInitialPosition(cache position_store.PositionCacheInterface, startPositionInSpec *config.MongoPosition) error {
+func SetupInitialPosition(cache position_store.PositionCacheInterface, startPositionInSpec config.MongoPosition) error {
 	position, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	if !exist {
-		var currentPosition *config.MongoPosition
-		if startPositionInSpec == nil {
+		var currentPosition config.MongoPosition
+		if startPositionInSpec.Empty() {
 			p := config.MongoPosition(0)
-			currentPosition = &p
+			currentPosition = p
 		} else {
 			currentPosition = startPositionInSpec
 		}
@@ -54,7 +54,7 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 
 		position := position_store.Position{
 			Stage:      config.Stream,
-			Value:      &positionValue,
+			Value:      positionValue,
 			UpdateTime: time.Now(),
 		}
 
@@ -65,18 +65,18 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 		return errors.Trace(cache.Flush())
 	}
 
-	positionValue, ok := position.Value.(*OplogPositionValue)
+	positionValue, ok := position.Value.(OplogPositionValue)
 	if !ok {
 		return errors.Errorf("invalid position type")
 	}
 
 	// reset runtimePositions
-	if startPositionInSpec != nil {
-		if positionValue.StartPosition == nil {
+	if !startPositionInSpec.Empty() {
+		if positionValue.StartPosition.Empty() {
 			positionValue.StartPosition = startPositionInSpec
 			positionValue.CurrentPosition = startPositionInSpec
 		} else {
-			if *positionValue.StartPosition != *startPositionInSpec {
+			if positionValue.StartPosition != startPositionInSpec {
 				positionValue.StartPosition = startPositionInSpec
 				positionValue.CurrentPosition = startPositionInSpec
 			}
@@ -91,26 +91,26 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 	return errors.Trace(cache.Flush())
 }
 
-func GetPositionValue(cache position_store.PositionCacheInterface) (*OplogPositionValue, error) {
+func GetPositionValue(cache position_store.PositionCacheInterface) (OplogPositionValue, error) {
 
 	position, exist, err := cache.Get()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return OplogPositionValue{}, errors.Trace(err)
 	}
 
 	if !exist {
-		return nil, errors.Errorf("empty position")
+		return OplogPositionValue{}, errors.Errorf("empty position")
 	}
 
-	oplogPositionValue, ok := position.Value.(*OplogPositionValue)
+	oplogPositionValue, ok := position.Value.(OplogPositionValue)
 	if !ok {
-		return nil, errors.Errorf("invalid position value type")
+		return OplogPositionValue{}, errors.Errorf("invalid position value type")
 	}
 
 	return oplogPositionValue, nil
 }
 
-func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, positionValue *config.MongoPosition) error {
+func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, positionValue config.MongoPosition) error {
 
 	position, exist, err := cache.Get()
 	if err != nil {
@@ -121,7 +121,7 @@ func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, pos
 		return errors.Errorf("empty position")
 	}
 
-	oplogPositionValue, ok := position.Value.(*OplogPositionValue)
+	oplogPositionValue, ok := position.Value.(OplogPositionValue)
 	if !ok {
 		return errors.Errorf("invalid position value type")
 	}

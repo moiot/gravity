@@ -35,7 +35,7 @@ func TestSetupInitialPosition(t *testing.T) {
 		r.NoError(err)
 		r.True(exists)
 
-		batchPositionValue, ok := p.Value.(*BatchPositionValue)
+		batchPositionValue, ok := p.Value.(BatchPositionValue)
 		r.True(ok)
 
 		r.NotNil(batchPositionValue.Start)
@@ -47,12 +47,12 @@ func TestSetupInitialPosition(t *testing.T) {
 		pipelineName := utils.TestCaseMd5Name(tt)
 
 		batchPositionValue := BatchPositionValue{
-			Start: &utils.MySQLBinlogPosition{BinlogGTID: "abc:123"},
+			Start: utils.MySQLBinlogPosition{BinlogGTID: "abc:123"},
 		}
 
 		s, err := EncodeBatchPositionValue(&batchPositionValue)
 		r.NoError(err)
-		r.NoError(repo.Put(pipelineName, &position_store.PositionWithValueString{Name: pipelineName, Stage: string(config.Batch), Value: s}))
+		r.NoError(repo.Put(pipelineName, position_store.Position{Name: pipelineName, Stage: config.Batch, ValueString: s}))
 
 		cache, err := position_store.NewPositionCache(
 			pipelineName,
@@ -70,7 +70,7 @@ func TestSetupInitialPosition(t *testing.T) {
 		r.NoError(err)
 		r.True(exists)
 
-		newPositionValue, ok := p.Value.(*BatchPositionValue)
+		newPositionValue, ok := p.Value.(BatchPositionValue)
 		r.True(ok)
 		r.Equal("abc:123", newPositionValue.Start.BinlogGTID)
 	})

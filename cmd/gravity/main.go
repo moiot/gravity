@@ -174,7 +174,7 @@ func healthzHandler(server *app.Server) func(http.ResponseWriter, *http.Request)
 
 func statusHandler(server *app.Server, name, hash string) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		positionRepoModel, exist, err := server.PositionCache.GetWithRawValue()
+		position, exist, err := server.PositionCache.GetWithValueString()
 		if err != nil || !exist {
 			writer.WriteHeader(http.StatusInternalServerError)
 			log.Error("[statusHandler] failed to get positionRepoModel, exist: %v, err: %v", exist, errors.ErrorStack(err))
@@ -182,14 +182,14 @@ func statusHandler(server *app.Server, name, hash string) func(http.ResponseWrit
 		}
 
 		var state = core.ReportStageIncremental
-		if positionRepoModel.Stage == string(config.Batch) {
+		if position.Stage == config.Batch {
 			state = core.ReportStageFull
 		}
 
 		ret := core.TaskReportStatus{
 			Name:       name,
 			ConfigHash: hash,
-			Position:   positionRepoModel.Value,
+			Position:   position.ValueString,
 			Stage:      state,
 			Version:    utils.Version,
 		}

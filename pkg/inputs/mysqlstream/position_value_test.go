@@ -16,22 +16,22 @@ import (
 func initRepo(repo position_store.PositionRepo, pipelineName string, startGTID string, currentGTID string) error {
 
 	positionValue := &helper.BinlogPositionsValue{
-		CurrentPosition: &utils.MySQLBinlogPosition{BinlogGTID: currentGTID},
-		StartPosition:   &utils.MySQLBinlogPosition{BinlogGTID: startGTID},
+		CurrentPosition: utils.MySQLBinlogPosition{BinlogGTID: currentGTID},
+		StartPosition:   utils.MySQLBinlogPosition{BinlogGTID: startGTID},
 	}
 
-	m := position_store.PositionWithValueString{
+	m := position_store.Position{
 		Name:  pipelineName,
-		Stage: string(config.Stream),
+		Stage: config.Stream,
 	}
 
 	s, err := helper.BinlogPositionValueEncoder(positionValue)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	m.Value = s
+	m.ValueString = s
 
-	return errors.Trace(repo.Put(pipelineName, &m))
+	return errors.Trace(repo.Put(pipelineName, m))
 }
 
 func TestSetupInitialPosition(t *testing.T) {
@@ -51,7 +51,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.NoError(err)
 
 			db := mysql_test.MustSetupSourceDB(utils.TestCaseMd5Name(ttt))
-			err = SetupInitialPosition(db, cache, nil)
+			err = SetupInitialPosition(db, cache, utils.MySQLBinlogPosition{})
 			r.NoError(err)
 
 			// it should init the current position to current master's position, and
@@ -60,10 +60,10 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.NoError(err)
 			r.True(exists)
 
-			positionValue, ok := position.Value.(*helper.BinlogPositionsValue)
+			positionValue, ok := position.Value.(helper.BinlogPositionsValue)
 			r.True(ok)
-			r.Nil(positionValue.StartPosition)
-			r.NotNil(positionValue.CurrentPosition)
+			r.True(positionValue.StartPosition.Empty())
+			r.False(positionValue.CurrentPosition.Empty())
 		})
 
 		tt.Run("when start spec is not nil", func(ttt *testing.T) {
@@ -86,7 +86,7 @@ func TestSetupInitialPosition(t *testing.T) {
 
 			db := mysql_test.MustSetupSourceDB(pipelineName)
 			newGTID := "abc:999"
-			specStart := &utils.MySQLBinlogPosition{
+			specStart := utils.MySQLBinlogPosition{
 				BinlogGTID: newGTID,
 			}
 
@@ -96,7 +96,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			p, exists, err := cache.Get()
 			r.NoError(err)
 			r.True(exists)
-			newPositionValue, ok := p.Value.(*helper.BinlogPositionsValue)
+			newPositionValue, ok := p.Value.(helper.BinlogPositionsValue)
 			r.True(ok)
 
 			r.Equal(newGTID, newPositionValue.StartPosition.BinlogGTID)
@@ -113,7 +113,7 @@ func TestSetupInitialPosition(t *testing.T) {
 
 			r.NoError(initRepo(repo, pipelineName, startGTID, currentGTID))
 
-			specStart := &utils.MySQLBinlogPosition{BinlogGTID: startGTID}
+			specStart := utils.MySQLBinlogPosition{BinlogGTID: startGTID}
 
 			db := mysql_test.MustSetupSourceDB(pipelineName)
 			cache, err := position_store.NewPositionCache(
@@ -129,7 +129,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.NoError(err)
 			r.True(exists)
 
-			newPositionValue, ok := p.Value.(*helper.BinlogPositionsValue)
+			newPositionValue, ok := p.Value.(helper.BinlogPositionsValue)
 			r.True(ok)
 			r.Equal(startGTID, newPositionValue.StartPosition.BinlogGTID)
 			r.Equal(currentGTID, newPositionValue.CurrentPosition.BinlogGTID)
@@ -144,7 +144,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.NoError(initRepo(repo, pipelineName, startGTID, currentGTID))
 
 			newGTID := "abc:789"
-			specStart := &utils.MySQLBinlogPosition{BinlogGTID: newGTID}
+			specStart := utils.MySQLBinlogPosition{BinlogGTID: newGTID}
 
 			db := mysql_test.MustSetupSourceDB(pipelineName)
 			cache, err := position_store.NewPositionCache(
@@ -160,7 +160,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.NoError(err)
 			r.True(exists)
 
-			newPositionValue, ok := p.Value.(*helper.BinlogPositionsValue)
+			newPositionValue, ok := p.Value.(helper.BinlogPositionsValue)
 			r.True(ok)
 			r.Equal(newGTID, newPositionValue.StartPosition.BinlogGTID)
 			r.Equal(newGTID, newPositionValue.CurrentPosition.BinlogGTID)

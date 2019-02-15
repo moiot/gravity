@@ -25,30 +25,30 @@ func TestMysqlPositionRepo_GetPut(t *testing.T) {
 	r.False(exist)
 
 	// put first value
-	position := PositionWithValueString{
-		Name:  t.Name(),
-		Stage: string(config.Stream),
-		Value: "test",
+	position := Position{
+		Name:        t.Name(),
+		Stage:       config.Stream,
+		ValueString: "test",
 	}
-	r.NoError(repo.Put(t.Name(), &position))
+	r.NoError(repo.Put(t.Name(), position))
 
 	p, exist, err := repo.Get(t.Name())
 	r.NoError(err)
 	r.True(exist)
-	r.Equal("test", p.Value)
-	r.Equal(string(config.Stream), p.Stage)
+	r.Equal("test", p.ValueString)
+	r.Equal(config.Stream, p.Stage)
 
 	// put another value
-	position.Value = "test2"
-	r.NoError(repo.Put(t.Name(), &position))
+	position.ValueString = "test2"
+	r.NoError(repo.Put(t.Name(), position))
 
 	p2, exist, err := repo.Get(t.Name())
 	r.NoError(err)
 	r.True(exist)
-	r.Equal(p2.Value, "test2")
+	r.Equal(p2.ValueString, "test2")
 
 	// put an invalid value
-	position.Value = ""
-	err = repo.Put(t.Name(), &position)
+	position.ValueString = ""
+	err = repo.Put(t.Name(), position)
 	r.NotNil(err)
 }

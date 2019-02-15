@@ -16,8 +16,8 @@ type SourceProbeCfg struct {
 }
 
 type BinlogPositionsValue struct {
-	CurrentPosition *utils.MySQLBinlogPosition `json:"current_position"`
-	StartPosition   *utils.MySQLBinlogPosition `json:"start_position"`
+	CurrentPosition utils.MySQLBinlogPosition `json:"current_position"`
+	StartPosition   utils.MySQLBinlogPosition `json:"start_position"`
 }
 
 func BinlogPositionValueEncoder(v interface{}) (string, error) {
@@ -28,16 +28,16 @@ func BinlogPositionValueDecoder(s string) (interface{}, error) {
 	return DeserializeBinlogPositionValue(s)
 }
 
-func SerializeBinlogPositionValue(position *BinlogPositionsValue) (string, error) {
+func SerializeBinlogPositionValue(position BinlogPositionsValue) (string, error) {
 	return BinlogPositionValueEncoder(position)
 }
 
-func DeserializeBinlogPositionValue(value string) (*BinlogPositionsValue, error) {
+func DeserializeBinlogPositionValue(value string) (BinlogPositionsValue, error) {
 	position := BinlogPositionsValue{}
 	if err := myJson.UnmarshalFromString(value, &position); err != nil {
-		return nil, errors.Trace(err)
+		return BinlogPositionsValue{}, errors.Trace(err)
 	}
-	return &position, nil
+	return position, nil
 }
 
 func GetProbCfg(sourceProbeCfg *SourceProbeCfg, sourceDBCfg *utils.DBConfig) (*utils.DBConfig, string) {

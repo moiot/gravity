@@ -1,16 +1,30 @@
 package position_store
 
+import "github.com/juju/errors"
+
 type memRepo struct {
-	positionRepoModels map[string]*PositionWithValueString
+	positionRepoModels map[string]Position
 }
 
-func (repo *memRepo) Get(pipelineName string) (*PositionWithValueString, bool, error) {
+func (repo *memRepo) Get(pipelineName string) (Position, bool, error) {
 	p, ok := repo.positionRepoModels[pipelineName]
-	return p, ok, nil
+	if ok {
+		if err := p.ValidateWithValueString(); err != nil {
+			return Position{}, true, errors.Trace(err)
+		} else {
+			return p, true, nil
+		}
+	} else {
+		return Position{}, false, nil
+	}
 }
 
-func (repo *memRepo) Put(pipelineName string, m *PositionWithValueString) error {
-	repo.positionRepoModels[pipelineName] = m
+func (repo *memRepo) Put(pipelineName string, p Position) error {
+	if err := p.ValidateWithValueString(); err != nil {
+		return errors.Trace(err)
+	}
+
+	repo.positionRepoModels[pipelineName] = p
 	return nil
 }
 
@@ -24,5 +38,5 @@ func (repo *memRepo) Close() error {
 }
 
 func NewMemoRepo() PositionRepo {
-	return &memRepo{positionRepoModels: make(map[string]*PositionWithValueString)}
+	return &memRepo{positionRepoModels: make(map[string]Position)}
 }

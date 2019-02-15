@@ -82,18 +82,18 @@ func (mr *MockPositionCacheInterfaceMockRecorder) Get() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockPositionCacheInterface)(nil).Get))
 }
 
-// GetWithRawValue mocks base method
-func (m *MockPositionCacheInterface) GetWithRawValue() (*position_store.PositionWithValueString, bool, error) {
-	ret := m.ctrl.Call(m, "GetWithRawValue")
-	ret0, _ := ret[0].(*position_store.PositionWithValueString)
+// GetWithValueString mocks base method
+func (m *MockPositionCacheInterface) GetWithValueString() (position_store.Position, bool, error) {
+	ret := m.ctrl.Call(m, "GetWithValueString")
+	ret0, _ := ret[0].(position_store.Position)
 	ret1, _ := ret[1].(bool)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
 
-// GetWithRawValue indicates an expected call of GetWithRawValue
-func (mr *MockPositionCacheInterfaceMockRecorder) GetWithRawValue() *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWithRawValue", reflect.TypeOf((*MockPositionCacheInterface)(nil).GetWithRawValue))
+// GetWithValueString indicates an expected call of GetWithValueString
+func (mr *MockPositionCacheInterfaceMockRecorder) GetWithValueString() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWithValueString", reflect.TypeOf((*MockPositionCacheInterface)(nil).GetWithValueString))
 }
 
 // Put mocks base method

@@ -38,45 +38,53 @@ type mongoPositionRepo struct {
 	session *mgo.Session
 }
 
-func (repo *mongoPositionRepo) Get(pipelineName string) (*PositionWithValueString, bool, error) {
+func (repo *mongoPositionRepo) Get(pipelineName string) (Position, bool, error) {
 	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
-	model := PositionWithValueString{}
-	err := collection.Find(bson.M{"name": pipelineName}).One(&model)
+	position := Position{}
+	err := collection.Find(bson.M{"name": pipelineName}).One(&position)
 	if err != nil {
 		if err == mgo.ErrNotFound {
-			return nil, false, nil
+			return Position{}, false, nil
 		}
-		return nil, false, errors.Trace(err)
+		return Position{}, false, errors.Trace(err)
 	}
 
-	// backward compatible with old model schema
-	if model.Version == "" {
+	// backward compatible with old position schema
+	if position.Version == "" {
 		oldPosition := PositionEntity{}
 		if err := collection.Find(bson.M{"name": pipelineName}).One(&oldPosition); err != nil {
-			return nil, true, errors.Trace(err)
+			return Position{}, true, errors.Trace(err)
 		}
 
 		s, err := myJson.MarshalToString(&oldPosition.MongoPosition)
 		if err != nil {
-			return nil, true, errors.Trace(err)
+			return Position{}, true, errors.Trace(err)
 		}
 
-		return &PositionWithValueString{Name: pipelineName, Stage: oldPosition.Stage, Value: s}, true, nil
+		return Position{Name: pipelineName, Stage: config.InputMode(oldPosition.Stage), ValueString: s}, true, nil
 
 	}
 
-	return &model, true, nil
+	if err := position.ValidateWithValueString(); err != nil {
+		return Position{}, true, errors.Trace(err)
+	}
+
+	return position, true, nil
 }
 
-func (repo *mongoPositionRepo) Put(pipelineName string, model *PositionWithValueString) error {
+func (repo *mongoPositionRepo) Put(pipelineName string, position Position) error {
+	position.Name = pipelineName
+	if err := position.ValidateWithValueString(); err != nil {
+		return errors.Trace(err)
+	}
 
 	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
 	_, err := collection.Upsert(
 		bson.M{"name": pipelineName}, bson.M{
 			"$set": bson.M{
 				"version":     Version,
-				"stage":       string(model.Stage),
-				"value":       model.Value,
+				"stage":       string(position.Stage),
+				"value":       position.ValueString,
 				"last_update": time.Now().Format(time.RFC3339Nano),
 			},
 		})

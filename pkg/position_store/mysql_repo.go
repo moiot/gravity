@@ -38,22 +38,22 @@ type mysqlPositionRepo struct {
 	annotation string
 }
 
-func (repo *mysqlPositionRepo) Get(pipelineName string) (*PositionWithValueString, bool, error) {
+func (repo *mysqlPositionRepo) Get(pipelineName string) (Position, bool, error) {
 	value, stage, lastUpdate, exists, err := repo.getRaw(pipelineName)
 	if err != nil {
-		return nil, exists, errors.Trace(err)
+		return Position{}, exists, errors.Trace(err)
 	}
 
 	if exists {
-		m := PositionWithValueString{Name: pipelineName, Stage: stage, Value: value, UpdateTime: lastUpdate}
+		p := Position{Name: pipelineName, Stage: config.InputMode(stage), ValueString: value, UpdateTime: lastUpdate}
 
-		if err := m.Validate(); err != nil {
-			return nil, true, errors.Trace(err)
+		if err := p.ValidateWithValueString(); err != nil {
+			return Position{}, true, errors.Trace(err)
 		}
-		return &m, true, nil
+		return p, true, nil
 	}
 
-	return nil, false, nil
+	return Position{}, false, nil
 }
 
 func (repo *mysqlPositionRepo) getRaw(pipelineName string) (value string, stage string, lastUpdate time.Time, exists bool, err error) {
@@ -70,8 +70,9 @@ func (repo *mysqlPositionRepo) getRaw(pipelineName string) (value string, stage 
 	return value, stage, lastUpdate, true, nil
 }
 
-func (repo *mysqlPositionRepo) Put(pipelineName string, m *PositionWithValueString) error {
-	if err := m.Validate(); err != nil {
+func (repo *mysqlPositionRepo) Put(pipelineName string, p Position) error {
+	p.Name = pipelineName
+	if err := p.ValidateWithValueString(); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -79,7 +80,7 @@ func (repo *mysqlPositionRepo) Put(pipelineName string, m *PositionWithValueStri
 		"%sINSERT INTO %s(name, stage, position) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE stage = ?, position = ?",
 		repo.annotation, positionFullTableName)
 
-	_, err := repo.db.Exec(stmt, pipelineName, m.Stage, m.Value, m.Stage, m.Value)
+	_, err := repo.db.Exec(stmt, pipelineName, p.Stage, p.ValueString, p.Stage, p.ValueString)
 	return errors.Trace(err)
 }
 

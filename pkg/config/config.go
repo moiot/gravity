@@ -97,6 +97,10 @@ type SourceProbeCfg struct {
 
 type MongoPosition bson.MongoTimestamp
 
+func (p MongoPosition) Empty() bool {
+	return p == 0
+}
+
 type MongoSource struct {
 	MongoConnConfig *MongoConnConfig `mapstructure:"source" toml:"source" json:"source"`
 	StartPosition   *MongoPosition   `mapstructure:"start-position" toml:"start-position" json:"start-position"`

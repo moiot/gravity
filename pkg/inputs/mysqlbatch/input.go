@@ -331,7 +331,7 @@ func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.Pos
 		streamPosition := position_store.Position{
 			Name:       plugin.pipelineName,
 			Stage:      config.Stream,
-			Value:      &binlogPositionsValue,
+			Value:      binlogPositionsValue,
 			UpdateTime: time.Now(),
 		}
 
@@ -360,14 +360,14 @@ func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInt
 		if scanColumn == "*" {
 			maxPos := TablePosition{Column: scanColumn, Type: PlainInt, Value: 1}
 			minPos := TablePosition{Column: scanColumn, Type: PlainInt, Value: 0}
-			if err := PutMaxMin(positionCache, fullTableName, &maxPos, &minPos); err != nil {
+			if err := PutMaxMin(positionCache, fullTableName, maxPos, minPos); err != nil {
 				return false, errors.Trace(err)
 			}
 		} else {
 			max, min := FindMaxMinValueFromDB(db, tableDef.Schema, tableDef.Name, scanColumn)
 			maxPos := TablePosition{Value: max, Type: scanType, Column: scanColumn}
 			minPos := TablePosition{Value: min, Type: scanType, Column: scanColumn}
-			if err := PutMaxMin(positionCache, fullTableName, &maxPos, &minPos); err != nil {
+			if err := PutMaxMin(positionCache, fullTableName, maxPos, minPos); err != nil {
 				return false, errors.Trace(err)
 			}
 			log.Infof("[InitTablePosition] table: %v, PutMaxMin: maxPos: %+v, minPos: %+v", fullTableName, maxPos, minPos)

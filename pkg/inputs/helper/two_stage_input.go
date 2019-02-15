@@ -246,11 +246,11 @@ func (s *twoStagePositionCache) Get() (position_store.Position, bool, error) {
 	}
 }
 
-func (s *twoStagePositionCache) GetWithRawValue() (*position_store.PositionWithValueString, bool, error) {
+func (s *twoStagePositionCache) GetWithValueString() (position_store.Position, bool, error) {
 	if s.Stage() == config.Stream {
-		return s.incremental.GetWithRawValue()
+		return s.incremental.GetWithValueString()
 	} else {
-		return s.full.GetWithRawValue()
+		return s.full.GetWithValueString()
 	}
 }
 

@@ -71,8 +71,8 @@ func (tableScanner *TableScanner) Start() error {
 					tableScanner.LoopInBatch(
 						tableScanner.db, work.TableDef,
 						work.TableConfig, scanColumn,
-						*max,
-						*min,
+						max,
+						min,
 						tableScanner.cfg.TableScanBatch)
 
 					if tableScanner.ctx.Err() == nil {
@@ -150,7 +150,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 	}
 
 	if !exists {
-		currentPosition = &min
+		currentPosition = min
 	} else {
 		if mysql.MySQLDataEquals(currentPosition.Value, max.Value) {
 			log.Infof("[LoopInBatch] already scanned: %v", utils.TableIdentity(tableDef.Schema, tableDef.Name))
@@ -316,15 +316,15 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 	// set the current and max position to be the same
 	p := TablePosition{Column: "*", Type: PlainInt, Value: len(allData)}
 
-	if err := PutCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), &p, false); err != nil {
+	if err := PutCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), p, false); err != nil {
 		log.Fatalf("[FindAll] failed to put current pos: %v", errors.ErrorStack(err))
 	}
 
 	if err := PutMaxMin(
 		tableScanner.positionCache,
 		utils.TableIdentity(tableDef.Schema, tableDef.Name),
-		&p,
-		&TablePosition{Column: "*", Type: PlainInt, Value: 0}); err != nil {
+		p,
+		TablePosition{Column: "*", Type: PlainInt, Value: 0}); err != nil {
 		log.Fatalf("[FindAll] failed to put max min: %v", errors.ErrorStack(err))
 	}
 
@@ -347,7 +347,7 @@ func (tableScanner *TableScanner) AfterMsgCommit(msg *core.Msg) error {
 		return errors.Errorf("type invalid")
 	}
 
-	if err := PutCurrentPos(tableScanner.positionCache, *msg.InputStreamKey, &p, true); err != nil {
+	if err := PutCurrentPos(tableScanner.positionCache, *msg.InputStreamKey, p, true); err != nil {
 		return errors.Trace(err)
 	}
 

@@ -592,6 +592,10 @@ type MySQLBinlogPosition struct {
 	BinlogGTID     string `toml:"binlog-gtid" json:"binlog-gtid" mapstructure:"binlog-gtid"`
 }
 
+func (p MySQLBinlogPosition) Empty() bool {
+	return p.BinlogGTID == ""
+}
+
 func TableIdentity(schemaName string, tableName string) string {
 	return fmt.Sprintf("`%s`.`%s`", schemaName, tableName)
 }

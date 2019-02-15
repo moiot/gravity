@@ -28,19 +28,16 @@ type Position struct {
 	// Version is the schema version of position
 	Version string
 	// Name is the unique name of a pipeline
-	Name       string
-	Stage      config.InputMode
-	Value      interface{}
-	UpdateTime time.Time
+	Name        string
+	Stage       config.InputMode
+	Value       interface{} `bson:"-" json:"-"`
+	ValueString string      `bson:"value" json:"value"`
+	UpdateTime  time.Time
 }
 
-func (p *Position) Validate() error {
+func (p Position) ValidateWithoutValue() error {
 	if p.Stage != config.Stream && p.Stage != config.Batch {
 		return errors.Errorf("invalid position stage: %v", p.Stage)
-	}
-
-	if p.Value == nil {
-		return errors.Errorf("empty position value: %v", p.Value)
 	}
 
 	if p.Name == "" {
@@ -50,25 +47,25 @@ func (p *Position) Validate() error {
 	return nil
 }
 
-type PositionWithValueString struct {
-	Version    string
-	Name       string
-	Stage      string
-	Value      string
-	UpdateTime time.Time
+func (p Position) ValidateWithValue() error {
+	if err := p.ValidateWithoutValue(); err != nil {
+		return errors.Trace(err)
+	}
+
+	if p.Value == nil {
+		return errors.Errorf("empty position value: %v", p.Value)
+	}
+
+	return nil
 }
 
-func (m *PositionWithValueString) Validate() error {
-	if m.Stage != string(config.Stream) && m.Stage != string(config.Batch) {
-		return errors.Errorf("invalid stage: %v", m.Stage)
+func (p Position) ValidateWithValueString() error {
+	if err := p.ValidateWithoutValue(); err != nil {
+		return errors.Trace(err)
 	}
 
-	if m.Value == "" {
-		return errors.Errorf("empty position value")
-	}
-
-	if m.Name == "" {
-		return errors.Errorf("empty name")
+	if p.ValueString == "" {
+		return errors.Errorf("empty value string")
 	}
 
 	return nil
