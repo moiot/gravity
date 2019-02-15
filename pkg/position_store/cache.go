@@ -15,7 +15,11 @@ type PositionCacheInterface interface {
 	Start() error
 	Close()
 	Put(position *Position) error
+	// Get will get a value from cache, if there is no value inside the cache
+	// it will try to get it from position repo
 	Get() (position *Position, exist bool, err error)
+	// Get will get a raw value from cache, if there is no value inside the cache
+	// it won't try to get it from position repo
 	GetWithRawValue() (position *PositionRepoModel, exist bool, err error)
 	Flush() error
 	Clear() error
@@ -140,16 +144,17 @@ func (cache *defaultPositionCache) Get() (*Position, bool, error) {
 }
 
 func (cache *defaultPositionCache) GetWithRawValue() (*PositionRepoModel, bool, error) {
-	p, exists, err := cache.Get()
-	if err != nil {
-		return nil, exists, errors.Trace(err)
+	cache.positionMutex.Lock()
+	defer cache.positionMutex.Unlock()
+	if !cache.exist {
+		return nil, false, nil
 	}
 
-	m, err := cache.convertPositionToRepoModel(p)
+	m, err := cache.convertPositionToRepoModel(cache.position)
 	if err != nil {
-		return nil, exists, errors.Trace(err)
+		return nil, true, errors.Trace(err)
 	}
-	return m, exists, nil
+	return m, true, nil
 }
 
 func (cache *defaultPositionCache) Flush() error {
@@ -196,6 +201,10 @@ func (cache *defaultPositionCache) Clear() error {
 	cache.exist = false
 	cache.closed = true
 	return nil
+}
+
+func (cache *defaultPositionCache) get() {
+
 }
 
 func (cache *defaultPositionCache) convertPositionToRepoModel(p *Position) (*PositionRepoModel, error) {
