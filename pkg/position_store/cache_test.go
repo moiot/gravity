@@ -47,7 +47,7 @@ func TestPositionCache_GetPut(t *testing.T) {
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
 
-		err = cache.Put(&Position{Value: ""})
+		err = cache.Put(Position{Value: ""})
 		r.NotNil(err)
 
 		_, exists, err := cache.Get()
@@ -59,7 +59,7 @@ func TestPositionCache_GetPut(t *testing.T) {
 		repo := NewMemoRepo()
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
-		err = cache.Put(&Position{Value: "test2", Stage: config.Stream})
+		err = cache.Put(Position{Value: "test2", Stage: config.Stream})
 		r.NoError(err)
 
 		p, exists, err := cache.Get()
@@ -67,7 +67,7 @@ func TestPositionCache_GetPut(t *testing.T) {
 		r.True(exists)
 		r.NoError(err)
 
-		err = cache.Put(&Position{Value: "test3", Stage: config.Stream})
+		err = cache.Put(Position{Value: "test3", Stage: config.Stream})
 		r.NoError(err)
 		p, exists, err = cache.Get()
 		r.NoError(err)
@@ -88,7 +88,7 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 
 		r.NoError(cache.Start())
 
-		err = cache.Put(&Position{Value: "test", Stage: config.Stream})
+		err = cache.Put(Position{Value: "test", Stage: config.Stream})
 		r.NoError(err)
 
 		p, exists, err := cache.Get()
@@ -103,7 +103,7 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 		r.Equal("test", m.Value)
 
 		// the second PUT will not flush data to repo until flush time comes
-		r.NoError(cache.Put(&Position{Value: "test2", Stage: config.Stream}))
+		r.NoError(cache.Put(Position{Value: "test2", Stage: config.Stream}))
 		p, exists, err = cache.Get()
 		r.NoError(err)
 		r.True(exists)
@@ -123,7 +123,7 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 
 		r.NoError(cache.Start())
 
-		err = cache.Put(&Position{Value: "test", Stage: config.Stream})
+		err = cache.Put(Position{Value: "test", Stage: config.Stream})
 		r.NoError(err)
 
 		p, exists, err := cache.Get()
@@ -138,7 +138,7 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 		r.Equal("test", m.Value)
 
 		// the second PUT will not flush data to repo until flush time comes
-		r.NoError(cache.Put(&Position{Value: "test2", Stage: config.Stream}))
+		r.NoError(cache.Put(Position{Value: "test2", Stage: config.Stream}))
 		p, exists, err = cache.Get()
 		r.NoError(err)
 		r.True(exists)
