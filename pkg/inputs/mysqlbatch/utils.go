@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/moiot/gravity/pkg/position_store"
+
 	"github.com/juju/errors"
 
 	"github.com/moiot/gravity/pkg/utils"
@@ -128,4 +130,34 @@ func DeleteEmptyTables(db *sql.DB, tables []*schema_store.Table, tableConfigs []
 	}
 	wg.Wait()
 	return retTables, retTableConfigs
+}
+
+func InitializePositionAndDeleteScannedTable(
+	db *sql.DB,
+	positionCache position_store.PositionCacheInterface,
+	scanColumns []string,
+	estimatedRowCount []int64,
+	tables []*schema_store.Table,
+	tableConfigs []TableConfig) ([]*schema_store.Table, []TableConfig, []string, []int64, error) {
+
+	var retTables []*schema_store.Table
+	var retTableConfigs []TableConfig
+	var retScanColumns []string
+	var retEstimatedRowCount []int64
+
+	for i, t := range tables {
+		// Initialize table position and delete table that finished scan.
+		finished, err := InitTablePosition(db, positionCache, t, scanColumns[i], estimatedRowCount[i])
+		if err != nil {
+			return nil, nil, nil, nil, errors.Trace(err)
+		}
+
+		if !finished {
+			retTables = append(retTables, tables[i])
+			retTableConfigs = append(retTableConfigs, tableConfigs[i])
+			retScanColumns = append(retScanColumns, scanColumns[i])
+			retEstimatedRowCount = append(retEstimatedRowCount, estimatedRowCount[i])
+		}
+	}
+	return retTables, retTableConfigs, retScanColumns, retEstimatedRowCount, nil
 }

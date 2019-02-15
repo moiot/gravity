@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moiot/gravity/pkg/mysql"
+
 	"github.com/moiot/gravity/pkg/inputs/helper"
 
 	"github.com/juju/errors"
@@ -192,6 +194,7 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 		return errors.Trace(err)
 	}
 
+	// Delete empty table
 	tableDefs, tableConfigs = DeleteEmptyTables(scanDB, tableDefs, tableConfigs)
 
 	// Detect any potential error before any work is done, so that we can check the error early.
@@ -211,10 +214,9 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 		return errors.Errorf("failed detect %d tables scan column", len(allErrors))
 	}
 
-	for i, t := range tableDefs {
-		if err := InitTablePosition(scanDB, positionCache, t, scanColumns[i], estimatedRowCount[i]); err != nil {
-			return errors.Trace(err)
-		}
+	tableDefs, tableConfigs, scanColumns, estimatedRowCount, err = InitializePositionAndDeleteScannedTable(scanDB, positionCache, scanColumns, estimatedRowCount, tableDefs, tableConfigs)
+	if err != nil {
+		return errors.Trace(err)
 	}
 
 	tableQueue := make(chan *TableWork, len(tableDefs))
@@ -344,11 +346,11 @@ func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.Pos
 	}
 }
 
-func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInterface, tableDef *schema_store.Table, scanColumn string, estimatedRowCount int64) error {
+func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInterface, tableDef *schema_store.Table, scanColumn string, estimatedRowCount int64) (bool, error) {
 	fullTableName := utils.TableIdentity(tableDef.Schema, tableDef.Name)
-	_, _, exists, err := GetMaxMin(positionCache, fullTableName)
+	max, _, exists, err := GetMaxMin(positionCache, fullTableName)
 	if err != nil {
-		return errors.Trace(err)
+		return false, errors.Trace(err)
 	}
 
 	if !exists {
@@ -359,26 +361,40 @@ func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInt
 			maxPos := TablePosition{Column: scanColumn, Type: PlainInt, Value: 1}
 			minPos := TablePosition{Column: scanColumn, Type: PlainInt, Value: 0}
 			if err := PutMaxMin(positionCache, fullTableName, &maxPos, &minPos); err != nil {
-				return errors.Trace(err)
+				return false, errors.Trace(err)
 			}
 		} else {
 			max, min := FindMaxMinValueFromDB(db, tableDef.Schema, tableDef.Name, scanColumn)
 			maxPos := TablePosition{Value: max, Type: scanType, Column: scanColumn}
 			minPos := TablePosition{Value: min, Type: scanType, Column: scanColumn}
 			if err := PutMaxMin(positionCache, fullTableName, &maxPos, &minPos); err != nil {
-				return errors.Trace(err)
+				return false, errors.Trace(err)
 			}
 			log.Infof("[InitTablePosition] table: %v, PutMaxMin: maxPos: %+v, minPos: %+v", fullTableName, maxPos, minPos)
 		}
 
 		if err := PutEstimatedCount(positionCache, fullTableName, estimatedRowCount); err != nil {
-			return errors.Trace(err)
+			return false, errors.Trace(err)
 		}
 
 		log.Infof("[InitTablePosition] schema: %v, table: %v, scanColumn: %v", tableDef.Schema, tableDef.Name, scanColumn)
+		return false, nil
+	} else {
+		current, exists, err := GetCurrentPos(positionCache, fullTableName)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
 
+		if !exists {
+			return false, nil
+		}
+
+		if mysql.MySQLDataEquals(current.Value, max.Value) {
+			return true, nil
+		} else {
+			return false, nil
+		}
 	}
-	return nil
 }
 
 // DetectScanColumn find a column that we used to scan the table
