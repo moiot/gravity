@@ -18,7 +18,12 @@ func TestSetupInitialPosition(t *testing.T) {
 	t.Run("when position does not exist", func(tt *testing.T) {
 		// it get a start binlog position and save it
 		pipelineName := utils.TestCaseMd5Name(tt)
-		cache, err := position_store.NewPositionCache(pipelineName, repo, 5*time.Second)
+		cache, err := position_store.NewPositionCache(
+			pipelineName,
+			repo,
+			EncodeBatchPositionValue,
+			DecodeBatchPositionValue,
+			5*time.Second)
 		r.NoError(err)
 
 		db := mysql_test.MustSetupSourceDB(pipelineName)
@@ -45,9 +50,16 @@ func TestSetupInitialPosition(t *testing.T) {
 			Start: &utils.MySQLBinlogPosition{BinlogGTID: "abc:123"},
 		}
 
-		r.NoError(repo.Put(pipelineName, position_store.Position{Name: pipelineName, Stage: config.Batch, Value: &batchPositionValue}))
+		s, err := EncodeBatchPositionValue(&batchPositionValue)
+		r.NoError(err)
+		r.NoError(repo.Put(pipelineName, &position_store.PositionRepoModel{Name: pipelineName, Stage: string(config.Batch), Value: s}))
 
-		cache, err := position_store.NewPositionCache(pipelineName, repo, 5*time.Second)
+		cache, err := position_store.NewPositionCache(
+			pipelineName,
+			repo,
+			EncodeBatchPositionValue,
+			DecodeBatchPositionValue,
+			5*time.Second)
 		r.NoError(err)
 
 		db := mysql_test.MustSetupSourceDB(pipelineName)

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+
 	"github.com/moiot/gravity/pkg/config"
 )
 
@@ -33,13 +34,41 @@ type Position struct {
 	UpdateTime time.Time
 }
 
-func (p Position) Validate() error {
+func (p *Position) Validate() error {
 	if p.Stage != config.Stream && p.Stage != config.Batch {
 		return errors.Errorf("invalid position stage: %v", p.Stage)
 	}
 
 	if p.Value == nil {
 		return errors.Errorf("empty position value: %v", p.Value)
+	}
+
+	if p.Name == "" {
+		return errors.Errorf("empty name")
+	}
+
+	return nil
+}
+
+type PositionRepoModel struct {
+	Version    string
+	Name       string
+	Stage      string
+	Value      string
+	UpdateTime time.Time
+}
+
+func (m *PositionRepoModel) Validate() error {
+	if m.Stage != string(config.Stream) && m.Stage != string(config.Batch) {
+		return errors.Errorf("invalid stage: %v", m.Stage)
+	}
+
+	if m.Value == "" {
+		return errors.Errorf("empty position value")
+	}
+
+	if m.Name == "" {
+		return errors.Errorf("empty name")
 	}
 
 	return nil

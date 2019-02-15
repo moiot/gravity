@@ -58,7 +58,7 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 			UpdateTime: time.Now(),
 		}
 
-		if err := cache.Put(position); err != nil {
+		if err := cache.Put(&position); err != nil {
 			return errors.Trace(err)
 		}
 

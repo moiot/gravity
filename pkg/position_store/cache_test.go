@@ -13,8 +13,8 @@ func TestPositionCache_New(t *testing.T) {
 
 	t.Run("when repo dont have any data", func(tt *testing.T) {
 		repo := NewMemoRepo()
-		repo.SetEncoderDecoder(StringEncoder, StringDecoder)
-		cache, err := NewPositionCache(t.Name(), repo, DefaultFlushPeriod)
+
+		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
 
 		_, exists, err := cache.Get()
@@ -24,11 +24,10 @@ func TestPositionCache_New(t *testing.T) {
 
 	t.Run("when repo has some data", func(tt *testing.T) {
 		repo := NewMemoRepo()
-		repo.SetEncoderDecoder(StringEncoder, StringDecoder)
-		err := repo.Put(t.Name(), Position{Value: "test", Stage: config.Stream})
+		err := repo.Put(t.Name(), &PositionRepoModel{Value: "test", Stage: string(config.Stream)})
 		r.NoError(err)
 
-		cache, err := NewPositionCache(t.Name(), repo, DefaultFlushPeriod)
+		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
 
 		p, exists, err := cache.Get()
@@ -45,11 +44,10 @@ func TestPositionCache_GetPut(t *testing.T) {
 
 	t.Run("when position is not valid", func(tt *testing.T) {
 		repo := NewMemoRepo()
-		repo.SetEncoderDecoder(StringEncoder, StringDecoder)
-		cache, err := NewPositionCache(t.Name(), repo, DefaultFlushPeriod)
+		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
 
-		err = cache.Put(Position{Value: ""})
+		err = cache.Put(&Position{Value: ""})
 		r.NotNil(err)
 
 		_, exists, err := cache.Get()
@@ -59,11 +57,9 @@ func TestPositionCache_GetPut(t *testing.T) {
 
 	t.Run("when position is valid", func(tt *testing.T) {
 		repo := NewMemoRepo()
-		repo.SetEncoderDecoder(StringEncoder, StringDecoder)
-		cache, err := NewPositionCache(t.Name(), repo, DefaultFlushPeriod)
+		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
-
-		err = cache.Put(Position{Value: "test2", Stage: config.Stream})
+		err = cache.Put(&Position{Value: "test2", Stage: config.Stream})
 		r.NoError(err)
 
 		p, exists, err := cache.Get()
@@ -71,7 +67,7 @@ func TestPositionCache_GetPut(t *testing.T) {
 		r.True(exists)
 		r.NoError(err)
 
-		err = cache.Put(Position{Value: "test3", Stage: config.Stream})
+		err = cache.Put(&Position{Value: "test3", Stage: config.Stream})
 		r.NoError(err)
 		p, exists, err = cache.Get()
 		r.NoError(err)
@@ -86,14 +82,13 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 
 	t.Run("it does not flush when time has not come", func(tt *testing.T) {
 		repo := NewMemoRepo()
-		repo.SetEncoderDecoder(StringEncoder, StringDecoder)
 
-		cache, err := NewPositionCache(t.Name(), repo, 5*time.Second)
+		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, 5*time.Second)
 		r.NoError(err)
 
 		r.NoError(cache.Start())
 
-		err = cache.Put(Position{Value: "test", Stage: config.Stream})
+		err = cache.Put(&Position{Value: "test", Stage: config.Stream})
 		r.NoError(err)
 
 		p, exists, err := cache.Get()
@@ -102,35 +97,33 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 		r.Equal("test", p.Value)
 
 		// the first PUT will flush data to repo
-		p, exists, err = repo.Get(t.Name())
+		m, exists, err := repo.Get(t.Name())
 		r.NoError(err)
 		r.True(exists)
-		r.Equal("test", p.Value)
+		r.Equal("test", m.Value)
 
 		// the second PUT will not flush data to repo until flush time comes
-		r.NoError(cache.Put(Position{Value: "test2", Stage: config.Stream}))
+		r.NoError(cache.Put(&Position{Value: "test2", Stage: config.Stream}))
 		p, exists, err = cache.Get()
 		r.NoError(err)
 		r.True(exists)
 		r.Equal("test2", p.Value)
-		p, exists, err = repo.Get(t.Name())
+		m, exists, err = repo.Get(t.Name())
 		r.NoError(err)
 		r.True(exists)
-		r.Equal("test", p.Value)
+		r.Equal("test", m.Value)
 
 		cache.Close()
 	})
 
 	t.Run("it flush to repo when time comes", func(tt *testing.T) {
 		repo := NewMemoRepo()
-		repo.SetEncoderDecoder(StringEncoder, StringDecoder)
-
-		cache, err := NewPositionCache(t.Name(), repo, 1*time.Second)
+		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, 1*time.Second)
 		r.NoError(err)
 
 		r.NoError(cache.Start())
 
-		err = cache.Put(Position{Value: "test", Stage: config.Stream})
+		err = cache.Put(&Position{Value: "test", Stage: config.Stream})
 		r.NoError(err)
 
 		p, exists, err := cache.Get()
@@ -139,25 +132,25 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 		r.Equal("test", p.Value)
 
 		// the first PUT will flush data to repo
-		p, exists, err = repo.Get(t.Name())
+		m, exists, err := repo.Get(t.Name())
 		r.NoError(err)
 		r.True(exists)
-		r.Equal("test", p.Value)
+		r.Equal("test", m.Value)
 
 		// the second PUT will not flush data to repo until flush time comes
-		r.NoError(cache.Put(Position{Value: "test2", Stage: config.Stream}))
+		r.NoError(cache.Put(&Position{Value: "test2", Stage: config.Stream}))
 		p, exists, err = cache.Get()
 		r.NoError(err)
 		r.True(exists)
 		r.Equal("test2", p.Value)
-		p, exists, err = repo.Get(t.Name())
+		m, exists, err = repo.Get(t.Name())
 		r.NoError(err)
 		r.True(exists)
-		r.Equal("test", p.Value)
+		r.Equal("test", m.Value)
 
 		time.Sleep(5 * time.Second)
-		p, _, _ = repo.Get(t.Name())
-		r.Equal("test2", p.Value)
+		m, _, _ = repo.Get(t.Name())
+		r.Equal("test2", m.Value)
 
 		cache.Close()
 	})

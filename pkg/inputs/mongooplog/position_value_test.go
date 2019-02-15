@@ -13,14 +13,18 @@ import (
 
 func TestSetupInitialPosition(t *testing.T) {
 	repo := position_store.NewMemoRepo()
-	repo.SetEncoderDecoder(OplogPositionValueEncoder, OplogPositionValueDecoder)
 	r := require.New(t)
 
 	t.Run("when the initial position is empty", func(tt *testing.T) {
 		tt.Run("when the start spec is empty", func(ttt *testing.T) {
 			// it sets the current spec to MongoPosition(0), and keep the start spec empty
 			pipelineName := utils.TestCaseMd5Name(ttt)
-			cache, err := position_store.NewPositionCache(pipelineName, repo, 1*time.Second)
+			cache, err := position_store.NewPositionCache(
+				pipelineName,
+				repo,
+				OplogPositionValueEncoder,
+				OplogPositionValueDecoder,
+				1*time.Second)
 			r.NoError(err)
 
 			r.NoError(SetupInitialPosition(cache, nil))
@@ -41,7 +45,12 @@ func TestSetupInitialPosition(t *testing.T) {
 			// it sets the start position and current position to start spec
 			pipelineName := utils.TestCaseMd5Name(ttt)
 
-			cache, err := position_store.NewPositionCache(pipelineName, repo, 1*time.Second)
+			cache, err := position_store.NewPositionCache(
+				pipelineName,
+				repo,
+				OplogPositionValueEncoder,
+				OplogPositionValueDecoder,
+				1*time.Second)
 			r.NoError(err)
 
 			startSpec := config.MongoPosition(100)
@@ -66,7 +75,12 @@ func TestSetupInitialPosition(t *testing.T) {
 			current := config.MongoPosition(200)
 			r.NoError(initPosition(repo, pipelineName, &start, &current))
 
-			cache, err := position_store.NewPositionCache(pipelineName, repo, 5*time.Second)
+			cache, err := position_store.NewPositionCache(
+				pipelineName,
+				repo,
+				OplogPositionValueEncoder,
+				OplogPositionValueDecoder,
+				5*time.Second)
 			r.NoError(err)
 
 			newStart := config.MongoPosition(400)
@@ -90,7 +104,12 @@ func TestSetupInitialPosition(t *testing.T) {
 			current := config.MongoPosition(200)
 			r.NoError(initPosition(repo, pipelineName, &start, &current))
 
-			cache, err := position_store.NewPositionCache(pipelineName, repo, 5*time.Second)
+			cache, err := position_store.NewPositionCache(
+				pipelineName,
+				repo,
+				OplogPositionValueEncoder,
+				OplogPositionValueDecoder,
+				5*time.Second)
 			r.NoError(err)
 
 			newStart := config.MongoPosition(100)
@@ -136,10 +155,16 @@ func initPosition(repo position_store.PositionRepo, pipelineName string, start *
 		CurrentPosition: current,
 	}
 
-	position := position_store.Position{
+	m := position_store.PositionRepoModel{
 		Name:  pipelineName,
-		Stage: config.Stream,
-		Value: &positionValue,
+		Stage: string(config.Stream),
 	}
-	return errors.Trace(repo.Put(pipelineName, position))
+
+	s, err := OplogPositionValueEncoder(&positionValue)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	m.Value = s
+
+	return errors.Trace(repo.Put(pipelineName, &m))
 }

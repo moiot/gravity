@@ -16,8 +16,6 @@ func TestMysqlPositionRepo_GetPut(t *testing.T) {
 	repo, err := NewMySQLRepo(dbCfg, "")
 	r.NoError(err)
 
-	repo.SetEncoderDecoder(StringEncoder, StringDecoder)
-
 	// delete it first
 	r.NoError(repo.Delete(t.Name()))
 
@@ -27,22 +25,22 @@ func TestMysqlPositionRepo_GetPut(t *testing.T) {
 	r.False(exist)
 
 	// put first value
-	position := Position{
+	position := PositionRepoModel{
 		Name:  t.Name(),
-		Stage: config.Stream,
+		Stage: string(config.Stream),
 		Value: "test",
 	}
-	r.NoError(repo.Put(t.Name(), position))
+	r.NoError(repo.Put(t.Name(), &position))
 
 	p, exist, err := repo.Get(t.Name())
 	r.NoError(err)
 	r.True(exist)
 	r.Equal("test", p.Value)
-	r.Equal(config.Stream, p.Stage)
+	r.Equal(string(config.Stream), p.Stage)
 
 	// put another value
 	position.Value = "test2"
-	r.NoError(repo.Put(t.Name(), position))
+	r.NoError(repo.Put(t.Name(), &position))
 
 	p2, exist, err := repo.Get(t.Name())
 	r.NoError(err)
@@ -50,7 +48,7 @@ func TestMysqlPositionRepo_GetPut(t *testing.T) {
 	r.Equal(p2.Value, "test2")
 
 	// put an invalid value
-	position.Value = nil
-	err = repo.Put(t.Name(), position)
+	position.Value = ""
+	err = repo.Put(t.Name(), &position)
 	r.NotNil(err)
 }

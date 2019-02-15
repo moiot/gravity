@@ -181,7 +181,7 @@ func DecodeBatchPositionValue(s string) (interface{}, error) {
 }
 
 func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB *sql.DB) error {
-	position, exist, err := cache.Get()
+	_, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -203,11 +203,11 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB 
 			Start:       &startPosition,
 			TableStates: make(map[string]TableStats),
 		}
-
+		position := position_store.Position{}
 		position.Value = &batchPositionValue
 		position.Stage = config.Batch
 		position.UpdateTime = time.Now()
-		if err := cache.Put(position); err != nil {
+		if err := cache.Put(&position); err != nil {
 			return errors.Trace(err)
 		}
 		if err := cache.Flush(); err != nil {

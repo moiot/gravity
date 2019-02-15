@@ -1,28 +1,21 @@
 package position_store
 
 type memRepo struct {
-	positions    map[string]Position
-	valueEncoder PositionValueEncoder
-	valueDecoder PositionValueDecoder
+	positionRepoModels map[string]*PositionRepoModel
 }
 
-func (repo *memRepo) Get(pipelineName string) (Position, bool, error) {
-	p, ok := repo.positions[pipelineName]
+func (repo *memRepo) Get(pipelineName string) (*PositionRepoModel, bool, error) {
+	p, ok := repo.positionRepoModels[pipelineName]
 	return p, ok, nil
 }
 
-func (repo *memRepo) GetWithRawValue(pipelineName string) (Position, bool, error) {
-	p, ok := repo.positions[pipelineName]
-	return p, ok, nil
-}
-
-func (repo *memRepo) Put(pipelineName string, position Position) error {
-	repo.positions[pipelineName] = position
+func (repo *memRepo) Put(pipelineName string, m *PositionRepoModel) error {
+	repo.positionRepoModels[pipelineName] = m
 	return nil
 }
 
 func (repo *memRepo) Delete(pipelineName string) error {
-	delete(repo.positions, pipelineName)
+	delete(repo.positionRepoModels, pipelineName)
 	return nil
 }
 
@@ -30,11 +23,6 @@ func (repo *memRepo) Close() error {
 	return nil
 }
 
-func (repo *memRepo) SetEncoderDecoder(encoder PositionValueEncoder, decoder PositionValueDecoder) {
-	repo.valueEncoder = encoder
-	repo.valueDecoder = decoder
-}
-
 func NewMemoRepo() PositionRepo {
-	return &memRepo{positions: make(map[string]Position)}
+	return &memRepo{positionRepoModels: make(map[string]*PositionRepoModel)}
 }

@@ -14,9 +14,9 @@ var DefaultFlushPeriod = 5 * time.Second
 type PositionCacheInterface interface {
 	Start() error
 	Close()
-	Put(position Position) error
-	Get() (position Position, exist bool, err error)
-	GetWithRawValue() (position Position, exist bool, err error)
+	Put(position *Position) error
+	Get() (position *Position, exist bool, err error)
+	GetWithRawValue() (position *PositionRepoModel, exist bool, err error)
 	Flush() error
 	Clear() error
 }
@@ -31,14 +31,21 @@ type defaultPositionCache struct {
 	closeMutex sync.Mutex
 	closed     bool
 
-	position      Position
+	position      *Position
 	positionMutex sync.Mutex
 
 	closeC chan struct{}
 	wg     sync.WaitGroup
+
+	valueEncoder PositionValueEncoder
+	valueDecoder PositionValueDecoder
 }
 
 func (cache *defaultPositionCache) Start() error {
+	if cache.valueEncoder == nil || cache.valueDecoder == nil {
+		return errors.Errorf("empty value encoder decoder")
+	}
+
 	cache.wg.Add(1)
 	go func() {
 		defer cache.wg.Done()
@@ -78,16 +85,22 @@ func (cache *defaultPositionCache) Close() {
 	cache.closed = true
 }
 
-func (cache *defaultPositionCache) Put(position Position) error {
+func (cache *defaultPositionCache) Put(position *Position) error {
 	cache.positionMutex.Lock()
 	defer cache.positionMutex.Unlock()
+
+	position.Name = cache.pipelineName
+
 	if err := position.Validate(); err != nil {
 		return errors.Trace(err)
 	}
-	position.Name = cache.pipelineName
 
 	if !cache.exist {
-		if err := cache.repo.Put(cache.pipelineName, position); err != nil {
+		m, err := cache.convertPositionToRepoModel(position)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if err := cache.repo.Put(cache.pipelineName, m); err != nil {
 			return errors.Trace(err)
 		}
 		cache.dirty = false
@@ -99,40 +112,44 @@ func (cache *defaultPositionCache) Put(position Position) error {
 	return nil
 }
 
-func (cache *defaultPositionCache) Get() (Position, bool, error) {
+func (cache *defaultPositionCache) Get() (*Position, bool, error) {
 	cache.positionMutex.Lock()
 	defer cache.positionMutex.Unlock()
 
 	if !cache.exist {
-		position, exist, err := cache.repo.Get(cache.pipelineName)
-		if err != nil && exist {
-			cache.exist = true
+		repoModel, exist, err := cache.repo.Get(cache.pipelineName)
+		if err != nil {
+			return nil, exist, errors.Trace(err)
 		}
-		return position, cache.exist, errors.Trace(err)
+
+		if exist {
+			cache.exist = true
+
+			p, err := cache.convertRepoModelToPosition(repoModel)
+			if err != nil {
+				return nil, cache.exist, errors.Trace(err)
+			}
+			cache.position = p
+			return p, cache.exist, nil
+		} else {
+			return nil, false, nil
+		}
 	}
 
-	if err := cache.position.Validate(); err != nil {
-		return Position{}, true, errors.Trace(err)
-	}
 	return cache.position, true, nil
 }
 
-func (cache *defaultPositionCache) GetWithRawValue() (Position, bool, error) {
-	cache.positionMutex.Lock()
-	defer cache.positionMutex.Unlock()
-
-	if !cache.exist {
-		position, exist, err := cache.repo.GetWithRawValue(cache.pipelineName)
-		if err != nil && exist {
-			cache.exist = true
-		}
-		return position, cache.exist, errors.Trace(err)
+func (cache *defaultPositionCache) GetWithRawValue() (*PositionRepoModel, bool, error) {
+	p, exists, err := cache.Get()
+	if err != nil {
+		return nil, exists, errors.Trace(err)
 	}
 
-	if err := cache.position.Validate(); err != nil {
-		return Position{}, true, errors.Trace(err)
+	m, err := cache.convertPositionToRepoModel(p)
+	if err != nil {
+		return nil, exists, errors.Trace(err)
 	}
-	return cache.position, true, nil
+	return m, exists, nil
 }
 
 func (cache *defaultPositionCache) Flush() error {
@@ -143,7 +160,12 @@ func (cache *defaultPositionCache) Flush() error {
 		return nil
 	}
 
-	err := cache.repo.Put(cache.pipelineName, cache.position)
+	m, err := cache.convertPositionToRepoModel(cache.position)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	err = cache.repo.Put(cache.pipelineName, m)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -163,38 +185,62 @@ func (cache *defaultPositionCache) Clear() error {
 	close(cache.closeC)
 	cache.wg.Wait()
 
-	position := Position{
-		Name:  cache.pipelineName,
-		Stage: config.Unknown,
-		Value: "",
-	}
-
 	if err := cache.repo.Delete(cache.pipelineName); err != nil {
 		return errors.Trace(err)
 	}
 
 	cache.repo.Close()
 
-	cache.position = position
+	cache.position = nil
 	cache.dirty = false
 	cache.exist = false
 	cache.closed = true
 	return nil
 }
 
-func NewPositionCache(pipelineName string, repo PositionRepo, flushDuration time.Duration) (PositionCacheInterface, error) {
+func (cache *defaultPositionCache) convertPositionToRepoModel(p *Position) (*PositionRepoModel, error) {
+	m := PositionRepoModel{Name: p.Name, Stage: string(p.Stage), UpdateTime: p.UpdateTime}
+	s, err := cache.valueEncoder(p.Value)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	m.Value = s
+	return &m, nil
+}
+
+func (cache *defaultPositionCache) convertRepoModelToPosition(m *PositionRepoModel) (*Position, error) {
+	p := Position{Name: m.Name, Stage: config.InputMode(m.Stage), UpdateTime: m.UpdateTime}
+	v, err := cache.valueDecoder(m.Value)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	p.Value = v
+	return &p, nil
+}
+
+func NewPositionCache(pipelineName string, repo PositionRepo, encoder PositionValueEncoder, decoder PositionValueDecoder, flushDuration time.Duration) (PositionCacheInterface, error) {
 	store := defaultPositionCache{
 		pipelineName:  pipelineName,
 		repo:          repo,
 		flushDuration: flushDuration,
+		valueEncoder:  encoder,
+		valueDecoder:  decoder,
 		closeC:        make(chan struct{})}
 
 	// Load initial data from repo
-	position, exist, err := repo.Get(pipelineName)
+	repoModel, exist, err := repo.Get(pipelineName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	store.position = position
+
+	if exist {
+		p, err := store.convertRepoModelToPosition(repoModel)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		store.position = p
+	}
+
 	store.exist = exist
 
 	return &store, nil

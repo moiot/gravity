@@ -172,7 +172,6 @@ func TestTableScanner_Start(t *testing.T) {
 
 		dbCfg := mysql_test.SourceDBConfig()
 		positionRepo, err := position_store.NewMySQLRepo(dbCfg, "")
-		positionRepo.SetEncoderDecoder(EncodeBatchPositionValue, DecodeBatchPositionValue)
 		r.NoError(err)
 
 		testCases := []struct {
@@ -350,7 +349,12 @@ func TestTableScanner_Start(t *testing.T) {
 
 			throttle := time.NewTicker(100 * time.Millisecond)
 
-			positionCache, err := position_store.NewPositionCache(testDBName, positionRepo, 10*time.Second)
+			positionCache, err := position_store.NewPositionCache(
+				testDBName,
+				positionRepo,
+				EncodeBatchPositionValue,
+				DecodeBatchPositionValue,
+				10*time.Second)
 			r.NoError(err)
 
 			r.NoError(SetupInitialPosition(positionCache, db))
@@ -396,7 +400,12 @@ func TestTableScanner_Start(t *testing.T) {
 			em, err = emitter.NewEmitter(nil, submitter)
 			r.NoError(err)
 
-			positionCache, err = position_store.NewPositionCache(testDBName, positionRepo, 10*time.Second)
+			positionCache, err = position_store.NewPositionCache(
+				testDBName,
+				positionRepo,
+				EncodeBatchPositionValue,
+				DecodeBatchPositionValue,
+				10*time.Second)
 			r.NoError(err)
 
 			q = make(chan *TableWork, 1)

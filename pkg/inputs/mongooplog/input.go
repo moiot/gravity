@@ -69,9 +69,13 @@ func (plugin *mongoStreamInputPlugin) NewPositionCache() (position_store.Positio
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	positionRepo.SetEncoderDecoder(OplogPositionValueEncoder, OplogPositionValueDecoder)
 
-	positionCache, err := position_store.NewPositionCache(plugin.pipelineName, positionRepo, position_store.DefaultFlushPeriod)
+	positionCache, err := position_store.NewPositionCache(
+		plugin.pipelineName,
+		positionRepo,
+		OplogPositionValueEncoder,
+		OplogPositionValueDecoder,
+		position_store.DefaultFlushPeriod)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -140,7 +144,7 @@ func (plugin *mongoStreamInputPlugin) Done() chan position_store.Position {
 		plugin.Wait()
 		position, exist, err := plugin.positionCache.Get()
 		if err != nil && exist {
-			c <- position
+			c <- *position
 		} else {
 			log.Fatalf("[mongoStreamInputPlugin] failed to get position, exist: %v, err: %v", exist, errors.ErrorStack(err))
 		}

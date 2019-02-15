@@ -41,7 +41,7 @@ func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCache
 			Value:      &binlogPositionValue,
 			UpdateTime: time.Now(),
 		}
-		if err := positionCache.Put(position); err != nil {
+		if err := positionCache.Put(&position); err != nil {
 			return errors.Trace(err)
 		}
 
@@ -98,7 +98,7 @@ func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, cur
 		Value: &binlogPositionValue,
 	}
 
-	if err := cache.Put(position); err != nil {
+	if err := cache.Put(&position); err != nil {
 		return errors.Trace(err)
 	}
 

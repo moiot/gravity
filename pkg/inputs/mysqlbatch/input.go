@@ -131,9 +131,12 @@ func (plugin *mysqlBatchInputPlugin) NewPositionCache() (position_store.Position
 		return nil, errors.Trace(err)
 	}
 
-	positionRepo.SetEncoderDecoder(EncodeBatchPositionValue, DecodeBatchPositionValue)
-
-	positionCache, err := position_store.NewPositionCache(plugin.pipelineName, positionRepo, position_store.DefaultFlushPeriod)
+	positionCache, err := position_store.NewPositionCache(
+		plugin.pipelineName,
+		positionRepo,
+		EncodeBatchPositionValue,
+		DecodeBatchPositionValue,
+		position_store.DefaultFlushPeriod)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

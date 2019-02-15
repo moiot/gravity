@@ -34,40 +34,26 @@ func IsPositionStoreEvent(schemaName string, tableName string) bool {
 }
 
 type mysqlPositionRepo struct {
-	db           *sql.DB
-	annotation   string
-	valueEncoder PositionValueEncoder
-	valueDecoder PositionValueDecoder
+	db         *sql.DB
+	annotation string
 }
 
-func (repo *mysqlPositionRepo) Get(pipelineName string) (Position, bool, error) {
+func (repo *mysqlPositionRepo) Get(pipelineName string) (*PositionRepoModel, bool, error) {
 	value, stage, lastUpdate, exists, err := repo.getRaw(pipelineName)
 	if err != nil {
-		return Position{}, exists, errors.Trace(err)
+		return nil, exists, errors.Trace(err)
 	}
 
 	if exists {
-		valueInterface, err := repo.valueDecoder(value)
-		if err != nil {
-			return Position{}, true, errors.Trace(err)
+		m := PositionRepoModel{Name: pipelineName, Stage: stage, Value: value, UpdateTime: lastUpdate}
+
+		if err := m.Validate(); err != nil {
+			return nil, true, errors.Trace(err)
 		}
-		position := Position{Name: pipelineName, Stage: config.InputMode(stage), Value: valueInterface, UpdateTime: lastUpdate}
-		if err := position.Validate(); err != nil {
-			return Position{}, true, errors.Trace(err)
-		}
-		return position, true, nil
+		return &m, true, nil
 	}
 
-	return Position{}, false, nil
-}
-
-func (repo *mysqlPositionRepo) GetWithRawValue(pipelineName string) (Position, bool, error) {
-	value, stage, lastUpdate, exists, err := repo.getRaw(pipelineName)
-	if err != nil {
-		return Position{}, exists, errors.Trace(err)
-	}
-	return Position{Name: pipelineName, Stage: config.InputMode(stage), Value: value, UpdateTime: lastUpdate}, exists, nil
-
+	return nil, false, nil
 }
 
 func (repo *mysqlPositionRepo) getRaw(pipelineName string) (value string, stage string, lastUpdate time.Time, exists bool, err error) {
@@ -84,8 +70,8 @@ func (repo *mysqlPositionRepo) getRaw(pipelineName string) (value string, stage 
 	return value, stage, lastUpdate, true, nil
 }
 
-func (repo *mysqlPositionRepo) Put(pipelineName string, position Position) error {
-	if err := position.Validate(); err != nil {
+func (repo *mysqlPositionRepo) Put(pipelineName string, m *PositionRepoModel) error {
+	if err := m.Validate(); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -93,12 +79,7 @@ func (repo *mysqlPositionRepo) Put(pipelineName string, position Position) error
 		"%sINSERT INTO %s(name, stage, position) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE stage = ?, position = ?",
 		repo.annotation, positionFullTableName)
 
-	valueString, err := repo.valueEncoder(position.Value)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	_, err = repo.db.Exec(stmt, pipelineName, position.Stage, valueString, position.Stage, valueString)
+	_, err := repo.db.Exec(stmt, pipelineName, m.Stage, m.Value, m.Stage, m.Value)
 	return errors.Trace(err)
 }
 
@@ -110,11 +91,6 @@ func (repo *mysqlPositionRepo) Delete(pipelineName string) error {
 
 func (repo *mysqlPositionRepo) Close() error {
 	return errors.Trace(repo.db.Close())
-}
-
-func (repo *mysqlPositionRepo) SetEncoderDecoder(encoder PositionValueEncoder, decoder PositionValueDecoder) {
-	repo.valueEncoder = encoder
-	repo.valueDecoder = decoder
 }
 
 func NewMySQLRepo(dbConfig *utils.DBConfig, annotation string) (PositionRepo, error) {

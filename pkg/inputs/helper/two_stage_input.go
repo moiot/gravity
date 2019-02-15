@@ -126,9 +126,11 @@ func (i *TwoStageInputPlugin) Start(emitter core.Emitter, router core.Router, po
 				log.Fatalf("[TwoStageInputPlugin] failed to start incremental position store: %v", errors.ErrorStack(err))
 			}
 
-			i.positionCache.incremental.Put(pos)
+			if err := i.positionCache.incremental.Put(&pos); err != nil {
+				log.Fatalf("[TwoStageInputPlugin] failed to change incremental position")
+			}
 			if err := i.positionCache.incremental.Flush(); err != nil {
-				log.Fatalf("[TwoStageInputPlugin] failed to change position stage")
+				log.Fatalf("[TwoStageInputPlugin] failed to flush incremental position")
 			}
 
 			// start incremental plugin
@@ -228,7 +230,7 @@ func (s *twoStagePositionCache) Close() {
 	}
 }
 
-func (s *twoStagePositionCache) Put(position position_store.Position) error {
+func (s *twoStagePositionCache) Put(position *position_store.Position) error {
 	if s.Stage() == config.Stream {
 		return errors.Trace(s.incremental.Put(position))
 	} else {
@@ -236,7 +238,7 @@ func (s *twoStagePositionCache) Put(position position_store.Position) error {
 	}
 }
 
-func (s *twoStagePositionCache) Get() (position_store.Position, bool, error) {
+func (s *twoStagePositionCache) Get() (*position_store.Position, bool, error) {
 	if s.Stage() == config.Stream {
 		return s.incremental.Get()
 	} else {
@@ -244,7 +246,7 @@ func (s *twoStagePositionCache) Get() (position_store.Position, bool, error) {
 	}
 }
 
-func (s *twoStagePositionCache) GetWithRawValue() (position_store.Position, bool, error) {
+func (s *twoStagePositionCache) GetWithRawValue() (*position_store.PositionRepoModel, bool, error) {
 	if s.Stage() == config.Stream {
 		return s.incremental.GetWithRawValue()
 	} else {
