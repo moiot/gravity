@@ -107,7 +107,7 @@ func TestMsgEmit(t *testing.T) {
 	r.NoError(err)
 
 	positionValue := helper.BinlogPositionsValue{
-		CurrentPosition: utils.MySQLBinlogPosition{
+		CurrentPosition: &utils.MySQLBinlogPosition{
 			BinLogFileName: position.Name,
 			BinLogFilePos:  position.Pos,
 			BinlogGTID:     gtidSet.String(),

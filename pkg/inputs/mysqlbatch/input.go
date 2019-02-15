@@ -322,8 +322,8 @@ func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.Pos
 		}
 
 		binlogPositionsValue := helper.BinlogPositionsValue{
-			StartPosition:   startBinlog,
-			CurrentPosition: startBinlog,
+			StartPosition:   &startBinlog,
+			CurrentPosition: &startBinlog,
 		}
 
 		// Notice that we should not change streamPosition stage in this plugin.

@@ -16,8 +16,8 @@ type SourceProbeCfg struct {
 }
 
 type BinlogPositionsValue struct {
-	CurrentPosition utils.MySQLBinlogPosition `json:"current_position"`
-	StartPosition   utils.MySQLBinlogPosition `json:"start_position"`
+	CurrentPosition *utils.MySQLBinlogPosition `json:"current_position"`
+	StartPosition   *utils.MySQLBinlogPosition `json:"start_position"`
 }
 
 func BinlogPositionValueEncoder(v interface{}) (string, error) {

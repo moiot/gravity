@@ -12,7 +12,7 @@ import (
 	gomysql "github.com/siddontang/go-mysql/mysql"
 )
 
-func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCacheInterface, startPositionSpec utils.MySQLBinlogPosition) error {
+func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCacheInterface, startPositionSpec *utils.MySQLBinlogPosition) error {
 	position, exist, err := positionCache.Get()
 	if err != nil {
 		return errors.Trace(err)
@@ -33,7 +33,7 @@ func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCache
 		// Do not initialize start position.
 		// StartPosition is a user configured parameter.
 		binlogPositionValue := helper.BinlogPositionsValue{
-			CurrentPosition: p,
+			CurrentPosition: &p,
 		}
 
 		position := position_store.Position{
@@ -55,8 +55,8 @@ func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCache
 	}
 
 	// reset runTimePositions
-	if !startPositionSpec.Empty() {
-		if runTimePositions.StartPosition.Empty() {
+	if startPositionSpec != nil {
+		if runTimePositions.StartPosition == nil {
 			runTimePositions.StartPosition = startPositionSpec
 			runTimePositions.CurrentPosition = startPositionSpec
 		} else {
@@ -79,7 +79,7 @@ func GetCurrentPositionValue(cache position_store.PositionCacheInterface) (utils
 	if err != nil {
 		return utils.MySQLBinlogPosition{}, errors.Trace(err)
 	}
-	return current, nil
+	return *current, nil
 }
 
 func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, currentPosition utils.MySQLBinlogPosition) error {
@@ -90,7 +90,7 @@ func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, cur
 
 	binlogPositionValue := helper.BinlogPositionsValue{
 		StartPosition:   start,
-		CurrentPosition: currentPosition,
+		CurrentPosition: &currentPosition,
 	}
 
 	position := position_store.Position{
@@ -114,23 +114,23 @@ func ToGoMySQLPosition(p utils.MySQLBinlogPosition) (gomysql.Position, gomysql.M
 	return gomysql.Position{Name: p.BinLogFileName, Pos: p.BinLogFilePos}, mysqlGTIDSet, nil
 }
 
-func getBinlogPositionsValue(cache position_store.PositionCacheInterface) (utils.MySQLBinlogPosition, utils.MySQLBinlogPosition, error) {
+func getBinlogPositionsValue(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, *utils.MySQLBinlogPosition, error) {
 	position, exist, err := cache.Get()
 	if err != nil {
-		return utils.MySQLBinlogPosition{}, utils.MySQLBinlogPosition{}, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 
 	if !exist {
-		return utils.MySQLBinlogPosition{}, utils.MySQLBinlogPosition{}, errors.New("empty position")
+		return nil, nil, errors.New("empty position")
 	}
 
 	binlogPositionValue, ok := position.Value.(helper.BinlogPositionsValue)
 	if !ok {
-		return utils.MySQLBinlogPosition{}, utils.MySQLBinlogPosition{}, errors.Errorf("invalid position type")
+		return nil, nil, errors.Errorf("invalid position type")
 	}
 
-	if binlogPositionValue.CurrentPosition.Empty() {
-		return utils.MySQLBinlogPosition{}, utils.MySQLBinlogPosition{}, errors.Errorf("empty currentPosition")
+	if binlogPositionValue.CurrentPosition == nil {
+		return nil, nil, errors.Errorf("empty currentPosition")
 	}
 
 	return binlogPositionValue.StartPosition, binlogPositionValue.CurrentPosition, nil

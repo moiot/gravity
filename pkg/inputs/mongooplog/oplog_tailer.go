@@ -116,7 +116,7 @@ func (tailer *OplogTailer) Run() {
 	}
 
 	// If timestamp is 0, we start from the LastOpTimestamp
-	if positionValue.CurrentPosition.Empty() {
+	if positionValue.CurrentPosition == config.MongoPosition(0) {
 		log.Infof("[oplog_tailer] start from the latest timestamp")
 		after = nil
 	} else {

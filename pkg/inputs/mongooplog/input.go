@@ -19,7 +19,7 @@ import (
 type PluginConfig struct {
 	// MongoSource *config.MongoSource `mapstructure:"source" toml:"source" json:"source"`
 	Source        *config.MongoConnConfig `mapstructure:"source" toml:"source" json:"source"`
-	StartPosition config.MongoPosition    `mapstructure:"start-position" toml:"start-position" json:"start-position"`
+	StartPosition *config.MongoPosition   `mapstructure:"start-position" toml:"start-position" json:"start-position"`
 	GtmConfig     *config.GtmConfig       `mapstructure:"gtm-config" toml:"gtm-config" json:"gtm-config"`
 }
 

@@ -12,8 +12,8 @@ import (
 var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
 
 type OplogPositionValue struct {
-	StartPosition   config.MongoPosition `json:"start_position" bson:"start_position"`
-	CurrentPosition config.MongoPosition `json:"current_position" bson:"current_position"`
+	StartPosition   *config.MongoPosition `json:"start_position" bson:"start_position"`
+	CurrentPosition config.MongoPosition  `json:"current_position" bson:"current_position"`
 }
 
 func OplogPositionValueEncoder(v interface{}) (string, error) {
@@ -32,7 +32,7 @@ func OplogPositionValueDecoder(v string) (interface{}, error) {
 	return positions, nil
 }
 
-func SetupInitialPosition(cache position_store.PositionCacheInterface, startPositionInSpec config.MongoPosition) error {
+func SetupInitialPosition(cache position_store.PositionCacheInterface, startPositionInSpec *config.MongoPosition) error {
 	position, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)
@@ -40,11 +40,11 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 
 	if !exist {
 		var currentPosition config.MongoPosition
-		if startPositionInSpec.Empty() {
+		if startPositionInSpec == nil {
 			p := config.MongoPosition(0)
 			currentPosition = p
 		} else {
-			currentPosition = startPositionInSpec
+			currentPosition = *startPositionInSpec
 		}
 
 		positionValue := OplogPositionValue{
@@ -71,14 +71,14 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 	}
 
 	// reset runtimePositions
-	if !startPositionInSpec.Empty() {
-		if positionValue.StartPosition.Empty() {
+	if startPositionInSpec != nil {
+		if positionValue.StartPosition == nil {
 			positionValue.StartPosition = startPositionInSpec
-			positionValue.CurrentPosition = startPositionInSpec
+			positionValue.CurrentPosition = *startPositionInSpec
 		} else {
-			if positionValue.StartPosition != startPositionInSpec {
+			if *positionValue.StartPosition != *startPositionInSpec {
 				positionValue.StartPosition = startPositionInSpec
-				positionValue.CurrentPosition = startPositionInSpec
+				positionValue.CurrentPosition = *startPositionInSpec
 			}
 		}
 	}

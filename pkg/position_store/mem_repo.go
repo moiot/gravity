@@ -20,6 +20,7 @@ func (repo *memRepo) Get(pipelineName string) (Position, bool, error) {
 }
 
 func (repo *memRepo) Put(pipelineName string, p Position) error {
+	p.Name = pipelineName
 	if err := p.ValidateWithValueString(); err != nil {
 		return errors.Trace(err)
 	}

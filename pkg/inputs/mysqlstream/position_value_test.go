@@ -16,8 +16,8 @@ import (
 func initRepo(repo position_store.PositionRepo, pipelineName string, startGTID string, currentGTID string) error {
 
 	positionValue := &helper.BinlogPositionsValue{
-		CurrentPosition: utils.MySQLBinlogPosition{BinlogGTID: currentGTID},
-		StartPosition:   utils.MySQLBinlogPosition{BinlogGTID: startGTID},
+		CurrentPosition: &utils.MySQLBinlogPosition{BinlogGTID: currentGTID},
+		StartPosition:   &utils.MySQLBinlogPosition{BinlogGTID: startGTID},
 	}
 
 	m := position_store.Position{
@@ -51,7 +51,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.NoError(err)
 
 			db := mysql_test.MustSetupSourceDB(utils.TestCaseMd5Name(ttt))
-			err = SetupInitialPosition(db, cache, utils.MySQLBinlogPosition{})
+			err = SetupInitialPosition(db, cache, nil)
 			r.NoError(err)
 
 			// it should init the current position to current master's position, and
@@ -62,8 +62,8 @@ func TestSetupInitialPosition(t *testing.T) {
 
 			positionValue, ok := position.Value.(helper.BinlogPositionsValue)
 			r.True(ok)
-			r.True(positionValue.StartPosition.Empty())
-			r.False(positionValue.CurrentPosition.Empty())
+			r.Nil(positionValue.StartPosition)
+			r.NotNil(positionValue.CurrentPosition)
 		})
 
 		tt.Run("when start spec is not nil", func(ttt *testing.T) {
@@ -90,7 +90,7 @@ func TestSetupInitialPosition(t *testing.T) {
 				BinlogGTID: newGTID,
 			}
 
-			err = SetupInitialPosition(db, cache, specStart)
+			err = SetupInitialPosition(db, cache, &specStart)
 			r.NoError(err)
 
 			p, exists, err := cache.Get()
@@ -123,7 +123,7 @@ func TestSetupInitialPosition(t *testing.T) {
 				helper.BinlogPositionValueDecoder,
 				5*time.Second)
 			r.NoError(err)
-			r.NoError(SetupInitialPosition(db, cache, specStart))
+			r.NoError(SetupInitialPosition(db, cache, &specStart))
 
 			p, exists, err := cache.Get()
 			r.NoError(err)
@@ -154,7 +154,7 @@ func TestSetupInitialPosition(t *testing.T) {
 				helper.BinlogPositionValueDecoder,
 				5*time.Second)
 			r.NoError(err)
-			r.NoError(SetupInitialPosition(db, cache, specStart))
+			r.NoError(SetupInitialPosition(db, cache, &specStart))
 
 			p, exists, err := cache.Get()
 			r.NoError(err)
