@@ -143,7 +143,7 @@ func (plugin *tidbKafkaStreamInputPlugin) Done() chan position_store.Position {
 		plugin.binlogTailer.Wait()
 		position, exist, err := plugin.positionCache.Get()
 		if err != nil && exist {
-			c <- *position
+			c <- position
 		} else {
 			log.Fatalf("[tidbKafkaStreamInputPlugin] failed to get position, exist: %v, err: %v", exist, errors.ErrorStack(err))
 		}

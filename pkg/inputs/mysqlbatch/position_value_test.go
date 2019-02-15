@@ -52,7 +52,7 @@ func TestSetupInitialPosition(t *testing.T) {
 
 		s, err := EncodeBatchPositionValue(&batchPositionValue)
 		r.NoError(err)
-		r.NoError(repo.Put(pipelineName, &position_store.PositionRepoModel{Name: pipelineName, Stage: string(config.Batch), Value: s}))
+		r.NoError(repo.Put(pipelineName, &position_store.PositionWithValueString{Name: pipelineName, Stage: string(config.Batch), Value: s}))
 
 		cache, err := position_store.NewPositionCache(
 			pipelineName,

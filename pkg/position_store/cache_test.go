@@ -24,7 +24,7 @@ func TestPositionCache_New(t *testing.T) {
 
 	t.Run("when repo has some data", func(tt *testing.T) {
 		repo := NewMemoRepo()
-		err := repo.Put(t.Name(), &PositionRepoModel{Value: "test", Stage: string(config.Stream)})
+		err := repo.Put(t.Name(), &PositionWithValueString{Value: "test", Stage: string(config.Stream)})
 		r.NoError(err)
 
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)

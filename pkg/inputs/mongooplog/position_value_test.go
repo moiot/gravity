@@ -155,7 +155,7 @@ func initPosition(repo position_store.PositionRepo, pipelineName string, start *
 		CurrentPosition: current,
 	}
 
-	m := position_store.PositionRepoModel{
+	m := position_store.PositionWithValueString{
 		Name:  pipelineName,
 		Stage: string(config.Stream),
 	}

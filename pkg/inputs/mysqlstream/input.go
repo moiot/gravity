@@ -200,7 +200,7 @@ func (plugin *mysqlStreamInputPlugin) Done() chan position_store.Position {
 		plugin.binlogTailer.Wait()
 		position, exist, err := plugin.positionCache.Get()
 		if err == nil && exist {
-			c <- *position
+			c <- position
 		} else {
 			log.Fatalf("[mysqlInputPlugin] failed get position exist: %v, err: %v", exist, errors.ErrorStack(err))
 		}

@@ -38,9 +38,9 @@ type mongoPositionRepo struct {
 	session *mgo.Session
 }
 
-func (repo *mongoPositionRepo) Get(pipelineName string) (*PositionRepoModel, bool, error) {
+func (repo *mongoPositionRepo) Get(pipelineName string) (*PositionWithValueString, bool, error) {
 	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
-	model := PositionRepoModel{}
+	model := PositionWithValueString{}
 	err := collection.Find(bson.M{"name": pipelineName}).One(&model)
 	if err != nil {
 		if err == mgo.ErrNotFound {
@@ -61,14 +61,14 @@ func (repo *mongoPositionRepo) Get(pipelineName string) (*PositionRepoModel, boo
 			return nil, true, errors.Trace(err)
 		}
 
-		return &PositionRepoModel{Name: pipelineName, Stage: oldPosition.Stage, Value: s}, true, nil
+		return &PositionWithValueString{Name: pipelineName, Stage: oldPosition.Stage, Value: s}, true, nil
 
 	}
 
 	return &model, true, nil
 }
 
-func (repo *mongoPositionRepo) Put(pipelineName string, model *PositionRepoModel) error {
+func (repo *mongoPositionRepo) Put(pipelineName string, model *PositionWithValueString) error {
 
 	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
 	_, err := collection.Upsert(

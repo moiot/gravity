@@ -38,14 +38,14 @@ type mysqlPositionRepo struct {
 	annotation string
 }
 
-func (repo *mysqlPositionRepo) Get(pipelineName string) (*PositionRepoModel, bool, error) {
+func (repo *mysqlPositionRepo) Get(pipelineName string) (*PositionWithValueString, bool, error) {
 	value, stage, lastUpdate, exists, err := repo.getRaw(pipelineName)
 	if err != nil {
 		return nil, exists, errors.Trace(err)
 	}
 
 	if exists {
-		m := PositionRepoModel{Name: pipelineName, Stage: stage, Value: value, UpdateTime: lastUpdate}
+		m := PositionWithValueString{Name: pipelineName, Stage: stage, Value: value, UpdateTime: lastUpdate}
 
 		if err := m.Validate(); err != nil {
 			return nil, true, errors.Trace(err)
@@ -70,7 +70,7 @@ func (repo *mysqlPositionRepo) getRaw(pipelineName string) (value string, stage 
 	return value, stage, lastUpdate, true, nil
 }
 
-func (repo *mysqlPositionRepo) Put(pipelineName string, m *PositionRepoModel) error {
+func (repo *mysqlPositionRepo) Put(pipelineName string, m *PositionWithValueString) error {
 	if err := m.Validate(); err != nil {
 		return errors.Trace(err)
 	}

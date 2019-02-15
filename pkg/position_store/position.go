@@ -50,7 +50,7 @@ func (p *Position) Validate() error {
 	return nil
 }
 
-type PositionRepoModel struct {
+type PositionWithValueString struct {
 	Version    string
 	Name       string
 	Stage      string
@@ -58,7 +58,7 @@ type PositionRepoModel struct {
 	UpdateTime time.Time
 }
 
-func (m *PositionRepoModel) Validate() error {
+func (m *PositionWithValueString) Validate() error {
 	if m.Stage != string(config.Stream) && m.Stage != string(config.Batch) {
 		return errors.Errorf("invalid stage: %v", m.Stage)
 	}

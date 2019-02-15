@@ -30,7 +30,7 @@ func TestMongoPositionRepo_Get(t *testing.T) {
 	})
 
 	t.Run("insert one record", func(tt *testing.T) {
-		err := repo.Put(tt.Name(), &PositionRepoModel{Stage: string(config.Stream), Value: "test"})
+		err := repo.Put(tt.Name(), &PositionWithValueString{Stage: string(config.Stream), Value: "test"})
 		r.NoError(err)
 
 		position, exists, err := repo.Get(tt.Name())

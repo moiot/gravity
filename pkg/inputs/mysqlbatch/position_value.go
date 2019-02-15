@@ -207,7 +207,7 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB 
 		position.Value = &batchPositionValue
 		position.Stage = config.Batch
 		position.UpdateTime = time.Now()
-		if err := cache.Put(&position); err != nil {
+		if err := cache.Put(position); err != nil {
 			return errors.Trace(err)
 		}
 		if err := cache.Flush(); err != nil {

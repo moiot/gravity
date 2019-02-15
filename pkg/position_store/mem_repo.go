@@ -1,15 +1,15 @@
 package position_store
 
 type memRepo struct {
-	positionRepoModels map[string]*PositionRepoModel
+	positionRepoModels map[string]*PositionWithValueString
 }
 
-func (repo *memRepo) Get(pipelineName string) (*PositionRepoModel, bool, error) {
+func (repo *memRepo) Get(pipelineName string) (*PositionWithValueString, bool, error) {
 	p, ok := repo.positionRepoModels[pipelineName]
 	return p, ok, nil
 }
 
-func (repo *memRepo) Put(pipelineName string, m *PositionRepoModel) error {
+func (repo *memRepo) Put(pipelineName string, m *PositionWithValueString) error {
 	repo.positionRepoModels[pipelineName] = m
 	return nil
 }
@@ -24,5 +24,5 @@ func (repo *memRepo) Close() error {
 }
 
 func NewMemoRepo() PositionRepo {
-	return &memRepo{positionRepoModels: make(map[string]*PositionRepoModel)}
+	return &memRepo{positionRepoModels: make(map[string]*PositionWithValueString)}
 }

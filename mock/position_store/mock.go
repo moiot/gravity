@@ -69,9 +69,9 @@ func (mr *MockPositionCacheInterfaceMockRecorder) Flush() *gomock.Call {
 }
 
 // Get mocks base method
-func (m *MockPositionCacheInterface) Get() (*position_store.Position, bool, error) {
+func (m *MockPositionCacheInterface) Get() (position_store.Position, bool, error) {
 	ret := m.ctrl.Call(m, "Get")
-	ret0, _ := ret[0].(*position_store.Position)
+	ret0, _ := ret[0].(position_store.Position)
 	ret1, _ := ret[1].(bool)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
@@ -83,9 +83,9 @@ func (mr *MockPositionCacheInterfaceMockRecorder) Get() *gomock.Call {
 }
 
 // GetWithRawValue mocks base method
-func (m *MockPositionCacheInterface) GetWithRawValue() (*position_store.PositionRepoModel, bool, error) {
+func (m *MockPositionCacheInterface) GetWithRawValue() (*position_store.PositionWithValueString, bool, error) {
 	ret := m.ctrl.Call(m, "GetWithRawValue")
-	ret0, _ := ret[0].(*position_store.PositionRepoModel)
+	ret0, _ := ret[0].(*position_store.PositionWithValueString)
 	ret1, _ := ret[1].(bool)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
@@ -97,7 +97,7 @@ func (mr *MockPositionCacheInterfaceMockRecorder) GetWithRawValue() *gomock.Call
 }
 
 // Put mocks base method
-func (m *MockPositionCacheInterface) Put(arg0 *position_store.Position) error {
+func (m *MockPositionCacheInterface) Put(arg0 position_store.Position) error {
 	ret := m.ctrl.Call(m, "Put", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0

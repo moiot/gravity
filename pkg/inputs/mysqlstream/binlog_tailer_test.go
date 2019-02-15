@@ -120,7 +120,7 @@ func TestMsgEmit(t *testing.T) {
 		Value: &positionValue,
 	}
 	mockPositionCache := mock_position_store.NewMockPositionCacheInterface(mockCtrl)
-	mockPositionCache.EXPECT().Get().Return(&p, true, nil).AnyTimes()
+	mockPositionCache.EXPECT().Get().Return(p, true, nil).AnyTimes()
 
 	// mockBinlogChecker
 	mockBinlogChecker := mock_binlog_checker.NewMockBinlogChecker(mockCtrl)

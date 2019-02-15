@@ -144,7 +144,7 @@ func (plugin *mongoStreamInputPlugin) Done() chan position_store.Position {
 		plugin.Wait()
 		position, exist, err := plugin.positionCache.Get()
 		if err != nil && exist {
-			c <- *position
+			c <- position
 		} else {
 			log.Fatalf("[mongoStreamInputPlugin] failed to get position, exist: %v, err: %v", exist, errors.ErrorStack(err))
 		}

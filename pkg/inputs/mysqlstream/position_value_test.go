@@ -20,7 +20,7 @@ func initRepo(repo position_store.PositionRepo, pipelineName string, startGTID s
 		StartPosition:   &utils.MySQLBinlogPosition{BinlogGTID: startGTID},
 	}
 
-	m := position_store.PositionRepoModel{
+	m := position_store.PositionWithValueString{
 		Name:  pipelineName,
 		Stage: string(config.Stream),
 	}

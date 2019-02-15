@@ -25,7 +25,7 @@ func TestMysqlPositionRepo_GetPut(t *testing.T) {
 	r.False(exist)
 
 	// put first value
-	position := PositionRepoModel{
+	position := PositionWithValueString{
 		Name:  t.Name(),
 		Stage: string(config.Stream),
 		Value: "test",
