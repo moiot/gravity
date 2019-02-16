@@ -37,9 +37,12 @@ func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCache
 		}
 
 		position := position_store.Position{
-			Stage:      config.Stream,
-			Value:      binlogPositionValue,
-			UpdateTime: time.Now(),
+			PositionMeta: position_store.PositionMeta{
+				Stage:      config.Stream,
+				UpdateTime: time.Now(),
+			},
+
+			Value: binlogPositionValue,
 		}
 		if err := positionCache.Put(position); err != nil {
 			return errors.Trace(err)
@@ -94,7 +97,10 @@ func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, cur
 	}
 
 	position := position_store.Position{
-		Stage: config.Stream,
+		PositionMeta: position_store.PositionMeta{
+			Stage: config.Stream,
+		},
+
 		Value: binlogPositionValue,
 	}
 

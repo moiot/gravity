@@ -19,36 +19,33 @@ func TestMysqlPositionRepo_GetPut(t *testing.T) {
 	// delete it first
 	r.NoError(repo.Delete(t.Name()))
 
-	_, exist, err := repo.Get(t.Name())
+	_, _, exist, err := repo.Get(t.Name())
 	r.NoError(err)
 
 	r.False(exist)
 
 	// put first value
-	position := Position{
-		Name:        t.Name(),
-		Stage:       config.Stream,
-		ValueString: "test",
+	meta := PositionMeta{
+		Name:  t.Name(),
+		Stage: config.Stream,
 	}
-	r.NoError(repo.Put(t.Name(), position))
+	r.NoError(repo.Put(t.Name(), meta, "test"))
 
-	p, exist, err := repo.Get(t.Name())
+	meta, v, exist, err := repo.Get(t.Name())
 	r.NoError(err)
 	r.True(exist)
-	r.Equal("test", p.ValueString)
-	r.Equal(config.Stream, p.Stage)
+	r.Equal("test", v)
+	r.Equal(config.Stream, meta.Stage)
 
 	// put another value
-	position.ValueString = "test2"
-	r.NoError(repo.Put(t.Name(), position))
+	r.NoError(repo.Put(t.Name(), meta, "test2"))
 
-	p2, exist, err := repo.Get(t.Name())
+	meta, v, exist, err = repo.Get(t.Name())
 	r.NoError(err)
 	r.True(exist)
-	r.Equal(p2.ValueString, "test2")
+	r.Equal("test2", v)
 
 	// put an invalid value
-	position.ValueString = ""
-	err = repo.Put(t.Name(), position)
+	err = repo.Put(t.Name(), meta, "")
 	r.NotNil(err)
 }

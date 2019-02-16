@@ -20,7 +20,7 @@ func initRepo(repo position_store.PositionRepo, pipelineName string, startGTID s
 		StartPosition:   &utils.MySQLBinlogPosition{BinlogGTID: startGTID},
 	}
 
-	m := position_store.Position{
+	m := position_store.PositionMeta{
 		Name:  pipelineName,
 		Stage: config.Stream,
 	}
@@ -29,9 +29,7 @@ func initRepo(repo position_store.PositionRepo, pipelineName string, startGTID s
 	if err != nil {
 		return errors.Trace(err)
 	}
-	m.ValueString = s
-
-	return errors.Trace(repo.Put(pipelineName, m))
+	return errors.Trace(repo.Put(pipelineName, m, s))
 }
 
 func TestSetupInitialPosition(t *testing.T) {

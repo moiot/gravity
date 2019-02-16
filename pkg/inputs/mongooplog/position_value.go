@@ -53,9 +53,12 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 		}
 
 		position := position_store.Position{
-			Stage:      config.Stream,
-			Value:      positionValue,
-			UpdateTime: time.Now(),
+			PositionMeta: position_store.PositionMeta{
+				Stage:      config.Stream,
+				UpdateTime: time.Now(),
+			},
+
+			Value: positionValue,
 		}
 
 		if err := cache.Put(position); err != nil {

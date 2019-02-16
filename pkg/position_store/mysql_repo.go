@@ -38,22 +38,27 @@ type mysqlPositionRepo struct {
 	annotation string
 }
 
-func (repo *mysqlPositionRepo) Get(pipelineName string) (Position, bool, error) {
+func (repo *mysqlPositionRepo) Get(pipelineName string) (PositionMeta, string, bool, error) {
 	value, stage, lastUpdate, exists, err := repo.getRaw(pipelineName)
 	if err != nil {
-		return Position{}, exists, errors.Trace(err)
+		return PositionMeta{}, "", exists, errors.Trace(err)
 	}
 
 	if exists {
-		p := Position{Name: pipelineName, Stage: config.InputMode(stage), ValueString: value, UpdateTime: lastUpdate}
+		meta := PositionMeta{Name: pipelineName, Stage: config.InputMode(stage), UpdateTime: lastUpdate}
 
-		if err := p.ValidateWithValueString(); err != nil {
-			return Position{}, true, errors.Trace(err)
+		if err := meta.Validate(); err != nil {
+			return PositionMeta{}, "", true, errors.Trace(err)
 		}
-		return p, true, nil
+
+		if value == "" {
+			return PositionMeta{}, "", true, errors.Errorf("empty value")
+		}
+
+		return meta, value, true, nil
 	}
 
-	return Position{}, false, nil
+	return PositionMeta{}, "", false, nil
 }
 
 func (repo *mysqlPositionRepo) getRaw(pipelineName string) (value string, stage string, lastUpdate time.Time, exists bool, err error) {
@@ -70,17 +75,21 @@ func (repo *mysqlPositionRepo) getRaw(pipelineName string) (value string, stage 
 	return value, stage, lastUpdate, true, nil
 }
 
-func (repo *mysqlPositionRepo) Put(pipelineName string, p Position) error {
-	p.Name = pipelineName
-	if err := p.ValidateWithValueString(); err != nil {
+func (repo *mysqlPositionRepo) Put(pipelineName string, meta PositionMeta, v string) error {
+	meta.Name = pipelineName
+	if err := meta.Validate(); err != nil {
 		return errors.Trace(err)
+	}
+
+	if v == "" {
+		return errors.Errorf("empty value")
 	}
 
 	stmt := fmt.Sprintf(
 		"%sINSERT INTO %s(name, stage, position) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE stage = ?, position = ?",
 		repo.annotation, positionFullTableName)
 
-	_, err := repo.db.Exec(stmt, pipelineName, p.Stage, p.ValueString, p.Stage, p.ValueString)
+	_, err := repo.db.Exec(stmt, pipelineName, meta.Stage, v, meta.Stage, v)
 	return errors.Trace(err)
 }
 

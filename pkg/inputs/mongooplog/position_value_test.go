@@ -155,7 +155,7 @@ func initPosition(repo position_store.PositionRepo, pipelineName string, start c
 		CurrentPosition: current,
 	}
 
-	p := position_store.Position{
+	m := position_store.PositionMeta{
 		Name:  pipelineName,
 		Stage: config.Stream,
 	}
@@ -164,7 +164,6 @@ func initPosition(repo position_store.PositionRepo, pipelineName string, start c
 	if err != nil {
 		return errors.Trace(err)
 	}
-	p.ValueString = s
 
-	return errors.Trace(repo.Put(pipelineName, p))
+	return errors.Trace(repo.Put(pipelineName, m, s))
 }

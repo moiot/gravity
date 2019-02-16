@@ -20,8 +20,8 @@ type PositionCacheInterface interface {
 	Get() (position Position, exist bool, err error)
 
 	// GetWithValueString will serialize the Value to ValueString, if there is no value inside the cache
-	// it won't try to get it from position repo
-	GetWithValueString() (position Position, exist bool, err error)
+	// it will try to get it from position repo
+	GetWithValueString() (position PositionMeta, v string, exist bool, err error)
 	Flush() error
 	Clear() error
 }
@@ -36,8 +36,9 @@ type defaultPositionCache struct {
 	closeMutex sync.Mutex
 	closed     bool
 
-	position      Position
-	positionMutex sync.Mutex
+	position            Position
+	positionValueString string
+	positionMutex       sync.Mutex
 
 	closeC chan struct{}
 	wg     sync.WaitGroup
@@ -96,16 +97,16 @@ func (cache *defaultPositionCache) Put(position Position) error {
 
 	position.Name = cache.pipelineName
 
-	if err := position.ValidateWithValue(); err != nil {
+	if err := position.Validate(); err != nil {
 		return errors.Trace(err)
 	}
 
 	if !cache.exist {
-		err := cache.encodePositionValueString(&position)
+		s, err := cache.encodePositionValueString(&position)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		if err := cache.repo.Put(cache.pipelineName, position); err != nil {
+		if err := cache.repo.Put(cache.pipelineName, position.PositionMeta, s); err != nil {
 			return errors.Trace(err)
 		}
 		cache.dirty = false
@@ -122,40 +123,39 @@ func (cache *defaultPositionCache) Get() (Position, bool, error) {
 	defer cache.positionMutex.Unlock()
 
 	if !cache.exist {
-		position, exist, err := cache.repo.Get(cache.pipelineName)
+		loaded, err := cache.loadFromRepo()
 		if err != nil {
-			return Position{}, exist, errors.Trace(err)
+			return Position{}, loaded, errors.Trace(err)
 		}
 
-		if exist {
-			cache.exist = true
-
-			err := cache.decodePositionValueString(&position)
-			if err != nil {
-				return Position{}, cache.exist, errors.Trace(err)
-			}
-			cache.position = position
-			return position, cache.exist, nil
-		} else {
-			return Position{}, false, nil
+		if loaded {
+			return cache.position, true, nil
 		}
+
+		return Position{}, false, nil
 	}
 
 	return cache.position, true, nil
 }
 
-func (cache *defaultPositionCache) GetWithValueString() (position Position, exist bool, err error) {
+func (cache *defaultPositionCache) GetWithValueString() (PositionMeta, string, bool, error) {
 	cache.positionMutex.Lock()
 	defer cache.positionMutex.Unlock()
+
 	if !cache.exist {
-		return Position{}, false, nil
+		loaded, err := cache.loadFromRepo()
+		if err != nil {
+			return PositionMeta{}, "", loaded, errors.Trace(err)
+		}
+
+		if loaded {
+			return cache.position.PositionMeta, cache.positionValueString, true, nil
+		}
+
+		return PositionMeta{}, "", false, nil
 	}
 
-	err = cache.encodePositionValueString(&cache.position)
-	if err != nil {
-		return Position{}, true, errors.Trace(err)
-	}
-	return cache.position, true, nil
+	return cache.position.PositionMeta, cache.positionValueString, true, nil
 }
 
 func (cache *defaultPositionCache) Flush() error {
@@ -166,12 +166,13 @@ func (cache *defaultPositionCache) Flush() error {
 		return nil
 	}
 
-	err := cache.encodePositionValueString(&cache.position)
+	s, err := cache.encodePositionValueString(&cache.position)
 	if err != nil {
 		return errors.Trace(err)
 	}
+	cache.positionValueString = s
 
-	err = cache.repo.Put(cache.pipelineName, cache.position)
+	err = cache.repo.Put(cache.pipelineName, cache.position.PositionMeta, s)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -203,21 +204,37 @@ func (cache *defaultPositionCache) Clear() error {
 	return nil
 }
 
-func (cache *defaultPositionCache) get() {
+func (cache *defaultPositionCache) loadFromRepo() (bool, error) {
+	meta, s, exists, err := cache.repo.Get(cache.pipelineName)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
 
+	position := Position{PositionMeta: meta}
+	if exists {
+		err := cache.decodePositionValueString(s, &position)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+		cache.position = position
+		cache.positionValueString = s
+		cache.exist = true
+		return true, nil
+	} else {
+		return false, nil
+	}
 }
 
-func (cache *defaultPositionCache) encodePositionValueString(p *Position) error {
+func (cache *defaultPositionCache) encodePositionValueString(p *Position) (string, error) {
 	s, err := cache.valueEncoder(p.Value)
 	if err != nil {
-		return errors.Trace(err)
+		return "", errors.Trace(err)
 	}
-	p.ValueString = s
-	return nil
+	return s, nil
 }
 
-func (cache *defaultPositionCache) decodePositionValueString(p *Position) error {
-	v, err := cache.valueDecoder(p.ValueString)
+func (cache *defaultPositionCache) decodePositionValueString(s string, p *Position) error {
+	v, err := cache.valueDecoder(s)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -235,13 +252,16 @@ func NewPositionCache(pipelineName string, repo PositionRepo, encoder PositionVa
 		closeC:        make(chan struct{})}
 
 	// Load initial data from repo
-	position, exist, err := repo.Get(pipelineName)
+	positionMeta, s, exist, err := repo.Get(pipelineName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	if exist {
-		err := store.decodePositionValueString(&position)
+		position := Position{
+			PositionMeta: positionMeta,
+		}
+		err := store.decodePositionValueString(s, &position)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

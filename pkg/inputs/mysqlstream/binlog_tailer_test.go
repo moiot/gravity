@@ -115,8 +115,11 @@ func TestMsgEmit(t *testing.T) {
 	}
 
 	p := position_store.Position{
-		Name:  "test",
-		Stage: config.Stream,
+		PositionMeta: position_store.PositionMeta{
+			Name:  "test",
+			Stage: config.Stream,
+		},
+
 		Value: positionValue,
 	}
 	mockPositionCache := mock_position_store.NewMockPositionCacheInterface(mockCtrl)

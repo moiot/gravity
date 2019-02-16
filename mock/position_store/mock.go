@@ -83,12 +83,13 @@ func (mr *MockPositionCacheInterfaceMockRecorder) Get() *gomock.Call {
 }
 
 // GetWithValueString mocks base method
-func (m *MockPositionCacheInterface) GetWithValueString() (position_store.Position, bool, error) {
+func (m *MockPositionCacheInterface) GetWithValueString() (position_store.PositionMeta, string, bool, error) {
 	ret := m.ctrl.Call(m, "GetWithValueString")
-	ret0, _ := ret[0].(position_store.Position)
-	ret1, _ := ret[1].(bool)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret0, _ := ret[0].(position_store.PositionMeta)
+	ret1, _ := ret[1].(string)
+	ret2, _ := ret[2].(bool)
+	ret3, _ := ret[3].(error)
+	return ret0, ret1, ret2, ret3
 }
 
 // GetWithValueString indicates an expected call of GetWithValueString

@@ -24,48 +24,39 @@ import (
 	"github.com/moiot/gravity/pkg/config"
 )
 
-type Position struct {
+type PositionMeta struct {
 	// Version is the schema version of position
-	Version string
+	Version string `bson:"version" json:"version"`
 	// Name is the unique name of a pipeline
-	Name        string
-	Stage       config.InputMode
-	Value       interface{} `bson:"-" json:"-"`
-	ValueString string      `bson:"value" json:"value"`
-	UpdateTime  time.Time
+	Name       string
+	Stage      config.InputMode
+	UpdateTime time.Time
 }
 
-func (p Position) ValidateWithoutValue() error {
-	if p.Stage != config.Stream && p.Stage != config.Batch {
-		return errors.Errorf("invalid position stage: %v", p.Stage)
+func (meta PositionMeta) Validate() error {
+	if meta.Stage != config.Stream && meta.Stage != config.Batch {
+		return errors.Errorf("invalid position stage: %v", meta.Stage)
 	}
 
-	if p.Name == "" {
+	if meta.Name == "" {
 		return errors.Errorf("empty name")
 	}
 
 	return nil
 }
 
-func (p Position) ValidateWithValue() error {
-	if err := p.ValidateWithoutValue(); err != nil {
+type Position struct {
+	PositionMeta
+	Value interface{} `bson:"-" json:"-"`
+}
+
+func (p Position) Validate() error {
+	if err := p.PositionMeta.Validate(); err != nil {
 		return errors.Trace(err)
 	}
 
 	if p.Value == nil {
 		return errors.Errorf("empty position value: %v", p.Value)
-	}
-
-	return nil
-}
-
-func (p Position) ValidateWithValueString() error {
-	if err := p.ValidateWithoutValue(); err != nil {
-		return errors.Trace(err)
-	}
-
-	if p.ValueString == "" {
-		return errors.Errorf("empty value string")
 	}
 
 	return nil

@@ -321,18 +321,22 @@ func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.Pos
 			log.Fatalf("[mysqlBatchInputPlugin] failed to get start streamPosition: %v", errors.ErrorStack(err))
 		}
 
+		currentPosition := startBinlog
 		binlogPositionsValue := helper.BinlogPositionsValue{
 			StartPosition:   &startBinlog,
-			CurrentPosition: &startBinlog,
+			CurrentPosition: &currentPosition,
 		}
 
 		// Notice that we should not change streamPosition stage in this plugin.
 		// Changing the stage is done by two stage plugin.
 		streamPosition := position_store.Position{
-			Name:       plugin.pipelineName,
-			Stage:      config.Stream,
-			Value:      binlogPositionsValue,
-			UpdateTime: time.Now(),
+			PositionMeta: position_store.PositionMeta{
+				Name:       plugin.pipelineName,
+				Stage:      config.Stream,
+				UpdateTime: time.Now(),
+			},
+
+			Value: binlogPositionsValue,
 		}
 
 		plugin.doneC <- streamPosition

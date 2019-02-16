@@ -24,19 +24,19 @@ func TestMongoPositionRepo_Get(t *testing.T) {
 	r.NoError(err)
 
 	t.Run("empty record", func(tt *testing.T) {
-		_, exist, err := repo.Get(tt.Name())
+		_, _, exist, err := repo.Get(tt.Name())
 		r.NoError(err)
 		r.False(exist)
 	})
 
 	t.Run("insert one record", func(tt *testing.T) {
-		err := repo.Put(tt.Name(), Position{Stage: config.Stream, ValueString: "test"})
+		err := repo.Put(tt.Name(), PositionMeta{Stage: config.Stream}, "test")
 		r.NoError(err)
 
-		position, exists, err := repo.Get(tt.Name())
+		_, v, exists, err := repo.Get(tt.Name())
 		r.NoError(err)
 		r.True(exists)
-		r.Equal("test", position.ValueString)
+		r.Equal("test", v)
 	})
 
 	t.Run("compatible with old position schema", func(tt *testing.T) {
@@ -61,12 +61,12 @@ func TestMongoPositionRepo_Get(t *testing.T) {
 			})
 		r.NoError(err)
 
-		position, exists, err := repo.Get(tt.Name())
+		meta, v, exists, err := repo.Get(tt.Name())
 		r.NoError(err)
 		r.True(exists)
 
 		oplogPositionValue := OplogPositionsValue{}
-		r.NoError(myJson.UnmarshalFromString(position.ValueString, &oplogPositionValue))
+		r.NoError(myJson.UnmarshalFromString(v, &oplogPositionValue))
 
 		r.EqualValues(1, oplogPositionValue.CurrentPosition)
 		r.EqualValues(1, oplogPositionValue.StartPosition)
@@ -77,16 +77,14 @@ func TestMongoPositionRepo_Get(t *testing.T) {
 		s, err := myJson.MarshalToString(oplogPositionValue)
 		r.NoError(err)
 
-		position.ValueString = s
+		r.NoError(repo.Put(tt.Name(), meta, s))
 
-		r.NoError(repo.Put(tt.Name(), position))
-
-		m, exists, err := repo.Get(tt.Name())
+		_, s, exists, err = repo.Get(tt.Name())
 		r.NoError(err)
 		r.True(exists)
 
 		newOplogValue := OplogPositionsValue{}
-		r.NoError(myJson.UnmarshalFromString(m.ValueString, &newOplogValue))
+		r.NoError(myJson.UnmarshalFromString(s, &newOplogValue))
 
 		r.EqualValues(config.MongoPosition(10), newOplogValue.CurrentPosition)
 
