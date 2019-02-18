@@ -82,9 +82,9 @@ func (mr *MockPositionCacheInterfaceMockRecorder) Get() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockPositionCacheInterface)(nil).Get))
 }
 
-// GetWithValueString mocks base method
-func (m *MockPositionCacheInterface) GetWithValueString() (position_store.PositionMeta, string, bool, error) {
-	ret := m.ctrl.Call(m, "GetWithValueString")
+// GetEncodedPersistentPosition mocks base method
+func (m *MockPositionCacheInterface) GetEncodedPersistentPosition() (position_store.PositionMeta, string, bool, error) {
+	ret := m.ctrl.Call(m, "GetEncodedPersistentPosition")
 	ret0, _ := ret[0].(position_store.PositionMeta)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(bool)
@@ -92,9 +92,9 @@ func (m *MockPositionCacheInterface) GetWithValueString() (position_store.Positi
 	return ret0, ret1, ret2, ret3
 }
 
-// GetWithValueString indicates an expected call of GetWithValueString
-func (mr *MockPositionCacheInterfaceMockRecorder) GetWithValueString() *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWithValueString", reflect.TypeOf((*MockPositionCacheInterface)(nil).GetWithValueString))
+// GetEncodedPersistentPosition indicates an expected call of GetEncodedPersistentPosition
+func (mr *MockPositionCacheInterfaceMockRecorder) GetEncodedPersistentPosition() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEncodedPersistentPosition", reflect.TypeOf((*MockPositionCacheInterface)(nil).GetEncodedPersistentPosition))
 }
 
 // Put mocks base method

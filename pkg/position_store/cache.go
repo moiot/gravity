@@ -19,9 +19,7 @@ type PositionCacheInterface interface {
 	// it will try to get it from position repo
 	Get() (position Position, exist bool, err error)
 
-	// GetWithValueString will serialize the Value to ValueString, if there is no value inside the cache
-	// it will try to get it from position repo
-	GetWithValueString() (position PositionMeta, v string, exist bool, err error)
+	GetEncodedPersistentPosition() (position PositionMeta, v string, exist bool, err error)
 	Flush() error
 	Clear() error
 }
@@ -138,7 +136,7 @@ func (cache *defaultPositionCache) Get() (Position, bool, error) {
 	return cache.position, true, nil
 }
 
-func (cache *defaultPositionCache) GetWithValueString() (PositionMeta, string, bool, error) {
+func (cache *defaultPositionCache) GetEncodedPersistentPosition() (PositionMeta, string, bool, error) {
 	cache.positionMutex.Lock()
 	defer cache.positionMutex.Unlock()
 
