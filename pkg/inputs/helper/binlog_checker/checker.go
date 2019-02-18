@@ -182,15 +182,15 @@ func ParseMySQLRowEvent(event *replication.RowsEvent) (Row, error) {
 
 	updatedAtGravity, ok := data[2].(time.Time)
 	if !ok {
-		return checkerRow, errors.Errorf("BinlogChecker type conversion error: updatedAtGravity, value: %v", data[2])
 		log.Errorf("BinlogChecker type conversion error: updatedAtGravity: %v", data[2])
+		return checkerRow, errors.Errorf("BinlogChecker type conversion error: updatedAtGravity, value: %v", data[2])
 	}
 	checkerRow.UpdateTimeAtGravity = updatedAtGravity
 
 	updatedAtSource, ok := data[2].(time.Time)
 	if !ok {
-		return checkerRow, errors.Errorf("BinlogChecker type conversion error: updatedAtSource, value: %v", data[3])
 		log.Errorf("BinlogChecker type conversion error: updatedAtGravity: %v", data[2])
+		return checkerRow, errors.Errorf("BinlogChecker type conversion error: updatedAtSource, value: %v", data[3])
 	}
 	checkerRow.UpdateTimeAtSource = updatedAtSource
 	return checkerRow, nil
