@@ -70,7 +70,12 @@ func (plugin *mongoStreamInputPlugin) NewPositionCache() (position_store.Positio
 		return nil, errors.Trace(err)
 	}
 
-	positionCache, err := position_store.NewPositionCache(plugin.pipelineName, positionRepo, position_store.DefaultFlushPeriod)
+	positionCache, err := position_store.NewPositionCache(
+		plugin.pipelineName,
+		positionRepo,
+		OplogPositionValueEncoder,
+		OplogPositionValueDecoder,
+		position_store.DefaultFlushPeriod)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

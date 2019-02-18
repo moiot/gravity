@@ -26,15 +26,15 @@ type KafkaPositionValue struct {
 	Offsets map[string]ConsumerGroupOffset `json:"offsets"`
 }
 
-func Serialize(position *KafkaPositionValue) (string, error) {
-	s, err := myJson.MarshalToString(position)
+func KafkaPositionValueEncoder(v interface{}) (string, error) {
+	s, err := myJson.MarshalToString(v)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
 	return s, nil
 }
 
-func Deserialize(value string) (*KafkaPositionValue, error) {
+func KafkaPositionValueDecoder(value string) (interface{}, error) {
 	position := KafkaPositionValue{}
 	if err := myJson.UnmarshalFromString(value, &position); err != nil {
 		return nil, errors.Trace(err)
@@ -63,10 +63,9 @@ func (store *OffsetStore) CommitOffset(req *offsets.OffsetCommitRequest) (*offse
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-
-	positionValue, err := Deserialize(position.Value)
-	if err != nil {
-		return nil, errors.Trace(err)
+	positionValue, ok := position.Value.(*KafkaPositionValue)
+	if !ok {
+		return nil, errors.Errorf("invalid position type")
 	}
 
 	if _, ok := positionValue.Offsets[req.ConsumerGroup]; !ok {
@@ -82,12 +81,7 @@ func (store *OffsetStore) CommitOffset(req *offsets.OffsetCommitRequest) (*offse
 		}
 	}
 
-	v, err := Serialize(positionValue)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	position.Value = v
+	position.Value = positionValue
 	if err := store.positionCache.Put(position); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -113,9 +107,9 @@ func (store *OffsetStore) FetchOffset(req *offsets.OffsetFetchRequest) (*offsets
 		return resp, nil
 	}
 
-	kafkaPositionValue, err := Deserialize(position.Value)
-	if err != nil {
-		return nil, errors.Trace(err)
+	kafkaPositionValue, ok := position.Value.(*KafkaPositionValue)
+	if !ok {
+		return nil, errors.Errorf("invalid position type")
 	}
 
 	consumerGroupOffset, ok := kafkaPositionValue.Offsets[req.ConsumerGroup]

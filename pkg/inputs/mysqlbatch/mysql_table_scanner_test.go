@@ -349,7 +349,12 @@ func TestTableScanner_Start(t *testing.T) {
 
 			throttle := time.NewTicker(100 * time.Millisecond)
 
-			positionCache, err := position_store.NewPositionCache(testDBName, positionRepo, 10*time.Second)
+			positionCache, err := position_store.NewPositionCache(
+				testDBName,
+				positionRepo,
+				EncodeBatchPositionValue,
+				DecodeBatchPositionValue,
+				10*time.Second)
 			r.NoError(err)
 
 			r.NoError(SetupInitialPosition(positionCache, db))
@@ -360,7 +365,8 @@ func TestTableScanner_Start(t *testing.T) {
 					tableDefs, tableConfigs = DeleteEmptyTables(db, tableDefs, tableConfigs)
 					r.Equal(0, len(tableDefs))
 				} else {
-					r.NoError(InitTablePosition(db, positionCache, tableDefs[i], c.scanColumn, 100))
+					_, err := InitTablePosition(db, positionCache, tableDefs[i], c.scanColumn, 100)
+					r.NoError(err)
 				}
 			}
 
@@ -395,7 +401,12 @@ func TestTableScanner_Start(t *testing.T) {
 			em, err = emitter.NewEmitter(nil, submitter)
 			r.NoError(err)
 
-			positionCache, err = position_store.NewPositionCache(testDBName, positionRepo, 10*time.Second)
+			positionCache, err = position_store.NewPositionCache(
+				testDBName,
+				positionRepo,
+				EncodeBatchPositionValue,
+				DecodeBatchPositionValue,
+				10*time.Second)
 			r.NoError(err)
 
 			q = make(chan *TableWork, 1)

@@ -13,24 +13,23 @@ var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
 
 type OplogPositionValue struct {
 	StartPosition   *config.MongoPosition `json:"start_position" bson:"start_position"`
-	CurrentPosition *config.MongoPosition `json:"current_position" bson:"current_position"`
+	CurrentPosition config.MongoPosition  `json:"current_position" bson:"current_position"`
 }
 
-func Deserialize(v string) (*OplogPositionValue, error) {
-	positions := OplogPositionValue{}
-	if err := myJson.UnmarshalFromString(v, &positions); err != nil {
-		return nil, errors.Trace(err)
-	}
-	return &positions, nil
-}
-
-func Serialize(oplogPositionValue *OplogPositionValue) (string, error) {
-
-	s, err := myJson.MarshalToString(oplogPositionValue)
+func OplogPositionValueEncoder(v interface{}) (string, error) {
+	s, err := myJson.MarshalToString(v)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
 	return s, nil
+}
+
+func OplogPositionValueDecoder(v string) (interface{}, error) {
+	positions := OplogPositionValue{}
+	if err := myJson.UnmarshalFromString(v, &positions); err != nil {
+		return nil, errors.Trace(err)
+	}
+	return positions, nil
 }
 
 func SetupInitialPosition(cache position_store.PositionCacheInterface, startPositionInSpec *config.MongoPosition) error {
@@ -40,26 +39,26 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 	}
 
 	if !exist {
-		var currentPosition *config.MongoPosition
+		var currentPosition config.MongoPosition
 		if startPositionInSpec == nil {
 			p := config.MongoPosition(0)
-			currentPosition = &p
+			currentPosition = p
 		} else {
-			currentPosition = startPositionInSpec
+			currentPosition = *startPositionInSpec
 		}
 
 		positionValue := OplogPositionValue{
 			CurrentPosition: currentPosition,
 			StartPosition:   startPositionInSpec,
 		}
-		v, err := Serialize(&positionValue)
-		if err != nil {
-			return errors.Trace(err)
-		}
+
 		position := position_store.Position{
-			Stage:      config.Stream,
-			Value:      v,
-			UpdateTime: time.Now(),
+			PositionMeta: position_store.PositionMeta{
+				Stage:      config.Stream,
+				UpdateTime: time.Now(),
+			},
+
+			Value: positionValue,
 		}
 
 		if err := cache.Put(position); err != nil {
@@ -69,29 +68,25 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 		return errors.Trace(cache.Flush())
 	}
 
-	positionValues, err := Deserialize(position.Value)
-	if err != nil {
-		return errors.Trace(err)
+	positionValue, ok := position.Value.(OplogPositionValue)
+	if !ok {
+		return errors.Errorf("invalid position type")
 	}
 
 	// reset runtimePositions
 	if startPositionInSpec != nil {
-		if positionValues.StartPosition == nil {
-			positionValues.StartPosition = startPositionInSpec
-			positionValues.CurrentPosition = startPositionInSpec
+		if positionValue.StartPosition == nil {
+			positionValue.StartPosition = startPositionInSpec
+			positionValue.CurrentPosition = *startPositionInSpec
 		} else {
-			if *positionValues.StartPosition != *startPositionInSpec {
-				positionValues.StartPosition = startPositionInSpec
-				positionValues.CurrentPosition = startPositionInSpec
+			if *positionValue.StartPosition != *startPositionInSpec {
+				positionValue.StartPosition = startPositionInSpec
+				positionValue.CurrentPosition = *startPositionInSpec
 			}
 		}
 	}
 
-	v, err := Serialize(positionValues)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	position.Value = v
+	position.Value = positionValue
 	if err := cache.Put(position); err != nil {
 		return errors.Trace(err)
 	}
@@ -99,26 +94,26 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 	return errors.Trace(cache.Flush())
 }
 
-func GetPositionValue(cache position_store.PositionCacheInterface) (*OplogPositionValue, error) {
+func GetPositionValue(cache position_store.PositionCacheInterface) (OplogPositionValue, error) {
 
 	position, exist, err := cache.Get()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return OplogPositionValue{}, errors.Trace(err)
 	}
 
 	if !exist {
-		return nil, errors.Errorf("empty position")
+		return OplogPositionValue{}, errors.Errorf("empty position")
 	}
 
-	oplogPositionValue, err := Deserialize(position.Value)
-	if err != nil {
-		return nil, errors.Trace(err)
+	oplogPositionValue, ok := position.Value.(OplogPositionValue)
+	if !ok {
+		return OplogPositionValue{}, errors.Errorf("invalid position value type")
 	}
 
 	return oplogPositionValue, nil
 }
 
-func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, positionValue *config.MongoPosition) error {
+func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, positionValue config.MongoPosition) error {
 
 	position, exist, err := cache.Get()
 	if err != nil {
@@ -129,17 +124,14 @@ func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, pos
 		return errors.Errorf("empty position")
 	}
 
-	oplogPositionValue, err := Deserialize(position.Value)
-	if err != nil {
-		return errors.Trace(err)
+	oplogPositionValue, ok := position.Value.(OplogPositionValue)
+	if !ok {
+		return errors.Errorf("invalid position value type")
 	}
 
 	oplogPositionValue.CurrentPosition = positionValue
-	v, err := Serialize(oplogPositionValue)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	position.Value = v
+
+	position.Value = oplogPositionValue
 
 	return errors.Trace(cache.Put(position))
 }

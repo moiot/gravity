@@ -104,6 +104,8 @@ func (plugin *mysqlStreamInputPlugin) NewPositionCache() (position_store.Positio
 	positionCache, err := position_store.NewPositionCache(
 		plugin.pipelineName,
 		positionRepo,
+		helper.BinlogPositionValueEncoder,
+		helper.BinlogPositionValueDecoder,
 		position_store.DefaultFlushPeriod,
 	)
 	if err != nil {

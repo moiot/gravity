@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/inputs/helper"
 	"github.com/moiot/gravity/pkg/position_store"
@@ -80,15 +82,13 @@ func (submitter *fakeMsgSubmitter) SubmitMsg(msg *core.Msg) error {
 }
 
 func TestMsgEmit(t *testing.T) {
-	assert := assert.New(t)
+	r := require.New(t)
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
 	submitter := &fakeMsgSubmitter{}
 	emitter, err := emitter.NewEmitter(nil, submitter)
-	if err != nil {
-		assert.FailNow(err.Error())
-	}
+	r.NoError(err)
 
 	sourceDBName := "binlog_tailer_test"
 	db := mysql_test.MustSetupSourceDB(sourceDBName)
@@ -104,7 +104,7 @@ func TestMsgEmit(t *testing.T) {
 	// setup mock position store to return latest postiion
 	dbUtils := utils.NewMySQLDB(db)
 	position, gtidSet, err := dbUtils.GetMasterStatus()
-	assert.Nil(err)
+	r.NoError(err)
 
 	positionValue := helper.BinlogPositionsValue{
 		CurrentPosition: &utils.MySQLBinlogPosition{
@@ -113,13 +113,14 @@ func TestMsgEmit(t *testing.T) {
 			BinlogGTID:     gtidSet.String(),
 		},
 	}
-	v, err := helper.SerializeBinlogPositionValue(&positionValue)
-	assert.Nil(err)
 
 	p := position_store.Position{
-		Name:  "test",
-		Stage: config.Stream,
-		Value: v,
+		PositionMeta: position_store.PositionMeta{
+			Name:  "test",
+			Stage: config.Stream,
+		},
+
+		Value: positionValue,
 	}
 	mockPositionCache := mock_position_store.NewMockPositionCacheInterface(mockCtrl)
 	mockPositionCache.EXPECT().Get().Return(p, true, nil).AnyTimes()
@@ -141,14 +142,10 @@ func TestMsgEmit(t *testing.T) {
 		nil,
 		mockBinlogChecker,
 		binlogFilter)
-	if err != nil {
-		assert.FailNow(err.Error())
-	}
+	r.NoError(err)
 
 	err = binlogTailer.Start()
-	if err != nil {
-		assert.FailNow(err.Error())
-	}
+	r.NoError(err)
 
 	// 1.
 	err = mysql_test.InsertIntoTestTable(db,
@@ -159,7 +156,7 @@ func TestMsgEmit(t *testing.T) {
 			"name": "test1",
 			"ts":   time.Now(),
 		})
-	assert.Nil(err)
+	r.NoError(err)
 
 	// 2.
 	err = mysql_test.InsertIntoTestTable(
@@ -171,7 +168,7 @@ func TestMsgEmit(t *testing.T) {
 			"name": "test2",
 			"ts":   time.Now(),
 		})
-	assert.Nil(err)
+	r.NoError(err)
 
 	// 3.
 	err = mysql_test.InsertIntoTestTable(db, sourceDBName, mysql_test.TestTableName,
@@ -180,25 +177,25 @@ func TestMsgEmit(t *testing.T) {
 			"name": "test3",
 			"ts":   time.Now(),
 		})
-	assert.Nil(err)
+	r.NoError(err)
 
 	// 4. update the first row
 	err = mysql_test.UpdateTestTable(db, sourceDBName, mysql_test.TestTableName, 1, "test11")
-	assert.Nil(err)
+	r.NoError(err)
 
 	// 5
 	err = mysql_test.UpdateTestTable(db, sourceDBName, mysql_test.TestTableName, 2, "test22")
-	assert.Nil(err)
+	r.NoError(err)
 
 	err = mysql_test.SendDeadSignal(db, t.Name())
-	assert.Nil(err)
+	r.NoError(err)
 
 	select {
 	case <-binlogTailer.done:
 	case <-time.After(20 * time.Second):
-		assert.FailNow("timeout")
+		assert.FailNow(t, "timeout")
 	}
 
 	// check received core.Msg
-	assert.Equal(5, len(submitter.msgs))
+	r.Equal(5, len(submitter.msgs))
 }

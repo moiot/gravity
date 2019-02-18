@@ -38,38 +38,58 @@ type mysqlPositionRepo struct {
 	annotation string
 }
 
-func (repo *mysqlPositionRepo) Get(pipelineName string) (Position, bool, error) {
-	var value string
-	var stage string
-	var lastUpdate time.Time
+func (repo *mysqlPositionRepo) Get(pipelineName string) (PositionMeta, string, bool, error) {
+	value, stage, lastUpdate, exists, err := repo.getRaw(pipelineName)
+	if err != nil {
+		return PositionMeta{}, "", exists, errors.Trace(err)
+	}
 
+	if exists {
+		meta := PositionMeta{Name: pipelineName, Stage: config.InputMode(stage), UpdateTime: lastUpdate}
+
+		if err := meta.Validate(); err != nil {
+			return PositionMeta{}, "", true, errors.Trace(err)
+		}
+
+		if value == "" {
+			return PositionMeta{}, "", true, errors.Errorf("empty value")
+		}
+
+		return meta, value, true, nil
+	}
+
+	return PositionMeta{}, "", false, nil
+}
+
+func (repo *mysqlPositionRepo) getRaw(pipelineName string) (value string, stage string, lastUpdate time.Time, exists bool, err error) {
 	row := repo.db.QueryRow(fmt.Sprintf(
 		"%sSELECT position, stage, updated_at FROM %s WHERE name = ?",
 		repo.annotation, positionFullTableName), pipelineName)
+
 	if err := row.Scan(&value, &stage, &lastUpdate); err != nil {
 		if err == sql.ErrNoRows {
-			return Position{}, false, nil
+			return "", "", lastUpdate, false, nil
 		}
-		return Position{}, false, errors.Trace(err)
+		return "", "", lastUpdate, true, errors.Trace(err)
 	}
-
-	position := Position{Name: pipelineName, Stage: config.InputMode(stage), Value: value, UpdateTime: lastUpdate}
-	if err := position.Validate(); err != nil {
-		return Position{}, true, errors.Trace(err)
-	}
-
-	return position, true, nil
+	return value, stage, lastUpdate, true, nil
 }
 
-func (repo *mysqlPositionRepo) Put(pipelineName string, position Position) error {
-	if err := position.Validate(); err != nil {
+func (repo *mysqlPositionRepo) Put(pipelineName string, meta PositionMeta, v string) error {
+	meta.Name = pipelineName
+	if err := meta.Validate(); err != nil {
 		return errors.Trace(err)
+	}
+
+	if v == "" {
+		return errors.Errorf("empty value")
 	}
 
 	stmt := fmt.Sprintf(
 		"%sINSERT INTO %s(name, stage, position) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE stage = ?, position = ?",
 		repo.annotation, positionFullTableName)
-	_, err := repo.db.Exec(stmt, pipelineName, position.Stage, position.Value, position.Stage, position.Value)
+
+	_, err := repo.db.Exec(stmt, pipelineName, meta.Stage, v, meta.Stage, v)
 	return errors.Trace(err)
 }
 

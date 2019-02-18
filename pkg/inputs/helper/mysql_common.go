@@ -20,21 +20,24 @@ type BinlogPositionsValue struct {
 	StartPosition   *utils.MySQLBinlogPosition `json:"start_position"`
 }
 
-func SerializeBinlogPositionValue(position *BinlogPositionsValue) (string, error) {
-	s, err := myJson.MarshalToString(position)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-
-	return s, nil
+func BinlogPositionValueEncoder(v interface{}) (string, error) {
+	return myJson.MarshalToString(v)
 }
 
-func DeserializeBinlogPositionValue(value string) (*BinlogPositionsValue, error) {
+func BinlogPositionValueDecoder(s string) (interface{}, error) {
+	return DeserializeBinlogPositionValue(s)
+}
+
+func SerializeBinlogPositionValue(position BinlogPositionsValue) (string, error) {
+	return BinlogPositionValueEncoder(position)
+}
+
+func DeserializeBinlogPositionValue(value string) (BinlogPositionsValue, error) {
 	position := BinlogPositionsValue{}
 	if err := myJson.UnmarshalFromString(value, &position); err != nil {
-		return nil, errors.Trace(err)
+		return BinlogPositionsValue{}, errors.Trace(err)
 	}
-	return &position, nil
+	return position, nil
 }
 
 func GetProbCfg(sourceProbeCfg *SourceProbeCfg, sourceDBCfg *utils.DBConfig) (*utils.DBConfig, string) {

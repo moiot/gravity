@@ -157,12 +157,12 @@ func (tailer *BinlogTailer) Start() error {
 		return errors.Errorf("empty position")
 	}
 
-	binlogPositions, err := helper.DeserializeBinlogPositionValue(position.Value)
-	if err != nil {
-		return errors.Trace(err)
+	binlogPositionValue, ok := position.Value.(helper.BinlogPositionsValue)
+	if !ok {
+		return errors.Errorf("invalid position type")
 	}
 
-	streamer, err := tailer.getBinlogStreamer(binlogPositions.CurrentPosition.BinlogGTID)
+	streamer, err := tailer.getBinlogStreamer(binlogPositionValue.CurrentPosition.BinlogGTID)
 
 	if err != nil {
 		return errors.Trace(err)
@@ -231,7 +231,7 @@ func (tailer *BinlogTailer) Start() error {
 					if err != nil {
 						log.Fatalf("[binlogTailer] failed getCurrentPosition, err: %v", errors.ErrorStack(err))
 					}
-					p, err := fixGTID(db, *currentPosition)
+					p, err := fixGTID(db, currentPosition)
 					if err != nil {
 						log.Fatalf("[binlogTailer] failed retrySyncGTIDs: %v", errors.ErrorStack(err))
 					}
@@ -466,7 +466,7 @@ func (tailer *BinlogTailer) Start() error {
 					ast,
 					ddlSQL,
 					int64(e.Header.Timestamp),
-					*currentPosition)
+					currentPosition)
 				if err := tailer.emitter.Emit(ddlMsg); err != nil {
 					log.Fatalf("failed to emit ddl msg: %v", errors.ErrorStack(err))
 				}
@@ -539,7 +539,7 @@ func (tailer *BinlogTailer) Start() error {
 				//  XID: 243
 				//  GTIDSet: 58ff439a-c2e2-11e6-bdc7-125c95d674c1:1-2225062
 				//
-				m := NewXIDMsg(int64(e.Header.Timestamp), tailer.AfterMsgCommit, *currentPosition)
+				m := NewXIDMsg(int64(e.Header.Timestamp), tailer.AfterMsgCommit, currentPosition)
 				if err != nil {
 					log.Fatalf("[binlogTailer] failed: %v", errors.ErrorStack(err))
 				}
@@ -557,7 +557,7 @@ func (tailer *BinlogTailer) AfterMsgCommit(msg *core.Msg) error {
 	ctx := msg.InputContext.(inputContext)
 	if ctx.op == xid || ctx.op == ddl {
 
-		if err := UpdateCurrentPositionValue(tailer.positionCache, &(ctx.position)); err != nil {
+		if err := UpdateCurrentPositionValue(tailer.positionCache, ctx.position); err != nil {
 			return errors.Trace(err)
 		}
 	}
