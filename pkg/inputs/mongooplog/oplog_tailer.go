@@ -5,12 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-
-	"github.com/moiot/gravity/pkg/metrics"
-
 	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
@@ -18,6 +15,7 @@ import (
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
 	"github.com/moiot/gravity/pkg/position_store"
 	"github.com/moiot/gravity/pkg/utils"
@@ -71,6 +69,11 @@ func GetRowDataFromOp(op *gtm.Op) *map[string]interface{} {
 func (tailer *OplogTailer) Filter(op *gtm.Op, option *filterOpt) bool {
 	dbName := op.GetDatabase()
 	tableName := op.GetCollection()
+
+	// handle heartbeat before route filter
+	if op.IsUpdate() && dbName == consts.GravityDBName && tableName == OplogCheckerCollectionName {
+		tailer.oplogChecker.MarkActive(op.Data)
+	}
 
 	// handle control msg
 	if dbName == consts.GravityDBName {

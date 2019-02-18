@@ -13,6 +13,7 @@ import (
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
+	"github.com/moiot/gravity/pkg/metrics"
 	pb "github.com/moiot/gravity/pkg/protocol/tidb"
 	"github.com/moiot/gravity/pkg/utils"
 	"github.com/moiot/gravity/pkg/utils/retry"
@@ -159,6 +160,7 @@ func (checker *binlogChecker) IsEventBelongsToMySelf(row Row) bool {
 // )
 func (checker *binlogChecker) MarkActive(row Row) {
 	checker.lastProbeReceivedOffset.Set(row.Offset)
+	metrics.ProbeHistogram.WithLabelValues(checker.pipelineName).Observe(time.Since(row.UpdateTimeAtGravity).Seconds())
 }
 
 func ParseMySQLRowEvent(event *replication.RowsEvent) (Row, error) {

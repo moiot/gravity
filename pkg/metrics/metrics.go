@@ -9,6 +9,14 @@ const (
 	PipelineTag = "pipeline"
 )
 
+var ProbeHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: "gravity",
+	Subsystem: "input",
+	Name:      "probe_latency",
+	Help:      "Latency of input probe in seconds.",
+	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22), // ~ 17min
+}, []string{PipelineTag})
+
 var InputCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "gravity",
 	Subsystem: "input",
@@ -114,6 +122,7 @@ var QueueLength = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 
 func init() {
 	prometheus.MustRegister(
+		ProbeHistogram,
 		InputCounter, Input2EmitterCounter, InputHistogram,
 		Emitter2SchedulerCounter, EmitterHistogram,
 		Scheduler2OutputCounter, SchedulerTotalHistogram, SchedulerSubmitHistogram, SchedulerAckHistogram,
