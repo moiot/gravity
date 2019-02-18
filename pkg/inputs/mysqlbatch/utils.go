@@ -2,13 +2,19 @@ package mysqlbatch
 
 import (
 	"database/sql"
+	"fmt"
+	"sync"
 
-	"github.com/pingcap/errors"
+	"github.com/moiot/gravity/pkg/position_store"
+
+	"github.com/juju/errors"
+
+	"github.com/moiot/gravity/pkg/utils"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/schema_store"
-	"github.com/moiot/gravity/pkg/utils"
 )
 
 // GetTables returns a list of table definition based on the schema, table name patterns
@@ -38,6 +44,7 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 		log.Fatalf("[scanner_server] query error: %s", errors.Trace(err))
 	}
 
+	added := make(map[string]bool)
 	for i := range tableConfigs {
 		schemaName := tableConfigs[i].Schema
 		allTables, ok := allSchema[schemaName]
@@ -60,14 +67,18 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 					log.Infof("added for batch: %s.%s", schemaName, tableName)
 					tableDefs = append(tableDefs, tableDef)
 					retTableConfigs = append(retTableConfigs, tableConfigs[i])
+					added[fmt.Sprintf("%s.%s", schemaName, tableName)] = true
 				}
 			}
 		}
 	}
 
-	if router != nil {
+	if len(tableConfigs) == 0 && router != nil {
 		for schemaName, tables := range allSchema {
 			for _, tableName := range tables {
+				if added[fmt.Sprintf("%s.%s", schemaName, tableName)] {
+					continue
+				}
 				msg := core.Msg{
 					Database: schemaName,
 					Table:    tableName,
@@ -93,4 +104,60 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 	}
 
 	return tableDefs, retTableConfigs
+}
+
+func DeleteEmptyTables(db *sql.DB, tables []*schema_store.Table, tableConfigs []TableConfig) ([]*schema_store.Table, []TableConfig) {
+	var retTables []*schema_store.Table
+	var retTableConfigs []TableConfig
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for i := range tables {
+		wg.Add(1)
+
+		go func(idx int) {
+			defer wg.Done()
+
+			if !utils.IsTableEmpty(db, tables[idx].Schema, tables[idx].Name) {
+				mu.Lock()
+				defer mu.Unlock()
+				retTables = append(retTables, tables[idx])
+				retTableConfigs = append(retTableConfigs, tableConfigs[idx])
+			}
+		}(i)
+
+	}
+	wg.Wait()
+	return retTables, retTableConfigs
+}
+
+func InitializePositionAndDeleteScannedTable(
+	db *sql.DB,
+	positionCache position_store.PositionCacheInterface,
+	scanColumns []string,
+	estimatedRowCount []int64,
+	tables []*schema_store.Table,
+	tableConfigs []TableConfig) ([]*schema_store.Table, []TableConfig, []string, []int64, error) {
+
+	var retTables []*schema_store.Table
+	var retTableConfigs []TableConfig
+	var retScanColumns []string
+	var retEstimatedRowCount []int64
+
+	for i, t := range tables {
+		// Initialize table position and delete table that finished scan.
+		finished, err := InitTablePosition(db, positionCache, t, scanColumns[i], estimatedRowCount[i])
+		if err != nil {
+			return nil, nil, nil, nil, errors.Trace(err)
+		}
+
+		if !finished {
+			retTables = append(retTables, tables[i])
+			retTableConfigs = append(retTableConfigs, tableConfigs[i])
+			retScanColumns = append(retScanColumns, scanColumns[i])
+			retEstimatedRowCount = append(retEstimatedRowCount, estimatedRowCount[i])
+		}
+	}
+	return retTables, retTableConfigs, retScanColumns, retEstimatedRowCount, nil
 }

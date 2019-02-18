@@ -4,9 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"testing"
 	"time"
+
+	"github.com/juju/errors"
+
+	"github.com/moiot/gravity/pkg/utils"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
@@ -112,7 +115,7 @@ func TestDetectScanColumn(t *testing.T) {
 		testDBName := "mysql_table_scanner_test_4"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-		col, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableIdPrimary, 1000)
+		col, _, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableIdPrimary, 1000)
 		r.Nil(err)
 		r.Equal("id", col)
 	})
@@ -121,7 +124,7 @@ func TestDetectScanColumn(t *testing.T) {
 		testDBName := "mysql_table_scanner_test_5"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-		c, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 1000)
+		c, _, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 1000)
 		r.Nil(err)
 		r.Equal("*", c)
 	})
@@ -130,7 +133,7 @@ func TestDetectScanColumn(t *testing.T) {
 		testDBName := "mysql_table_scanner_test_6"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-		_, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 0)
+		_, _, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 0)
 		r.NotNil(err)
 	})
 
@@ -138,7 +141,7 @@ func TestDetectScanColumn(t *testing.T) {
 		testDBName := "mysql_table_scanner_test_7"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-		col, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableUniqueIndexEmailString, 1000)
+		col, _, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableUniqueIndexEmailString, 1000)
 		r.Nil(err)
 		r.Equal("email", col)
 	})
@@ -152,29 +155,30 @@ func (submitter *fakeMsgSubmitter) SubmitMsg(msg *core.Msg) error {
 	if msg.Type == core.MsgDML {
 		submitter.msgs = append(submitter.msgs, msg)
 	}
+	if msg.AfterCommitCallback != nil {
+		if err := msg.AfterCommitCallback(msg); err != nil {
+			return errors.Trace(err)
+		}
+	}
 	close(msg.Done)
 	return nil
 }
 
-func TestFindInBatch(t *testing.T) {
+func TestTableScanner_Start(t *testing.T) {
 	r := require.New(t)
 
-	t.Run("terminates when there is no record in table", func(tt *testing.T) {
-		testDBName := "mysql_table_scanner_test_8"
-		positionFile := "mysql_table_scanner_test_8.toml"
-		f, err := os.Create(positionFile)
-		r.NoError(err)
-		defer func() {
-			f.Close()
-			os.Remove(positionFile)
-		}()
+	t.Run("it terminates", func(tt *testing.T) {
+		testDBName := utils.TestCaseMd5Name(tt)
 
 		dbCfg := mysql_test.SourceDBConfig()
+		positionRepo, err := position_store.NewMySQLRepo(dbCfg, "")
+		r.NoError(err)
 
 		testCases := []struct {
-			name     string
-			seedFunc func(db *sql.DB)
-			cfg      PluginConfig
+			name       string
+			seedFunc   func(db *sql.DB)
+			cfg        PluginConfig
+			scanColumn string
 		}{
 			{
 				"no record in table",
@@ -191,9 +195,10 @@ func TestFindInBatch(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
+				"id",
 			},
 			{
-				"sends one msg when source table have only one recor",
+				"sends one msg when source table have only one record",
 				func(db *sql.DB) {
 					args := map[string]interface{}{
 						"id":   1,
@@ -213,6 +218,7 @@ func TestFindInBatch(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
+				"id",
 			},
 			{
 				"terminates when scan column is int",
@@ -236,6 +242,7 @@ func TestFindInBatch(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
+				"id",
 			},
 			{
 				"terminates when scan column is string",
@@ -265,6 +272,7 @@ func TestFindInBatch(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
+				"email",
 			},
 			{
 				"terminates when scan column is time",
@@ -291,6 +299,7 @@ func TestFindInBatch(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
+				"ts",
 			},
 			{
 				"terminates when do a full scan",
@@ -316,6 +325,7 @@ func TestFindInBatch(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
+				"*",
 			},
 		}
 
@@ -339,23 +349,45 @@ func TestFindInBatch(t *testing.T) {
 
 			throttle := time.NewTicker(100 * time.Millisecond)
 
-			positionStore, err := position_store.NewMySQLTableLocalPositionStore(positionFile)
+			positionCache, err := position_store.NewPositionCache(
+				testDBName,
+				positionRepo,
+				EncodeBatchPositionValue,
+				DecodeBatchPositionValue,
+				10*time.Second)
 			r.NoError(err)
 
+			r.NoError(SetupInitialPosition(positionCache, db))
+
+			for i := range tableDefs {
+				// empty table should be ignored
+				if c.seedFunc == nil {
+					tableDefs, tableConfigs = DeleteEmptyTables(db, tableDefs, tableConfigs)
+					r.Equal(0, len(tableDefs))
+				} else {
+					_, err := InitTablePosition(db, positionCache, tableDefs[i], c.scanColumn, 100)
+					r.NoError(err)
+				}
+			}
+
+			if len(tableDefs) == 0 {
+				continue
+			}
+
 			submitter := &fakeMsgSubmitter{}
-			emitter, err := emitter.NewEmitter(nil, submitter)
+			em, err := emitter.NewEmitter(nil, submitter)
 			r.NoError(err)
 
 			q := make(chan *TableWork, 1)
-			q <- &TableWork{TableDef: tableDefs[0], TableConfig: &tableConfigs[0]}
+			q <- &TableWork{TableDef: tableDefs[0], TableConfig: &tableConfigs[0], ScanColumn: c.scanColumn}
 			close(q)
 
 			tableScanner := NewTableScanner(
 				tt.Name(),
 				q,
 				db,
-				positionStore,
-				emitter,
+				positionCache,
+				em,
 				throttle,
 				schemaStore,
 				&cfg,
@@ -364,7 +396,37 @@ func TestFindInBatch(t *testing.T) {
 			r.NoError(tableScanner.Start())
 			tableScanner.Wait()
 
+			// do it again, the submitter should not receive any message now.
+			submitter = &fakeMsgSubmitter{}
+			em, err = emitter.NewEmitter(nil, submitter)
+			r.NoError(err)
+
+			positionCache, err = position_store.NewPositionCache(
+				testDBName,
+				positionRepo,
+				EncodeBatchPositionValue,
+				DecodeBatchPositionValue,
+				10*time.Second)
+			r.NoError(err)
+
+			q = make(chan *TableWork, 1)
+			q <- &TableWork{TableDef: tableDefs[0], TableConfig: &tableConfigs[0], ScanColumn: c.scanColumn}
+			close(q)
+
+			tableScanner = NewTableScanner(
+				tt.Name(),
+				q,
+				db,
+				positionCache,
+				em,
+				throttle,
+				schemaStore,
+				&cfg,
+				context.Background(),
+			)
+			r.NoError(tableScanner.Start())
+			tableScanner.Wait()
+			r.Equalf(0, len(submitter.msgs), "test case: %v", c.name)
 		}
 	})
-
 }

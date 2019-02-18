@@ -39,6 +39,7 @@ func NewInsertMsgs(
 	database string,
 	table string,
 	ts int64,
+	received time.Time,
 	ev *replication.RowsEvent,
 	tableDef *schema_store.Table) ([]*core.Msg, error) {
 
@@ -58,15 +59,15 @@ func NewInsertMsgs(
 				ev.Table.Schema, ev.Table.Table, len(columns), len(dataRow), tableDef)
 		}
 		msg := core.Msg{
+			Phase: core.Phase{
+				EnterInput: received,
+			},
 			Type:         core.MsgDML,
 			Host:         host,
 			Database:     database,
 			Table:        table,
 			Timestamp:    time.Unix(ts, 0),
 			InputContext: inputContext{op: insert},
-			Metrics: core.Metrics{
-				MsgCreateTime: time.Now(),
-			},
 		}
 
 		dmlMsg := &core.DMLMsg{}
@@ -96,6 +97,7 @@ func NewUpdateMsgs(
 	database string,
 	table string,
 	ts int64,
+	received time.Time,
 	ev *replication.RowsEvent,
 	tableDef *schema_store.Table) ([]*core.Msg, error) {
 
@@ -134,15 +136,15 @@ func NewUpdateMsgs(
 
 		if !pkUpdate {
 			msg := core.Msg{
+				Phase: core.Phase{
+					EnterInput: received,
+				},
 				Type:         core.MsgDML,
 				Host:         host,
 				Database:     database,
 				Table:        table,
 				Timestamp:    time.Unix(ts, 0),
 				InputContext: inputContext{op: update},
-				Metrics: core.Metrics{
-					MsgCreateTime: time.Now(),
-				},
 			}
 
 			dmlMsg := &core.DMLMsg{}
@@ -164,15 +166,15 @@ func NewUpdateMsgs(
 		} else {
 			// first delete old row
 			msgDelete := core.Msg{
+				Phase: core.Phase{
+					EnterInput: received,
+				},
 				Type:         core.MsgDML,
 				Host:         host,
 				Database:     database,
 				Table:        table,
 				Timestamp:    time.Unix(ts, 0),
 				InputContext: inputContext{op: updatePrimaryKey},
-				Metrics: core.Metrics{
-					MsgCreateTime: time.Now(),
-				},
 			}
 			dmlMsg1 := &core.DMLMsg{}
 			dmlMsg1.Operation = core.Delete
@@ -191,15 +193,15 @@ func NewUpdateMsgs(
 
 			// then insert new row
 			msgInsert := core.Msg{
+				Phase: core.Phase{
+					EnterInput: received,
+				},
 				Type:         core.MsgDML,
 				Host:         host,
 				Database:     database,
 				Table:        table,
 				Timestamp:    time.Unix(ts, 0),
 				InputContext: inputContext{op: updatePrimaryKey},
-				Metrics: core.Metrics{
-					MsgCreateTime: time.Now(),
-				},
 			}
 			dmlMsg2 := &core.DMLMsg{}
 			dmlMsg2.Operation = core.Insert
@@ -258,6 +260,7 @@ func NewDeleteMsgs(
 	database string,
 	table string,
 	ts int64,
+	received time.Time,
 	ev *replication.RowsEvent,
 	tableDef *schema_store.Table) ([]*core.Msg, error) {
 
@@ -275,15 +278,15 @@ func NewDeleteMsgs(
 				tableDef.Schema, tableDef.Name, len(columns), len(row))
 		}
 		msg := core.Msg{
+			Phase: core.Phase{
+				EnterInput: received,
+			},
 			Type:         core.MsgDML,
 			Host:         host,
 			Database:     database,
 			Table:        table,
 			Timestamp:    time.Unix(ts, 0),
 			InputContext: inputContext{op: del},
-			Metrics: core.Metrics{
-				MsgCreateTime: time.Now(),
-			},
 		}
 
 		dmlMsg := &core.DMLMsg{}
@@ -318,9 +321,13 @@ func NewDDLMsg(
 	ast ast.StmtNode,
 	ddlSQL string,
 	ts int64,
+	received time.Time,
 	position utils.MySQLBinlogPosition) *core.Msg {
 
 	return &core.Msg{
+		Phase: core.Phase{
+			EnterInput: received,
+		},
 		Type:                core.MsgDDL,
 		Timestamp:           time.Unix(ts, 0),
 		Database:            dbName,
@@ -331,29 +338,29 @@ func NewDDLMsg(
 		InputStreamKey:      utils.NewStringPtr(inputStreamKey),
 		OutputStreamKey:     utils.NewStringPtr(""),
 		AfterCommitCallback: callback,
-		Metrics: core.Metrics{
-			MsgCreateTime: time.Now(),
-		},
 	}
 }
 
-func NewBarrierMsg(ts int64, callback core.AfterMsgCommitFunc) *core.Msg {
+func NewBarrierMsg(callback core.AfterMsgCommitFunc) *core.Msg {
 	return &core.Msg{
 		Type:                core.MsgCtl,
-		Timestamp:           time.Unix(ts, 0),
+		Timestamp:           time.Now(),
 		Done:                make(chan struct{}),
 		InputContext:        inputContext{op: barrier},
 		InputStreamKey:      utils.NewStringPtr(inputStreamKey),
 		OutputStreamKey:     utils.NewStringPtr(""),
 		AfterCommitCallback: callback,
-		Metrics: core.Metrics{
-			MsgCreateTime: time.Now(),
+		Phase: core.Phase{
+			EnterInput: time.Now(),
 		},
 	}
 }
 
-func NewXIDMsg(ts int64, callback core.AfterMsgCommitFunc, position utils.MySQLBinlogPosition) *core.Msg {
+func NewXIDMsg(ts int64, received time.Time, callback core.AfterMsgCommitFunc, position utils.MySQLBinlogPosition) *core.Msg {
 	return &core.Msg{
+		Phase: core.Phase{
+			EnterInput: received,
+		},
 		Type:                core.MsgCtl,
 		Timestamp:           time.Unix(ts, 0),
 		Done:                make(chan struct{}),
@@ -361,8 +368,5 @@ func NewXIDMsg(ts int64, callback core.AfterMsgCommitFunc, position utils.MySQLB
 		InputStreamKey:      utils.NewStringPtr(inputStreamKey),
 		OutputStreamKey:     utils.NewStringPtr(""),
 		AfterCommitCallback: callback,
-		Metrics: core.Metrics{
-			MsgCreateTime: time.Now(),
-		},
 	}
 }

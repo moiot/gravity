@@ -126,11 +126,11 @@ func IsTestDB(schemaName string) bool {
 }
 
 func dropDBStatement(testDBName string) string {
-	return fmt.Sprintf("DROP DATABASE IF EXISTS %s", testDBName)
+	return fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", testDBName)
 }
 
 func createDBStatement(tesetDBName string) string {
-	return fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s ", tesetDBName)
+	return fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", tesetDBName)
 }
 
 func dbConfig(configStr string) *utils.DBConfig {
@@ -378,7 +378,7 @@ func setupTestDB(db *sql.DB, dbName string) error {
 			return errors.Trace(err)
 		}
 
-		txn.Exec(fmt.Sprintf("USE %s", dbName))
+		txn.Exec(fmt.Sprintf("USE `%s`", dbName))
 		_, err = txn.Exec(statement)
 		if err != nil {
 			return errors.Trace(err)

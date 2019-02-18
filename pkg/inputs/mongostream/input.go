@@ -23,7 +23,7 @@ type PluginConfig struct {
 	GtmConfig     *config.GtmConfig       `mapstructure:"gtm-config" toml:"gtm-config" json:"gtm-config"`
 }
 
-type mongoStreamInput struct {
+type mongoStreamInputPlugin struct {
 	pipelineName string
 
 	cfg *PluginConfig
@@ -31,25 +31,22 @@ type mongoStreamInput struct {
 	emitter core.Emitter
 	wg      sync.WaitGroup
 
-	ctx    context.Context
-	cancel context.CancelFunc
-
+	ctx           context.Context
+	cancel        context.CancelFunc
+	positionCache position_store.PositionCacheInterface
 	mongoSession  *mgo.Session
 	oplogTailer   *OplogTailer
 	oplogChecker  *OplogChecker
-	positionStore position_store.PositionStore
-
-	closeOnce sync.Once
 }
 
 const Name = "mongo-stream"
 
 func init() {
-	registry.RegisterPlugin(registry.InputPlugin, Name, &mongoStreamInput{}, false)
+	registry.RegisterPlugin(registry.InputPlugin, Name, &mongoStreamInputPlugin{}, false)
 }
 
 // TODO position store, gtm config, etc
-func (plugin *mongoStreamInput) Configure(pipelineName string, data map[string]interface{}) error {
+func (plugin *mongoStreamInputPlugin) Configure(pipelineName string, data map[string]interface{}) error {
 	plugin.pipelineName = pipelineName
 
 	cfg := PluginConfig{}
@@ -64,17 +61,37 @@ func (plugin *mongoStreamInput) Configure(pipelineName string, data map[string]i
 	return nil
 }
 
-func (plugin *mongoStreamInput) NewPositionStore() (position_store.PositionStore, error) {
-	positionStore, err := position_store.NewMongoPositionStore(plugin.pipelineName, plugin.cfg.Source, plugin.cfg.StartPosition)
+func (plugin *mongoStreamInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
+	session, err := mongo.CreateMongoSession(plugin.cfg.Source)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	plugin.positionStore = positionStore
-	return positionStore, nil
+
+	positionRepo, err := position_store.NewMongoPositionRepo(session)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	positionCache, err := position_store.NewPositionCache(
+		plugin.pipelineName,
+		positionRepo,
+		OplogPositionValueEncoder,
+		OplogPositionValueDecoder,
+		position_store.DefaultFlushPeriod)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if err := SetupInitialPosition(positionCache, plugin.cfg.StartPosition); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return positionCache, nil
 }
 
-func (plugin *mongoStreamInput) Start(emitter core.Emitter, router core.Router) error {
+func (plugin *mongoStreamInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
 	plugin.emitter = emitter
+	plugin.positionCache = positionCache
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
 
 	session, err := mongo.CreateMongoSession(plugin.cfg.Source)
@@ -89,15 +106,15 @@ func (plugin *mongoStreamInput) Start(emitter core.Emitter, router core.Router) 
 	checker := NewOplogChecker(session, cfg.Source.Host, plugin.pipelineName, plugin.ctx)
 
 	tailerOpts := OplogTailerOpt{
-		oplogChecker:   checker,
-		session:        session,
-		gtmConfig:      cfg.GtmConfig,
-		emitter:        emitter,
-		router:         router,
-		ctx:            plugin.ctx,
-		sourceHost:     cfg.Source.Host,
-		timestampStore: plugin.positionStore.(position_store.MongoPositionStore),
-		pipelineName:   plugin.pipelineName,
+		oplogChecker:  checker,
+		session:       session,
+		gtmConfig:     cfg.GtmConfig,
+		emitter:       emitter,
+		router:        router,
+		ctx:           plugin.ctx,
+		sourceHost:    cfg.Source.Host,
+		positionCache: positionCache,
+		pipelineName:  plugin.pipelineName,
 	}
 	tailer := NewOplogTailer(&tailerOpts)
 
@@ -119,38 +136,38 @@ func (plugin *mongoStreamInput) Start(emitter core.Emitter, router core.Router) 
 	return nil
 }
 
-func (plugin *mongoStreamInput) Stage() config.InputMode {
+func (plugin *mongoStreamInputPlugin) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *mongoStreamInput) PositionStore() position_store.PositionStore {
-	return plugin.positionStore
-}
-
-func (plugin *mongoStreamInput) Done() chan position_store.Position {
+func (plugin *mongoStreamInputPlugin) Done() chan position_store.Position {
 	c := make(chan position_store.Position)
 	go func() {
 		plugin.Wait()
-		c <- plugin.positionStore.Position()
+		position, exist, err := plugin.positionCache.Get()
+		if err != nil && exist {
+			c <- position
+		} else {
+			log.Fatalf("[mongoStreamInputPlugin] failed to get position, exist: %v, err: %v", exist, errors.ErrorStack(err))
+		}
+
 		close(c)
 	}()
 	return c
 }
 
-func (plugin *mongoStreamInput) Wait() {
+func (plugin *mongoStreamInputPlugin) Wait() {
 	plugin.oplogTailer.Wait()
 }
 
-func (plugin *mongoStreamInput) SendDeadSignal() error {
+func (plugin *mongoStreamInputPlugin) SendDeadSignal() error {
 	return errors.Trace(plugin.oplogTailer.SendDeadSignal())
 }
 
-func (plugin *mongoStreamInput) Close() {
-	plugin.closeOnce.Do(func() {
-		plugin.cancel()
+func (plugin *mongoStreamInputPlugin) Close() {
+	plugin.cancel()
 
-		log.Infof("[mongoStreamInput] wait others")
-		plugin.wg.Wait()
-		plugin.mongoSession.Close()
-	})
+	log.Infof("[mongoStreamInputPlugin] wait others")
+	plugin.wg.Wait()
+	plugin.mongoSession.Close()
 }

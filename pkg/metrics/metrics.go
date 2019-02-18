@@ -1,392 +1,133 @@
 package metrics
 
-import (
-	"github.com/prometheus/client_golang/prometheus"
-)
+import "github.com/prometheus/client_golang/prometheus"
+
+//(counter)input ->(counter, latency) emitter (counter, latency)-> scheduler (counter, submit latency, ack latency)-> output(counter, latency)
+// e2e process time, event time latency
 
 const (
 	PipelineTag = "pipeline"
-
-	TopicTag     = "topic"
-	PartitionTag = "partition"
-	stageTag     = "stage"
-
-	PadderTag = "padder"
 )
 
-var testCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "test_counter",
-	Help: "test_counter",
-})
-
-//common
-var WaterMarkHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-	Namespace: "drc_v2",
-	Name:      "watermark_seconds",
-	Help:      "Histogram of watermark in seconds.",
-	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-}, []string{PipelineTag, "type"})
-
-// Gravity metrics
-var GravityKafkaEnqueuedCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "drc_v2",
-	Subsystem: "gravity",
-	Name:      "kafka_enqueue",
-	Help:      "Number of enqueued message of kafka by topic",
-}, []string{PipelineTag, TopicTag})
-
-var GravityKafkaSuccessCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "drc_v2",
-	Subsystem: "gravity",
-	Name:      "kafka_success",
-	Help:      "Number of success message of kafka",
-}, []string{PipelineTag, TopicTag})
-
-var GravityKafkaErrorCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "drc_v2",
-	Subsystem: "gravity",
-	Name:      "kafka_error",
-	Help:      "Number of error message of kafka",
+var ProbeHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: "gravity",
+	Subsystem: "input",
+	Name:      "probe_latency",
+	Help:      "Latency of input probe in seconds.",
+	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22), // ~ 17min
 }, []string{PipelineTag})
 
-var GravityKafkaPartitionCounter = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "gravity",
-		Name:      "partition_counter",
-		Help:      "the number of message sent to each partition",
-	}, []string{PipelineTag, TopicTag, PartitionTag})
+var InputCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "gravity",
+	Subsystem: "input",
+	Name:      "counter",
+	Help:      "Number of message input received(generated)",
+}, []string{PipelineTag, "db", "table", "type", "subtype"})
 
-var GravityMsgSentHistogram = prometheus.NewHistogramVec(
-	prometheus.HistogramOpts{
-		Namespace: "drc_v2",
-		Subsystem: "gravity",
-		Name:      "msg_sent_duration_seconds",
-		Help:      "Bucketed histogram of processing time (s) of receive message sent success from mq.",
-		Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-	}, []string{PipelineTag})
-
-var GravitySchedulerEnqueueCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "drc_v2",
-	Subsystem: "gravity",
-	Name:      "scheduler_enqueue",
-	Help:      "Number of enqueued job of scheduler",
+var Input2EmitterCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "gravity",
+	Subsystem: "input",
+	Name:      "emitter_counter",
+	Help:      "Number of message input sends to emitter",
 }, []string{PipelineTag})
 
-var GravitySchedulerDequeueCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "drc_v2",
-	Subsystem: "gravity",
-	Name:      "scheduler_dequeue",
-	Help:      "Number of dequeued job of scheduler",
+var InputHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: "gravity",
+	Subsystem: "input",
+	Name:      "latency",
+	Help:      "Latency of input in seconds.",
+	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 15), // ~ 8s
 }, []string{PipelineTag})
 
-var GravityOplogLagLatency = prometheus.NewHistogramVec(
-	prometheus.HistogramOpts{
-		Namespace: "drc_v2",
-		Subsystem: "gravity",
-		Name:      "oplog_lag_latency",
-		Help:      "oplog lag latency",
-		Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-	}, []string{PipelineTag, "source"},
-)
-
-var GravityOplogTimeoutCountHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-	Namespace: "drc",
-	Subsystem: "gravity",
-	Name:      "mongo_oplog_timeout_count",
-	Help:      "Bucketed histogram of timeout count of mongo oplog",
-	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
+var Emitter2SchedulerCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "gravity",
+	Subsystem: "emitter",
+	Name:      "scheduler_counter",
+	Help:      "Number of message emitter sends to scheduler",
 }, []string{PipelineTag})
 
-var GravityOplogFetchDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-	Namespace: "drc",
-	Subsystem: "gravity",
-	Name:      "mongo_oplog_fetch_duration",
-	Help:      "Bucketed histogram of duration of mongo oplog to channel",
-	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
+var EmitterHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: "gravity",
+	Subsystem: "emitter",
+	Name:      "latency",
+	Help:      "Latency of emitter in seconds.",
+	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 15), // ~ 8s
 }, []string{PipelineTag})
 
-var (
-	GravityPipelineCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "gravity",
-		Name:      "gravity_pipeline_counter",
-		Help:      "gravity pipeline counter",
-	}, []string{PipelineTag})
+var Scheduler2OutputCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "gravity",
+	Subsystem: "scheduler",
+	Name:      "output_counter",
+	Help:      "Number of message scheduler sends to output",
+}, []string{PipelineTag})
 
-	GravityBinlogProbeLagGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "drc_v2",
-		Subsystem: "gravity",
-		Name:      "binlog_probe_lag",
-		Help:      "Number of offset lag for binlog probe message",
-	}, []string{PipelineTag})
+var SchedulerTotalHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: "gravity",
+	Subsystem: "scheduler",
+	Name:      "total_latency",
+	Help:      "Latency of scheduler from the beginning of submit to the end of ack in seconds.",
+	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 15), // ~ 8s
+}, []string{PipelineTag})
 
-	GravityBinlogProbeSentGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "drc_v2",
-		Subsystem: "gravity",
-		Name:      "binlog_probe_sent_offset",
-		Help:      "binlog probe sent offset",
-	}, []string{PipelineTag})
+var SchedulerSubmitHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: "gravity",
+	Subsystem: "scheduler",
+	Name:      "submit_latency",
+	Help:      "Latency of scheduler submit phrase in seconds.",
+	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 15), // ~ 8s
+}, []string{PipelineTag})
 
-	GravityBinlogProbeReceivedGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "drc_v2",
-		Subsystem: "gravity",
-		Name:      "binlog_probe_received_offset",
-		Help:      "binlog probe received offset",
-	}, []string{PipelineTag})
+var SchedulerAckHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: "gravity",
+	Subsystem: "scheduler",
+	Name:      "ack_latency",
+	Help:      "Latency of scheduler ack phrase in seconds.",
+	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 15), // ~ 8s
+}, []string{PipelineTag})
 
-	GravityBinlogDurationFromGravity = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "drc_v2",
-			Subsystem: "gravity",
-			Name:      "binlog_duration_seconds_from_gravity",
-			Help:      "Bucketed histogram of two rtt between gravity and source",
-			Buckets:   prometheus.ExponentialBuckets(0.001, 2, 22),
-		}, []string{PipelineTag})
+var OutputCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "gravity",
+	Subsystem: "output",
+	Name:      "counter",
+	Help:      "Number of message output sends",
+}, []string{PipelineTag, "cat0", "cat1", "cat2", "cat3"})
 
-	GravityBinlogDurationFromSource = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "drc_v2",
-			Subsystem: "gravity",
-			Name:      "binlog_duration_seconds_from_source",
-			Help:      "Bucketed histogram of rtt from source to gravity",
-			Buckets:   prometheus.ExponentialBuckets(0.001, 2, 22),
-		}, []string{PipelineTag})
+var OutputHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: "gravity",
+	Subsystem: "output",
+	Name:      "latency",
+	Help:      "Latency of output in seconds.",
+	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18), // ~ 65s
+}, []string{PipelineTag})
 
-	GravityBinlogGTIDGaugeVec = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "drc_v2",
-			Subsystem: "gravity",
-			Name:      "gtid",
-			Help:      "current transaction id",
-		}, []string{PipelineTag, "node"})
+var End2EndEventTimeHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: "gravity",
+	Name:      "event_time_latency",
+	Help:      "Latency of end to end event time in seconds.",
+	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22), // ~ 17min
+}, []string{PipelineTag})
 
-	GravityBinlogGTIDLatencyGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "drc_v2",
-		Subsystem: "gravity",
-		Name:      "gtid_latency",
-		Help:      "transaction id latency between gravity and database",
-	}, []string{PipelineTag})
+var End2EndProcessTimeHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: "gravity",
+	Name:      "process_time_latency",
+	Help:      "Latency of end to end process time in seconds.",
+	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22), // ~ 17min
+}, []string{PipelineTag})
 
-	GravityBinlogPosGaugeVec = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "drc_v2",
-			Subsystem: "gravity",
-			Name:      "binlog_pos",
-			Help:      "current binlog pos",
-		}, []string{PipelineTag, "node"})
-
-	GravityBinlogFileGaugeVec = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "drc_v2",
-			Subsystem: "gravity",
-			Name:      "binlog_file",
-			Help:      "current binlog file index",
-		}, []string{PipelineTag, "node"})
-)
-
-var GravityMsgHistogram = prometheus.NewHistogramVec(
-	prometheus.HistogramOpts{
-		Namespace: "drc_v2",
-		Subsystem: "gravity",
-		Name:      "handle_msg_duration_seconds",
-		Help:      "Bucketed histogram of processing time (s) of handled messages for different stages.",
-		Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-	}, []string{PipelineTag, stageTag},
-)
-
-// Nuclear related metrics
-var NuclearOffsetLagGaugeVec = prometheus.NewGaugeVec(
-	prometheus.GaugeOpts{
-		Namespace: "drc_v2",
-		Subsystem: "nuclear",
-		Name:      "offset_lag",
-		Help:      "current offset lag with high water mark",
-	}, []string{PipelineTag, TopicTag, PartitionTag})
-
-var NuclearKafkaMsgCounterVec = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "nuclear",
-		Name:      "kafka_msg_count",
-		Help:      "kafka msg count consumed by partition",
-	}, []string{PipelineTag, TopicTag, PartitionTag})
-
-var NuclearE2eMsgHistogram = prometheus.NewHistogramVec(
-	prometheus.HistogramOpts{
-		Namespace: "drc_v2",
-		Subsystem: "nuclear",
-		Name:      "e2e_handle_msg_duration_seconds",
-		Help:      "Bucketed histogram of e2e message process time",
-		Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-	}, []string{PipelineTag})
-
-var NuclearReceiveMsgHistogram = prometheus.NewHistogramVec(
-	prometheus.HistogramOpts{
-		Namespace: "drc_v2",
-		Subsystem: "nuclear",
-		Name:      "receive_msg_duration_seconds",
-		Help:      "Bucketed histogram of processing time (s) of receive message from mq.",
-		Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-	}, []string{PipelineTag})
-
-var NuclearWarningCounterVec = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "nuclear",
-		Name:      "warning",
-		Help:      "warning needs attention",
-	}, []string{PipelineTag, "type"})
-
-var NuclearSqlCommitHistogram = prometheus.NewHistogramVec(
-	prometheus.HistogramOpts{
-		Namespace: "drc_v2",
-		Subsystem: "nuclear",
-		Name:      "sql_commit_duration",
-		Help:      "Bucketed histogram of processing time (s) of sql commit duration",
-		Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-	}, []string{PipelineTag})
-
-var NuclearSqlRetriesTotal = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "nuclear",
-		Name:      "sql_retries_total_times",
-		Help:      "The total time the the sql retries",
-	}, []string{PipelineTag})
-
-var NuclearSqlCommitCount = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "nuclear",
-		Name:      "sql_commit_count",
-		Help:      "sql commit count",
-	}, []string{PipelineTag})
-
-var NuclearBatchCommitSize = prometheus.NewGaugeVec(
-	prometheus.GaugeOpts{
-		Namespace: "drc_v2",
-		Subsystem: "nuclear",
-		Name:      "sql_commit_batch_size",
-		Help:      "sql commit batch size",
-	}, []string{PipelineTag, "db", "table"})
-
-var NuclearSlidingWindowRatio = prometheus.NewGaugeVec(
-	prometheus.GaugeOpts{
-		Namespace: "drc_v2",
-		Subsystem: "nuclear",
-		Name:      "sliding_window_ratio",
-		Help:      "sliding window ratio",
-	}, []string{PipelineTag, "topic", "partition"})
-
-var NuclearSlidingWindowSize = prometheus.NewGaugeVec(
-	prometheus.GaugeOpts{
-		Namespace: "drc_v2",
-		Subsystem: "nuclear",
-		Name:      "sliding_window_size",
-		Help:      "sliding window ratio",
-	}, []string{PipelineTag, "topic", "partition"})
-
-// scanner metrics
-var (
-	ScannerBatchQueryDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "drc_v2",
-			Subsystem: "scanner",
-			Name:      "batch_query_duration",
-			Help:      "bucketed histogram of batch fetch duration time",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-		}, []string{PipelineTag})
-
-	ScannerSingleScanDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "drc_v2",
-			Subsystem: "scanner",
-			Name:      "single_scan_duration",
-			Help:      "bucketed histogram of single scan duration",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-		}, []string{PipelineTag})
-
-	ScannerSendJobDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "drc_v2",
-			Subsystem: "scanner",
-			Name:      "send_job_duration",
-			Help:      "bucketed histogram of send job duration",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-		}, []string{PipelineTag})
-
-	ScannerQueueLength = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "drc_v2",
-			Subsystem: "scanner",
-			Name:      "queue_length",
-			Help:      "queue length",
-		}, []string{PipelineTag})
-
-	ScannerJobFetchedCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "scanner",
-		Name:      "job_fetched_count",
-		Help:      "Number of data rows fetched by scanner",
-	}, []string{PipelineTag})
-
-	ScannerKafkaEnqueuedCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "scanner",
-		Name:      "kafka_enqueue",
-		Help:      "Number of enqueued message of kafka by topic",
-	}, []string{PipelineTag, TopicTag})
-
-	ScannerKafkaSuccessCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "scanner",
-		Name:      "kafka_success",
-		Help:      "Number of success message of kafka",
-	}, []string{PipelineTag, TopicTag})
-
-	ScannerKafkaPartitionCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: "drc_v2",
-			Subsystem: "scanner",
-			Name:      "partition_counter",
-			Help:      "the number of message sent to each partition",
-		}, []string{PipelineTag, TopicTag, PartitionTag})
-)
+var QueueLength = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: "gravity",
+	Name:      "queue_length",
+	Help:      "Length of specific queue.",
+}, []string{PipelineTag, "type", "subtype"})
 
 func init() {
-	prometheus.MustRegister(testCounter)
-
-	prometheus.MustRegister(WaterMarkHistogram)
-
-	prometheus.MustRegister(GravityKafkaEnqueuedCount)
-	prometheus.MustRegister(GravityKafkaSuccessCount)
-	prometheus.MustRegister(GravityKafkaErrorCount)
-	prometheus.MustRegister(GravityKafkaPartitionCounter)
-	prometheus.MustRegister(GravityMsgSentHistogram)
-	prometheus.MustRegister(GravitySchedulerEnqueueCount)
-	prometheus.MustRegister(GravitySchedulerDequeueCount)
-	prometheus.MustRegister(GravityOplogLagLatency)
-	prometheus.MustRegister(GravityPipelineCounter)
-	prometheus.MustRegister(GravityBinlogProbeLagGauge)
-	prometheus.MustRegister(GravityBinlogGTIDGaugeVec)
-	prometheus.MustRegister(GravityBinlogGTIDLatencyGauge)
-	prometheus.MustRegister(GravityBinlogProbeSentGauge)
-	prometheus.MustRegister(GravityBinlogProbeReceivedGauge)
-	prometheus.MustRegister(GravityBinlogDurationFromGravity)
-	prometheus.MustRegister(GravityBinlogDurationFromSource)
-	prometheus.MustRegister(GravityBinlogPosGaugeVec)
-	prometheus.MustRegister(GravityBinlogFileGaugeVec)
-	prometheus.MustRegister(GravityOplogTimeoutCountHistogram)
-	prometheus.MustRegister(GravityOplogFetchDuration)
-	prometheus.MustRegister(GravityMsgHistogram)
-
-	prometheus.MustRegister(ScannerBatchQueryDuration)
-	prometheus.MustRegister(ScannerSingleScanDuration)
-	prometheus.MustRegister(ScannerSendJobDuration)
-	prometheus.MustRegister(ScannerQueueLength)
-	prometheus.MustRegister(ScannerKafkaEnqueuedCount)
-	prometheus.MustRegister(ScannerKafkaSuccessCount)
-	prometheus.MustRegister(ScannerKafkaPartitionCounter)
-	prometheus.MustRegister(ScannerJobFetchedCount)
+	prometheus.MustRegister(
+		ProbeHistogram,
+		InputCounter, Input2EmitterCounter, InputHistogram,
+		Emitter2SchedulerCounter, EmitterHistogram,
+		Scheduler2OutputCounter, SchedulerTotalHistogram, SchedulerSubmitHistogram, SchedulerAckHistogram,
+		OutputCounter, OutputHistogram,
+		End2EndEventTimeHistogram, End2EndProcessTimeHistogram,
+		QueueLength,
+	)
 }

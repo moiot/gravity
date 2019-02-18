@@ -26,36 +26,12 @@ import (
 const Name = "async-kafka"
 
 var (
-	KafkaMsgSizeGaugeVec = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "drc_v2",
-			Subsystem: "output_async_kafka",
-			Name:      "binlog_msg_size",
-			Help:      "binlog msg size",
-		}, []string{metrics.PipelineTag, metrics.TopicTag},
-	)
-
-	KafkaEnqueuedCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "drc_v2",
+	KafkaMsgSizeGaugeVec = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "gravity",
 		Subsystem: "output_async_kafka",
-		Name:      "kafka_enqueue",
-		Help:      "Number of enqueued message of kafka by topic",
-	}, []string{metrics.PipelineTag, metrics.TopicTag})
-
-	KafkaSuccessCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "output_async_kafka",
-		Name:      "kafka_success",
-		Help:      "Number of success message of kafka",
-	}, []string{metrics.PipelineTag, metrics.TopicTag})
-
-	KafkaPartitionCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: "drc_v2",
-			Subsystem: "output_async_kafka",
-			Name:      "partition_counter",
-			Help:      "the number of message sent to each partition",
-		}, []string{metrics.PipelineTag, metrics.TopicTag, metrics.PartitionTag})
+		Name:      "binlog_msg_size",
+		Help:      "binlog msg size",
+	}, []string{metrics.PipelineTag, "topic"})
 )
 
 type AsyncKafkaPluginConfig struct {
@@ -83,9 +59,6 @@ func init() {
 	registry.RegisterPlugin(registry.OutputPlugin, Name, &AsyncKafka{}, false)
 
 	prometheus.MustRegister(KafkaMsgSizeGaugeVec)
-	prometheus.MustRegister(KafkaEnqueuedCount)
-	prometheus.MustRegister(KafkaSuccessCount)
-	prometheus.MustRegister(KafkaPartitionCounter)
 }
 
 func (output *AsyncKafka) Configure(pipelineName string, data map[string]interface{}) error {
@@ -153,8 +126,7 @@ func (output *AsyncKafka) Start(msgAcker core.MsgAcker) error {
 			if err := output.msgAcker.AckMsg(msg); err != nil {
 				log.Fatalf("failed to ack job, err: %v", errors.ErrorStack(err))
 			}
-			KafkaSuccessCount.WithLabelValues(output.pipelineName, topic).Add(1)
-			KafkaPartitionCounter.WithLabelValues(output.pipelineName, topic, fmt.Sprintf("%v", partition)).Add(1)
+			metrics.OutputCounter.WithLabelValues(output.pipelineName, topic, fmt.Sprint(partition), "", "").Add(1)
 		}
 		log.Infof("[server] kafkaAsync success ack exit")
 	}()
@@ -232,7 +204,6 @@ func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 
 		KafkaMsgSizeGaugeVec.WithLabelValues(output.pipelineName, topic).Set(float64(size))
 		output.kafkaAsyncProducer.Input() <- &kafkaMsg
-		KafkaEnqueuedCount.WithLabelValues(output.pipelineName, topic).Add(1)
 	}
 
 	return nil

@@ -28,7 +28,11 @@ func (plugin *dumpInput) Configure(pipelineName string, data map[string]interfac
 	return nil
 }
 
-func (plugin *dumpInput) Start(emitter core.Emitter, router core.Router) error {
+func (plugin *dumpInput) NewPositionStore() (position_store.PositionCacheInterface, error) {
+	return nil, nil
+}
+
+func (plugin *dumpInput) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
 	return nil
 }
 
@@ -40,19 +44,11 @@ func (plugin *dumpInput) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *dumpInput) NewPositionStore() (position_store.PositionStore, error) {
-	return nil, nil
-}
-
-func (plugin *dumpInput) PositionStore() position_store.PositionStore {
-	return nil
-}
-
 func (plugin *dumpInput) SendDeadSignal() error {
 	return nil
 }
 
-func (plugin *dumpInput) Done() chan position_store.Position {
+func (plugin *dumpInput) Done(positionCache position_store.PositionCacheInterface) chan position_store.Position {
 	return make(chan position_store.Position)
 }
 

@@ -207,7 +207,7 @@ func TestMySQLBatch(t *testing.T) {
 
 	// wait for some time to see if server is healthy
 	sliding_window.DefaultHealthyThreshold = 4
-	time.Sleep(5)
+	time.Sleep(6)
 
 	r.True(server.Scheduler.Healthy())
 
@@ -589,7 +589,7 @@ func TestMySQLToMySQLPositionReset(t *testing.T) {
 	server, err = app.NewServer(pipelineConfig.ToV3())
 	r.NoError(err)
 
-	server.PositionStore.Clear()
+	server.PositionCache.Clear()
 	for _, t := range tables {
 		_, err := targetDB.Exec(fmt.Sprintf("truncate table %s.%s", targetDBName, t))
 		r.NoError(err)
@@ -706,7 +706,7 @@ func TestMySQLToMyBidirection(t *testing.T) {
 	r.Equal(2, ids[0])
 }
 
-func TestTagDDL(t *testing.T) {
+func TestMySQLTagDDL(t *testing.T) {
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -778,7 +778,7 @@ func TestTagDDL(t *testing.T) {
 	r.Equal(sql.ErrNoRows, err)
 }
 
-func TestDDL(t *testing.T) {
+func TestMySQLDDL(t *testing.T) {
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -871,7 +871,7 @@ func TestDDL(t *testing.T) {
 	server.Close()
 }
 
-func TestDDLNoRoute(t *testing.T) {
+func TestMySQLDDLNoRoute(t *testing.T) {
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name())

@@ -7,6 +7,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
@@ -14,6 +15,7 @@ import (
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
 	"github.com/moiot/gravity/pkg/position_store"
@@ -25,17 +27,17 @@ type OplogTailer struct {
 	uniqueSourceName string
 	oplogChecker     *OplogChecker
 	// mqMsgType         protocol.JobMsgType
-	emitter        core.Emitter
-	router         core.Router
-	ctx            context.Context
-	cancel         context.CancelFunc
-	idx            int
-	session        *mgo.Session
-	gtmConfig      *config.GtmConfig
-	opCtx          *gtm.OpCtx
-	sourceHost     string
-	timestampStore position_store.MongoPositionStore
-	stopped        bool
+	emitter       core.Emitter
+	router        core.Router
+	ctx           context.Context
+	cancel        context.CancelFunc
+	idx           int
+	session       *mgo.Session
+	gtmConfig     *config.GtmConfig
+	opCtx         *gtm.OpCtx
+	sourceHost    string
+	positionCache position_store.PositionCacheInterface
+	stopped       bool
 }
 
 type isMasterResult struct {
@@ -71,7 +73,7 @@ func (tailer *OplogTailer) Filter(op *gtm.Op, option *filterOpt) bool {
 
 	// handle heartbeat before route filter
 	if op.IsUpdate() && dbName == consts.GravityDBName && tableName == OplogCheckerCollectionName {
-		tailer.oplogChecker.MarkActive(tailer.sourceHost, op.Data)
+		tailer.oplogChecker.MarkActive(op.Data)
 	}
 
 	// handle control msg
@@ -103,14 +105,21 @@ func (tailer *OplogTailer) Run() {
 
 	log.Infof("[oplog_tailer] isMaster: %v", result)
 
-	t := tailer.timestampStore.Get()
+	positionValue, err := GetPositionValue(tailer.positionCache)
+	if err != nil {
+		log.Fatalf("[oplogTailer] failed to get position: %v", errors.Trace(err))
+	}
+
 	after := func(session *mgo.Session, options *gtm.Options) bson.MongoTimestamp {
-		ts := tailer.timestampStore.Get()
-		return bson.MongoTimestamp(ts)
+		positionValue, err := GetPositionValue(tailer.positionCache)
+		if err != nil {
+			log.Fatalf("[oplogTailer] failed to get position: %v", errors.Trace(err))
+		}
+		return bson.MongoTimestamp(positionValue.CurrentPosition)
 	}
 
 	// If timestamp is 0, we start from the LastOpTimestamp
-	if t == 0 {
+	if positionValue.CurrentPosition == config.MongoPosition(0) {
 		log.Infof("[oplog_tailer] start from the latest timestamp")
 		after = nil
 	} else {
@@ -146,12 +155,16 @@ func (tailer *OplogTailer) Run() {
 		case err := <-tailer.opCtx.ErrC:
 			log.Fatalf("[oplog_tailer] err: %v", err)
 		case op := <-tailer.opCtx.OpC:
+			received := time.Now()
 			if mongo.IsDeadSignal(op, tailer.pipelineName) {
 				log.Info("[oplog_tailer] receive dead signal, exit")
 				tailer.Stop()
 			}
 
 			msg := core.Msg{
+				Phase: core.Phase{
+					EnterInput: received,
+				},
 				Host:      tailer.sourceHost,
 				Database:  op.GetDatabase(),
 				Table:     op.GetCollection(),
@@ -159,15 +172,18 @@ func (tailer *OplogTailer) Run() {
 				Oplog:     op,
 				Done:      make(chan struct{}),
 			}
+			var c prometheus.Counter
 
 			if op.IsCommand() {
 				stmt, err := jsoniter.MarshalToString(op.Data)
 				if err != nil {
 					log.Fatalf("[oplog_tailer] fail to marshal command. data: %v, err: %s", op.Data, err)
 				}
+				msg.Type = core.MsgDDL
 				msg.DdlMsg = &core.DDLMsg{
 					Statement: stmt,
 				}
+				c = metrics.InputCounter.WithLabelValues(tailer.pipelineName, msg.Database, msg.Table, string(msg.Type), "")
 			} else {
 				var o core.DMLOp
 				var data map[string]interface{}
@@ -180,6 +196,7 @@ func (tailer *OplogTailer) Run() {
 				} else if op.IsDelete() {
 					o = core.Delete
 				}
+				msg.Type = core.MsgDML
 				msg.DmlMsg = &core.DMLMsg{
 					Operation: o,
 					Data:      data,
@@ -188,13 +205,13 @@ func (tailer *OplogTailer) Run() {
 						"_id": op.Id,
 					},
 				}
+				c = metrics.InputCounter.WithLabelValues(tailer.pipelineName, msg.Database, msg.Table, string(msg.Type), string(o))
 			}
-
+			c.Add(1)
 			msg.InputStreamKey = utils.NewStringPtr("mongooplog")
 			msg.OutputStreamKey = utils.NewStringPtr(outputStreamKey(msg.Oplog))
 			msg.InputContext = config.MongoPosition(op.Timestamp)
 			msg.AfterCommitCallback = tailer.AfterMsgCommit
-			msg.Metrics = core.Metrics{MsgCreateTime: time.Now()}
 			if err := tailer.emitter.Emit(&msg); err != nil {
 				log.Fatalf("failed to emit: %v", errors.ErrorStack(err))
 			}
@@ -212,7 +229,9 @@ func (tailer *OplogTailer) AfterMsgCommit(msg *core.Msg) error {
 		return errors.Errorf("invalid InputContext")
 	}
 
-	tailer.timestampStore.Put(position)
+	if err := UpdateCurrentPositionValue(tailer.positionCache, position); err != nil {
+		return errors.Trace(err)
+	}
 	return nil
 }
 
@@ -251,16 +270,16 @@ type OplogTailerOpt struct {
 	pipelineName     string
 	uniqueSourceName string
 	// mqMsgType        protocol.JobMsgType
-	gtmConfig      *config.GtmConfig
-	session        *mgo.Session
-	oplogChecker   *OplogChecker
-	sourceHost     string
-	timestampStore position_store.MongoPositionStore
-	emitter        core.Emitter
-	router         core.Router
-	logger         log.Logger
-	idx            int
-	ctx            context.Context
+	gtmConfig     *config.GtmConfig
+	session       *mgo.Session
+	oplogChecker  *OplogChecker
+	sourceHost    string
+	positionCache position_store.PositionCacheInterface
+	emitter       core.Emitter
+	router        core.Router
+	logger        log.Logger
+	idx           int
+	ctx           context.Context
 }
 
 func NewOplogTailer(opts *OplogTailerOpt) *OplogTailer {
@@ -278,7 +297,7 @@ func NewOplogTailer(opts *OplogTailerOpt) *OplogTailer {
 		router:           opts.router,
 		idx:              opts.idx,
 		sourceHost:       opts.sourceHost,
-		timestampStore:   opts.timestampStore,
+		positionCache:    opts.positionCache,
 	}
 	tailer.ctx, tailer.cancel = context.WithCancel(opts.ctx)
 	log.Infof("[oplog_tailer] tailer created")

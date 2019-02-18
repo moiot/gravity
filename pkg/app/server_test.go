@@ -63,7 +63,7 @@ sliding-window-size = 1024
 	}
 
 	at.False(pipelineConfig.IsV3())
-	server, err := Parse(pipelineConfig.ToV3())
+	server, err := ParsePlugins(pipelineConfig.ToV3())
 	at.NoError(err, errors.ErrorStack(err))
 	at.True(len(server.filters) == 1)
 }
@@ -136,7 +136,7 @@ sliding-window-size = 1024
 		at.FailNow(errors.ErrorStack(err))
 	}
 
-	server, err := Parse(pipelineConfig)
+	server, err := ParsePlugins(pipelineConfig)
 	at.NoError(err, errors.ErrorStack(err))
 	at.True(len(server.filters) == 2)
 }

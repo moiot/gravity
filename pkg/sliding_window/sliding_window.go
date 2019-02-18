@@ -10,6 +10,7 @@ type WindowItem interface {
 	SequenceNumber() int64
 	BeforeWindowMoveForward()
 	EventTime() time.Time
+	ProcessTime() time.Time
 }
 
 // (Output) Watermark is defined as the minimum process time of input(which may be blocked on enqueue) and active items in window.

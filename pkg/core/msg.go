@@ -5,12 +5,15 @@ import (
 	"hash/fnv"
 	"time"
 
+	"github.com/juju/errors"
+
 	"github.com/pingcap/parser/ast"
-	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/mongo/gtm"
 )
+
+var PipelineName string
 
 type MsgType string
 
@@ -37,7 +40,7 @@ const (
 type AfterMsgCommitFunc func(m *Msg) error
 
 type Msg struct {
-	Metrics
+	Phase
 
 	Type     MsgType
 	Host     string
@@ -50,7 +53,7 @@ type Msg struct {
 	//
 	// Timestamp, TimeZone, Oplog will be deprecated.
 	//
-	Timestamp time.Time
+	Timestamp time.Time // event generated at source
 	TimeZone  *time.Location
 	Oplog     *gtm.Op
 
@@ -62,6 +65,27 @@ type Msg struct {
 
 	InputContext        interface{}
 	AfterCommitCallback AfterMsgCommitFunc
+}
+
+func (msg *Msg) SequenceNumber() int64 {
+	return *msg.InputSequence
+}
+
+func (msg *Msg) BeforeWindowMoveForward() {
+	if msg.AfterCommitCallback != nil {
+		if err := msg.AfterCommitCallback(msg); err != nil {
+			log.Fatalf("callback failed: %v", errors.ErrorStack(err))
+		}
+	}
+	close(msg.Done)
+}
+
+func (msg *Msg) EventTime() time.Time {
+	return msg.Timestamp
+}
+
+func (msg *Msg) ProcessTime() time.Time {
+	return msg.EnterInput
 }
 
 type MsgSubmitter interface {
@@ -127,73 +151,14 @@ func SafeEncodeString(s string) string {
 	return string(r)
 }
 
-//
-// metrics definitions
-//
-type Metrics struct {
-	MsgCreateTime time.Time
-	MsgEmitTime   time.Time
-	MsgSubmitTime time.Time
-	MsgAckTime    time.Time
-}
-
-const (
-	PipelineTag = "pipeline"
-)
-
-var (
-	MsgCreateToEmitDurationHistogram = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "drc_v2",
-			Subsystem: "gravity",
-			Name:      "msg_create_to_emit_duration",
-			Help:      "Bucketed histogram of processing time (s) from msg create to msg emit",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-		}, []string{PipelineTag})
-
-	MsgEmitToSubmitDurationHistogram = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "drc_v2",
-			Subsystem: "gravity",
-			Name:      "msg_emit_to_submit_duration",
-			Help:      "Bucketed histogram of processing time (s) from msg emit to submit",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-		}, []string{PipelineTag})
-
-	MsgSubmitToAckDurationHistogram = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "drc_v2",
-			Subsystem: "gravity",
-			Name:      "msg_submit_to_ack_duration",
-			Help:      "Bucketed histogram of processing time (s) from msg submit to ack",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-		}, []string{PipelineTag})
-
-	MsgCreateToAckDurationHistogram = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: "drc_v2",
-			Subsystem: "gravity",
-			Name:      "msg_create_to_ack_duration",
-			Help:      "Bucketed histogram of processing time (s) from msg create to ack",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22),
-		}, []string{PipelineTag})
-)
-
-func AddMetrics(pipelineName string, msg *Msg) {
-	msgCreateToEmitDuration := msg.MsgEmitTime.Sub(msg.MsgCreateTime).Seconds()
-	msgEmitToSubmitDuration := msg.MsgSubmitTime.Sub(msg.MsgEmitTime).Seconds()
-	msgSubmitToAckDuration := msg.MsgAckTime.Sub(msg.MsgSubmitTime).Seconds()
-	msgCreateToAckDuration := msg.MsgAckTime.Sub(msg.MsgCreateTime).Seconds()
-
-	MsgCreateToEmitDurationHistogram.WithLabelValues(pipelineName).Observe(msgCreateToEmitDuration)
-	MsgEmitToSubmitDurationHistogram.WithLabelValues(pipelineName).Observe(msgEmitToSubmitDuration)
-	MsgSubmitToAckDurationHistogram.WithLabelValues(pipelineName).Observe(msgSubmitToAckDuration)
-	MsgCreateToAckDurationHistogram.WithLabelValues(pipelineName).Observe(msgCreateToAckDuration)
-}
-
-func init() {
-	prometheus.MustRegister(MsgCreateToEmitDurationHistogram)
-	prometheus.MustRegister(MsgEmitToSubmitDurationHistogram)
-	prometheus.MustRegister(MsgSubmitToAckDurationHistogram)
-	prometheus.MustRegister(MsgCreateToAckDurationHistogram)
+type Phase struct {
+	EnterInput     time.Time
+	EnterEmitter   time.Time // also leave input
+	LeaveEmitter   time.Time
+	EnterScheduler time.Time // also enter submitter
+	LeaveScheduler time.Time // also leave acker
+	LeaveSubmitter time.Time
+	EnterAcker     time.Time // also leave output
+	EnterOutput    time.Time
+	//Committed      time.Time not used
 }

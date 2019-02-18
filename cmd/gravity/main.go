@@ -11,7 +11,7 @@ import (
 	"syscall"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -67,20 +67,19 @@ func main() {
 
 	server, err := app.NewServer(cfg.PipelineConfig)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(errors.ErrorStack(err))
 	}
 
 	if cfg.ClearPosition {
-		positionStore := server.Input.PositionStore()
-		pos := positionStore.Position()
-		positionStore.Clear()
-		log.Infof("position cleared: %s", pos)
+		if err := server.PositionCache.Clear(); err != nil {
+			log.Errorf("failed to clear position, err: %v", errors.ErrorStack(err))
+		}
 		return
 	}
 
 	err = server.Start()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(errors.ErrorStack(err))
 	}
 
 	go func() {
@@ -175,21 +174,22 @@ func healthzHandler(server *app.Server) func(http.ResponseWriter, *http.Request)
 
 func statusHandler(server *app.Server, name, hash string) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		pos, err := myJson.MarshalToString(server.Input.PositionStore().Position().Raw)
-		if err != nil {
-			log.Error(err)
-			http.Error(writer, err.Error(), http.StatusInternalServerError)
+		position, v, exist, err := server.PositionCache.GetEncodedPersistentPosition()
+		if err != nil || !exist {
+			writer.WriteHeader(http.StatusInternalServerError)
+			log.Error("[statusHandler] failed to get positionRepoModel, exist: %v, err: %v", exist, errors.ErrorStack(err))
 			return
 		}
+
 		var state = core.ReportStageIncremental
-		if server.Input.Stage() == config.Batch {
+		if position.Stage == config.Batch {
 			state = core.ReportStageFull
 		}
 
 		ret := core.TaskReportStatus{
 			Name:       name,
 			ConfigHash: hash,
-			Position:   pos,
+			Position:   v,
 			Stage:      state,
 			Version:    utils.Version,
 		}
@@ -205,28 +205,14 @@ func statusHandler(server *app.Server, name, hash string) func(http.ResponseWrit
 	}
 }
 
-func resetHandler(server *app.Server, pipelineConfig config.PipelineConfigV3) func(http.ResponseWriter, *http.Request) {
+func resetHandler(server *app.Server, _ config.PipelineConfigV3) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
+		if err := server.PositionCache.Clear(); err != nil {
+			log.Errorf("[reset] failed to clear position, err: %v", errors.ErrorStack(err))
+			http.Error(writer, fmt.Sprintf("failed to clear position, err: %v", errors.ErrorStack(err)), 500)
+			return
+		}
 		server.Close()
-
-		server, err := app.NewServer(pipelineConfig)
-		if err != nil {
-			log.Errorf("[reset] fail to new server, err: %s", err)
-			http.Error(writer, fmt.Sprintf("fail to new server, err: %s", err), 500)
-			return
-		}
-		server.Input.PositionStore().Clear()
-
-		server, err = app.NewServer(pipelineConfig)
-		if err != nil {
-			log.Errorf("[reset] fail to new server, err: %s", err)
-			http.Error(writer, fmt.Sprintf("fail to new server, err: %s", err), 500)
-			return
-		}
-		if err := server.Start(); err != nil {
-			log.Errorf("[reset] fail to start server, err: %s", err)
-			http.Error(writer, fmt.Sprintf("fail to start server, err: %s", err), 500)
-			return
-		}
+		os.Exit(1)
 	}
 }

@@ -35,7 +35,7 @@ test:
 	docker-compose -f docker-compose-gravity-test.yml up --build --abort-on-container-exit
 
 test-down:
-	docker-compose -f docker-compose-gravity-test.yml down -v
+	docker-compose -f docker-compose-gravity-test.yml down -v --rmi local
 
 run-dev:
 	docker-compose -f docker-compose-gravity-dev.yml up -d --force-recreate
@@ -48,13 +48,11 @@ run-dev:
 
 build:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity cmd/gravity/main.go
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -race -o bin/gravity-race cmd/gravity/main.go
 	#$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/padder cmd/padder/main.go
 
 
 build-linux:
 	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-linux-amd64 cmd/gravity/main.go
-	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -race -o bin/gravity-race-linux-amd64 cmd/gravity/main.go
 
 check:
 	@echo "gofmt"
@@ -79,5 +77,5 @@ proto:
 
 mock:
 	mockgen -destination ./mock/binlog_checker/mock.go github.com/moiot/gravity/pkg/inputs/helper/binlog_checker BinlogChecker
-	mockgen -destination ./mock/position_store/mock.go github.com/moiot/gravity/pkg/position_store MySQLPositionStore,MongoPositionStore,MySQLTablePositionStore
+	mockgen -destination ./mock/position_store/mock.go github.com/moiot/gravity/pkg/position_store PositionCacheInterface
 	mockgen -destination ./mock/sliding_window/mock.go github.com/moiot/gravity/pkg/sliding_window WindowItem

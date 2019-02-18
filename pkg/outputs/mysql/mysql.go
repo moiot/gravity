@@ -10,7 +10,6 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/format"
 	"github.com/pingcap/parser/model"
-	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
@@ -26,15 +25,6 @@ import (
 
 const (
 	Name = "mysql"
-)
-
-var (
-	ProcessedMsgCount = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "output_mysql",
-		Name:      "processed_msg_count",
-		Help:      "processed msg count",
-	}, []string{metrics.PipelineTag, "type"})
 )
 
 type MySQLPluginConfig struct {
@@ -56,7 +46,6 @@ type MySQLOutput struct {
 }
 
 func init() {
-	prometheus.MustRegister(ProcessedMsgCount)
 	registry.RegisterPlugin(registry.OutputPlugin, Name, &MySQLOutput{}, false)
 }
 
@@ -195,6 +184,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
 				}
 				log.Info("[output-mysql] executed ddl: ", stmt)
+				metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "create-table").Add(1)
 				output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
 
 			case *ast.AlterTableStmt:
@@ -219,16 +209,13 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					}
 				} else {
 					log.Info("[output-mysql] executed ddl: ", stmt)
+					metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "alter-table").Add(1)
 					output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
 				}
 
 			default:
 				log.Info("[output-mysql] ignore unsupported ddl: ", msg.DdlMsg.Statement)
 			}
-
-			ProcessedMsgCount.
-				WithLabelValues(output.pipelineName, string(core.MsgDDL)).
-				Add(1)
 
 			return nil
 
@@ -272,9 +259,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 			return errors.Trace(err)
 		}
 
-		ProcessedMsgCount.
-			WithLabelValues(output.pipelineName, string(core.MsgDML)).
-			Add(float64(len(batch)))
+		metrics.OutputCounter.WithLabelValues(output.pipelineName, targetTableDef.Schema, targetTableDef.Name, string(core.MsgDML), output.cfg.EngineConfig.Type).Add(float64(len(batch)))
 	}
 
 	return nil
