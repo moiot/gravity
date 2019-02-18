@@ -25,26 +25,24 @@ func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCache
 			return errors.Trace(err)
 		}
 
-		p := &utils.MySQLBinlogPosition{
+		p := utils.MySQLBinlogPosition{
 			BinLogFileName: binlogFilePos.Name,
 			BinLogFilePos:  binlogFilePos.Pos,
 			BinlogGTID:     gtid.String(),
 		}
 		// Do not initialize start position.
 		// StartPosition is a user configured parameter.
-		binlogPositions := helper.BinlogPositionsValue{
-			CurrentPosition: p,
-		}
-
-		v, err := helper.SerializeBinlogPositionValue(&binlogPositions)
-		if err != nil {
-			return errors.Trace(err)
+		binlogPositionValue := helper.BinlogPositionsValue{
+			CurrentPosition: &p,
 		}
 
 		position := position_store.Position{
-			Stage:      config.Stream,
-			Value:      v,
-			UpdateTime: time.Now(),
+			PositionMeta: position_store.PositionMeta{
+				Stage:      config.Stream,
+				UpdateTime: time.Now(),
+			},
+
+			Value: binlogPositionValue,
 		}
 		if err := positionCache.Put(position); err != nil {
 			return errors.Trace(err)
@@ -54,9 +52,9 @@ func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCache
 
 	}
 
-	runTimePositions, err := helper.DeserializeBinlogPositionValue(position.Value)
-	if err != nil {
-		return errors.Trace(err)
+	runTimePositions, ok := position.Value.(helper.BinlogPositionsValue)
+	if !ok {
+		return errors.Errorf("invalid position value type")
 	}
 
 	// reset runTimePositions
@@ -72,39 +70,38 @@ func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCache
 		}
 	}
 
-	v, err := helper.SerializeBinlogPositionValue(runTimePositions)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	position.Value = v
+	position.Value = runTimePositions
 	if err := positionCache.Put(position); err != nil {
 		return errors.Trace(err)
 	}
 	return errors.Trace(positionCache.Flush())
 }
 
-func GetCurrentPositionValue(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, error) {
+func GetCurrentPositionValue(cache position_store.PositionCacheInterface) (utils.MySQLBinlogPosition, error) {
 	_, current, err := getBinlogPositionsValue(cache)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return utils.MySQLBinlogPosition{}, errors.Trace(err)
 	}
-	return current, nil
+	return *current, nil
 }
 
-func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, currentPosition *utils.MySQLBinlogPosition) error {
+func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, currentPosition utils.MySQLBinlogPosition) error {
 	start, _, err := getBinlogPositionsValue(cache)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	v, err := helper.SerializeBinlogPositionValue(&helper.BinlogPositionsValue{StartPosition: start, CurrentPosition: currentPosition})
-	if err != nil {
-		return errors.Trace(err)
+	binlogPositionValue := helper.BinlogPositionsValue{
+		StartPosition:   start,
+		CurrentPosition: &currentPosition,
 	}
 
 	position := position_store.Position{
-		Stage: config.Stream,
-		Value: v,
+		PositionMeta: position_store.PositionMeta{
+			Stage: config.Stream,
+		},
+
+		Value: binlogPositionValue,
 	}
 
 	if err := cache.Put(position); err != nil {
@@ -133,14 +130,14 @@ func getBinlogPositionsValue(cache position_store.PositionCacheInterface) (*util
 		return nil, nil, errors.New("empty position")
 	}
 
-	positions, err := helper.DeserializeBinlogPositionValue(position.Value)
-	if err != nil {
-		return nil, nil, errors.Trace(err)
+	binlogPositionValue, ok := position.Value.(helper.BinlogPositionsValue)
+	if !ok {
+		return nil, nil, errors.Errorf("invalid position type")
 	}
 
-	if positions.CurrentPosition == nil {
+	if binlogPositionValue.CurrentPosition == nil {
 		return nil, nil, errors.Errorf("empty currentPosition")
 	}
 
-	return positions.StartPosition, positions.CurrentPosition, nil
+	return binlogPositionValue.StartPosition, binlogPositionValue.CurrentPosition, nil
 }

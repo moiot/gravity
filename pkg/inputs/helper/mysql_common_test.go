@@ -17,7 +17,7 @@ func TestSerializeBinlogPositions(t *testing.T) {
 		CurrentPosition: &utils.MySQLBinlogPosition{BinlogGTID: fmt.Sprintf("%s,%s", gtidBig, gtidSmall)},
 	}
 
-	v, err := SerializeBinlogPositionValue(&position)
+	v, err := SerializeBinlogPositionValue(position)
 	r.NoError(err)
 
 	p2, err := DeserializeBinlogPositionValue(v)

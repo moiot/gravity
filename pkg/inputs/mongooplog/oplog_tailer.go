@@ -114,11 +114,11 @@ func (tailer *OplogTailer) Run() {
 		if err != nil {
 			log.Fatalf("[oplogTailer] failed to get position: %v", errors.Trace(err))
 		}
-		return bson.MongoTimestamp(*positionValue.CurrentPosition)
+		return bson.MongoTimestamp(positionValue.CurrentPosition)
 	}
 
 	// If timestamp is 0, we start from the LastOpTimestamp
-	if *positionValue.CurrentPosition == 0 {
+	if positionValue.CurrentPosition == config.MongoPosition(0) {
 		log.Infof("[oplog_tailer] start from the latest timestamp")
 		after = nil
 	} else {
@@ -234,7 +234,7 @@ func (tailer *OplogTailer) AfterMsgCommit(msg *core.Msg) error {
 		return errors.Errorf("invalid InputContext")
 	}
 
-	if err := UpdateCurrentPositionValue(tailer.positionCache, &position); err != nil {
+	if err := UpdateCurrentPositionValue(tailer.positionCache, position); err != nil {
 		return errors.Trace(err)
 	}
 	return nil

@@ -34,10 +34,6 @@ const (
 
 var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
 
-func isPositionEquals(p1 *utils.MySQLBinlogPosition, p2 *utils.MySQLBinlogPosition) bool {
-	return p1.BinlogGTID == p2.BinlogGTID
-}
-
 type TablePosition struct {
 	Value  interface{} `toml:"value" json:"value,omitempty"`
 	Type   string      `toml:"type" json:"type"`
@@ -159,44 +155,33 @@ func (p *TablePosition) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+type TableStats struct {
+	Max               *TablePosition `toml:"max" json:"max"`
+	Min               *TablePosition `toml:"min" json:"min"`
+	Current           *TablePosition `toml:"current" json:"current"`
+	EstimatedRowCount int64          `json:"estimated-count"`
+	ScannedCount      int64          `json:"scanned-count"`
+}
+
 type BatchPositionValue struct {
-	Start   *utils.MySQLBinlogPosition `toml:"start-binlog" json:"start-binlog"`
-	Min     map[string]TablePosition   `toml:"min" json:"min"`
-	Max     map[string]TablePosition   `toml:"max" json:"max"`
-	Current map[string]TablePosition   `toml:"current" json:"current"`
+	Start       utils.MySQLBinlogPosition `toml:"start-binlog" json:"start-binlog"`
+	TableStates map[string]TableStats     `toml:"table-stats" json:"table-stats"`
 }
 
-func Serialize(positions *BatchPositionValue) (string, error) {
-	s, err := myJson.MarshalToString(positions)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	return s, nil
+func EncodeBatchPositionValue(v interface{}) (string, error) {
+	return myJson.MarshalToString(v)
 }
 
-func Deserialize(value string) (*BatchPositionValue, error) {
-	positionValue := BatchPositionValue{}
-	if err := myJson.UnmarshalFromString(value, &positionValue); err != nil {
+func DecodeBatchPositionValue(s string) (interface{}, error) {
+	v := BatchPositionValue{}
+	if err := myJson.UnmarshalFromString(s, &v); err != nil {
 		return nil, errors.Trace(err)
 	}
-
-	if positionValue.Min == nil {
-		positionValue.Min = make(map[string]TablePosition)
-	}
-
-	if positionValue.Max == nil {
-		positionValue.Max = make(map[string]TablePosition)
-	}
-
-	if positionValue.Current == nil {
-		positionValue.Current = make(map[string]TablePosition)
-	}
-
-	return &positionValue, nil
+	return v, nil
 }
 
 func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB *sql.DB) error {
-	position, exist, err := cache.Get()
+	_, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -214,15 +199,12 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB 
 			BinlogGTID:     gtid.String(),
 		}
 
-		batchPositions := BatchPositionValue{
-			Start: &startPosition,
+		batchPositionValue := BatchPositionValue{
+			Start:       startPosition,
+			TableStates: make(map[string]TableStats),
 		}
-		v, err := Serialize(&batchPositions)
-		if err != nil {
-			return errors.Trace(err)
-		}
-
-		position.Value = v
+		position := position_store.Position{}
+		position.Value = batchPositionValue
 		position.Stage = config.Batch
 		position.UpdateTime = time.Now()
 		if err := cache.Put(position); err != nil {
@@ -238,53 +220,58 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB 
 
 var mu sync.Mutex
 
-func GetStartBinlog(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, error) {
+func GetStartBinlog(cache position_store.PositionCacheInterface) (utils.MySQLBinlogPosition, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
 	position, exist, err := cache.Get()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return utils.MySQLBinlogPosition{}, errors.Trace(err)
 	}
 
 	if !exist {
-		return nil, errors.Errorf("empty position")
+		return utils.MySQLBinlogPosition{}, errors.Errorf("empty position")
 	}
 
-	batchPositions, err := Deserialize(position.Value)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	return batchPositions.Start, nil
-}
-
-func GetCurrentPos(cache position_store.PositionCacheInterface, fullTableName string) (*TablePosition, bool, error) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	position, exist, err := cache.Get()
-	if err != nil {
-		return nil, false, errors.Trace(err)
-	}
-
-	if !exist {
-		return nil, false, nil
-	}
-
-	batchPositions, err := Deserialize(position.Value)
-	if err != nil {
-		return nil, false, errors.Trace(err)
-	}
-
-	current, ok := batchPositions.Current[fullTableName]
+	batchPositionValue, ok := position.Value.(BatchPositionValue)
 	if !ok {
-		return nil, false, nil
+		return utils.MySQLBinlogPosition{}, errors.Errorf("invalid position type")
 	}
-	return &current, true, nil
+
+	return batchPositionValue.Start, nil
 }
 
-func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName string, pos *TablePosition) error {
+func GetCurrentPos(cache position_store.PositionCacheInterface, fullTableName string) (TablePosition, bool, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	position, exist, err := cache.Get()
+	if err != nil {
+		return TablePosition{}, false, errors.Trace(err)
+	}
+
+	if !exist {
+		return TablePosition{}, false, nil
+	}
+
+	batchPositionValue, ok := position.Value.(BatchPositionValue)
+	if !ok {
+		return TablePosition{}, true, errors.Errorf("invalid position type")
+	}
+
+	stats, ok := batchPositionValue.TableStates[fullTableName]
+	if !ok {
+		return TablePosition{}, false, errors.Errorf("empty stats for table: %v", fullTableName)
+	}
+
+	if stats.Current != nil {
+		return *stats.Current, true, nil
+	} else {
+		return TablePosition{}, false, nil
+	}
+}
+
+func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName string, pos TablePosition, incScanCount bool) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -297,52 +284,27 @@ func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName st
 		return errors.Errorf("empty position")
 	}
 
-	batchPositions, err := Deserialize(position.Value)
-	if err != nil {
-		return errors.Trace(err)
+	batchPositionValue, ok := position.Value.(BatchPositionValue)
+	if !ok {
+		return errors.Errorf("invalid position type")
 	}
 
-	batchPositions.Current[fullTableName] = *pos
-	v, err := Serialize(batchPositions)
-	if err != nil {
-		return errors.Trace(err)
+	stats, ok := batchPositionValue.TableStates[fullTableName]
+	if !ok {
+		return errors.Errorf("empty stats for table: %v", fullTableName)
 	}
-	position.Value = v
+
+	stats.Current = &pos
+	if incScanCount {
+		stats.ScannedCount++
+	}
+	batchPositionValue.TableStates[fullTableName] = stats
+
+	position.Value = batchPositionValue
 	return errors.Trace(cache.Put(position))
 }
 
-func GetMaxMin(cache position_store.PositionCacheInterface, fullTableName string) (*TablePosition, *TablePosition, bool, error) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	position, exist, err := cache.Get()
-	if err != nil {
-		return nil, nil, false, errors.Trace(err)
-	}
-
-	if !exist {
-		return nil, nil, false, nil
-	}
-
-	batchPositions, err := Deserialize(position.Value)
-	if err != nil {
-		return nil, nil, false, errors.Trace(err)
-	}
-
-	max, ok := batchPositions.Max[fullTableName]
-	if !ok {
-		return nil, nil, false, nil
-	}
-
-	min, ok := batchPositions.Min[fullTableName]
-	if !ok {
-		return nil, nil, false, nil
-	}
-
-	return &max, &min, true, nil
-}
-
-func PutMaxMin(cache position_store.PositionCacheInterface, fullTableName string, max *TablePosition, min *TablePosition) error {
+func PutEstimatedCount(cache position_store.PositionCacheInterface, fullTableName string, estimatedCount int64) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -355,20 +317,82 @@ func PutMaxMin(cache position_store.PositionCacheInterface, fullTableName string
 		return errors.Errorf("empty position")
 	}
 
-	batchPositions, err := Deserialize(position.Value)
+	batchPositionValue, ok := position.Value.(BatchPositionValue)
+	if !ok {
+		return errors.Errorf("invalid position type")
+	}
+
+	stats, ok := batchPositionValue.TableStates[fullTableName]
+	if !ok {
+		batchPositionValue.TableStates[fullTableName] = TableStats{}
+		stats = batchPositionValue.TableStates[fullTableName]
+	}
+
+	stats.EstimatedRowCount = estimatedCount
+	batchPositionValue.TableStates[fullTableName] = stats
+
+	position.Value = batchPositionValue
+	return errors.Trace(cache.Put(position))
+}
+
+func GetMaxMin(cache position_store.PositionCacheInterface, fullTableName string) (TablePosition, TablePosition, bool, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	position, exist, err := cache.Get()
+	if err != nil {
+		return TablePosition{}, TablePosition{}, false, errors.Trace(err)
+	}
+
+	if !exist {
+		return TablePosition{}, TablePosition{}, false, nil
+	}
+
+	batchPositionValue, ok := position.Value.(BatchPositionValue)
+	if !ok {
+		return TablePosition{}, TablePosition{}, true, errors.Errorf("invalid position type")
+	}
+
+	stats, ok := batchPositionValue.TableStates[fullTableName]
+	if !ok {
+		return TablePosition{}, TablePosition{}, false, nil
+	}
+
+	if stats.Max == nil || stats.Min == nil {
+		return TablePosition{}, TablePosition{}, false, nil
+	}
+
+	return *stats.Max, *stats.Min, true, nil
+}
+
+func PutMaxMin(cache position_store.PositionCacheInterface, fullTableName string, max TablePosition, min TablePosition) error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	position, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	batchPositions.Max[fullTableName] = *max
-	batchPositions.Min[fullTableName] = *min
-
-	newV, err := Serialize(batchPositions)
-	if err != nil {
-		return errors.Trace(err)
+	if !exist {
+		return errors.Errorf("empty position")
 	}
 
-	position.Value = newV
+	batchPositionValue, ok := position.Value.(BatchPositionValue)
+	if !ok {
+		return errors.Errorf("invalid position type")
+	}
+
+	stats, ok := batchPositionValue.TableStates[fullTableName]
+	if !ok {
+		batchPositionValue.TableStates[fullTableName] = TableStats{}
+		stats = batchPositionValue.TableStates[fullTableName]
+	}
+	stats.Max = &max
+	stats.Min = &min
+	batchPositionValue.TableStates[fullTableName] = stats
+
+	position.Value = batchPositionValue
 
 	return errors.Trace(cache.Put(position))
 }

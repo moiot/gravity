@@ -115,7 +115,7 @@ func TestDetectScanColumn(t *testing.T) {
 		testDBName := "mysql_table_scanner_test_4"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-		col, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableIdPrimary, 1000)
+		col, _, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableIdPrimary, 1000)
 		r.Nil(err)
 		r.Equal("id", col)
 	})
@@ -124,7 +124,7 @@ func TestDetectScanColumn(t *testing.T) {
 		testDBName := "mysql_table_scanner_test_5"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-		c, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 1000)
+		c, _, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 1000)
 		r.Nil(err)
 		r.Equal("*", c)
 	})
@@ -133,7 +133,7 @@ func TestDetectScanColumn(t *testing.T) {
 		testDBName := "mysql_table_scanner_test_6"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-		_, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 0)
+		_, _, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 0)
 		r.NotNil(err)
 	})
 
@@ -141,7 +141,7 @@ func TestDetectScanColumn(t *testing.T) {
 		testDBName := "mysql_table_scanner_test_7"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-		col, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableUniqueIndexEmailString, 1000)
+		col, _, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableUniqueIndexEmailString, 1000)
 		r.Nil(err)
 		r.Equal("email", col)
 	})
@@ -349,10 +349,30 @@ func TestTableScanner_Start(t *testing.T) {
 
 			throttle := time.NewTicker(100 * time.Millisecond)
 
-			positionCache, err := position_store.NewPositionCache(testDBName, positionRepo, 10*time.Second)
+			positionCache, err := position_store.NewPositionCache(
+				testDBName,
+				positionRepo,
+				EncodeBatchPositionValue,
+				DecodeBatchPositionValue,
+				10*time.Second)
 			r.NoError(err)
 
 			r.NoError(SetupInitialPosition(positionCache, db))
+
+			for i := range tableDefs {
+				// empty table should be ignored
+				if c.seedFunc == nil {
+					tableDefs, tableConfigs = DeleteEmptyTables(db, tableDefs, tableConfigs)
+					r.Equal(0, len(tableDefs))
+				} else {
+					_, err := InitTablePosition(db, positionCache, tableDefs[i], c.scanColumn, 100)
+					r.NoError(err)
+				}
+			}
+
+			if len(tableDefs) == 0 {
+				continue
+			}
 
 			submitter := &fakeMsgSubmitter{}
 			em, err := emitter.NewEmitter(nil, submitter)
@@ -381,7 +401,12 @@ func TestTableScanner_Start(t *testing.T) {
 			em, err = emitter.NewEmitter(nil, submitter)
 			r.NoError(err)
 
-			positionCache, err = position_store.NewPositionCache(testDBName, positionRepo, 10*time.Second)
+			positionCache, err = position_store.NewPositionCache(
+				testDBName,
+				positionRepo,
+				EncodeBatchPositionValue,
+				DecodeBatchPositionValue,
+				10*time.Second)
 			r.NoError(err)
 
 			q = make(chan *TableWork, 1)

@@ -93,7 +93,7 @@ func GetUniqueIndexesWithoutPks(db *sql.DB, schemaName string, tableName string)
 	return getIndexRowsName(db, statement)
 }
 
-func EstimateRowsCount(db *sql.DB, schemaName string, tableName string) (int, error) {
+func EstimateRowsCount(db *sql.DB, schemaName string, tableName string) (int64, error) {
 	statement := fmt.Sprintf("SELECT TABLE_ROWS FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s'", schemaName, tableName)
 	var rowsCount sql.NullInt64
 
@@ -106,7 +106,7 @@ func EstimateRowsCount(db *sql.DB, schemaName string, tableName string) (int, er
 		return 0, errors.Errorf("TABLE_ROWS null")
 	}
 
-	return int(rowsCount.Int64), nil
+	return rowsCount.Int64, nil
 }
 
 func IsColumnString(columnType *sql.ColumnType) bool {

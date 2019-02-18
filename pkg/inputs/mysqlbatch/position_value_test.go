@@ -18,7 +18,12 @@ func TestSetupInitialPosition(t *testing.T) {
 	t.Run("when position does not exist", func(tt *testing.T) {
 		// it get a start binlog position and save it
 		pipelineName := utils.TestCaseMd5Name(tt)
-		cache, err := position_store.NewPositionCache(pipelineName, repo, 5*time.Second)
+		cache, err := position_store.NewPositionCache(
+			pipelineName,
+			repo,
+			EncodeBatchPositionValue,
+			DecodeBatchPositionValue,
+			5*time.Second)
 		r.NoError(err)
 
 		db := mysql_test.MustSetupSourceDB(pipelineName)
@@ -30,10 +35,11 @@ func TestSetupInitialPosition(t *testing.T) {
 		r.NoError(err)
 		r.True(exists)
 
-		positionValue, err := Deserialize(p.Value)
-		r.NoError(err)
-		r.NotNil(positionValue.Start)
-		r.NotEmpty(positionValue.Start.BinlogGTID)
+		batchPositionValue, ok := p.Value.(BatchPositionValue)
+		r.True(ok)
+
+		r.NotNil(batchPositionValue.Start)
+		r.NotEmpty(batchPositionValue.Start.BinlogGTID)
 	})
 
 	t.Run("when position exists", func(tt *testing.T) {
@@ -41,15 +47,19 @@ func TestSetupInitialPosition(t *testing.T) {
 		pipelineName := utils.TestCaseMd5Name(tt)
 
 		batchPositionValue := BatchPositionValue{
-			Start: &utils.MySQLBinlogPosition{BinlogGTID: "abc:123"},
+			Start: utils.MySQLBinlogPosition{BinlogGTID: "abc:123"},
 		}
 
-		v, err := Serialize(&batchPositionValue)
+		s, err := EncodeBatchPositionValue(&batchPositionValue)
 		r.NoError(err)
+		r.NoError(repo.Put(pipelineName, position_store.PositionMeta{Name: pipelineName, Stage: config.Batch}, s))
 
-		r.NoError(repo.Put(pipelineName, position_store.Position{Name: pipelineName, Stage: config.Batch, Value: v}))
-
-		cache, err := position_store.NewPositionCache(pipelineName, repo, 5*time.Second)
+		cache, err := position_store.NewPositionCache(
+			pipelineName,
+			repo,
+			EncodeBatchPositionValue,
+			DecodeBatchPositionValue,
+			5*time.Second)
 		r.NoError(err)
 
 		db := mysql_test.MustSetupSourceDB(pipelineName)
@@ -60,13 +70,9 @@ func TestSetupInitialPosition(t *testing.T) {
 		r.NoError(err)
 		r.True(exists)
 
-		newPositionValue, err := Deserialize(p.Value)
-		r.NoError(err)
+		newPositionValue, ok := p.Value.(BatchPositionValue)
+		r.True(ok)
 		r.Equal("abc:123", newPositionValue.Start.BinlogGTID)
 	})
-
-}
-
-func TestSerialize(t *testing.T) {
 
 }

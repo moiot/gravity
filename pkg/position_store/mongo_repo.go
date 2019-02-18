@@ -27,6 +27,8 @@ type MongoPosition struct {
 	StartPosition   config.MongoPosition `json:"start_position" bson:"start_position"`
 	CurrentPosition config.MongoPosition `json:"current_position" bson:"current_position"`
 }
+
+// PositionEntity is the old format, will be deprecated
 type PositionEntity struct {
 	Name          string `json:"name" bson:"name"`
 	Stage         string `json:"stage" bson:"stage"`
@@ -34,46 +36,86 @@ type PositionEntity struct {
 	LastUpdate    string `json:"last_update" bson:"last_update"`
 }
 
+// MongoPositionRet is the new format
+type MongoPositionRet struct {
+	Version    string `json:"version" bson:"version"`
+	Name       string `json:"name" bson:"name"`
+	Stage      string `json:"stage" bson:"stage"`
+	Value      string `json:"value" bson:"value"`
+	LastUpdate string `json:"last_update" bson:"last_update"`
+}
+
 type mongoPositionRepo struct {
 	session *mgo.Session
 }
 
-func (repo *mongoPositionRepo) Get(pipelineName string) (Position, bool, error) {
-	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
-	position := Position{}
-	err := collection.Find(bson.M{"name": pipelineName}).One(&position)
-	if err != nil {
-		if err == mgo.ErrNotFound {
-			return Position{}, false, nil
-		}
-		return Position{}, false, errors.Trace(err)
-	}
-
-	// backward compatible with old position schema
-	if position.Version == "" {
-		oldPosition := PositionEntity{}
-		if err := collection.Find(bson.M{"name": pipelineName}).One(&oldPosition); err != nil {
-			return Position{}, true, errors.Trace(err)
-		}
-
-		v, err := myJson.MarshalToString(&oldPosition.MongoPosition)
-		if err != nil {
-			return Position{}, true, errors.Trace(err)
-		}
-		return Position{Name: pipelineName, Stage: config.InputMode(oldPosition.Stage), Value: v}, true, nil
-
-	}
-	return position, true, nil
+type PositionWrapper struct {
+	PositionMeta
+	MongoValue string `bson:"value" json:"value"`
 }
 
-func (repo *mongoPositionRepo) Put(pipelineName string, position Position) error {
+func (repo *mongoPositionRepo) Get(pipelineName string) (PositionMeta, string, bool, error) {
+	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
+	mongoRet := MongoPositionRet{}
+	err := collection.Find(bson.M{"name": pipelineName}).One(&mongoRet)
+	if err != nil {
+		if err == mgo.ErrNotFound {
+			return PositionMeta{}, "", false, nil
+		}
+		return PositionMeta{}, "", false, errors.Trace(err)
+	}
+
+	// backward compatible with old mongoRet schema
+	if mongoRet.Version == "" {
+		oldPosition := PositionEntity{}
+		if err := collection.Find(bson.M{"name": pipelineName}).One(&oldPosition); err != nil {
+			return PositionMeta{}, "", true, errors.Trace(err)
+		}
+
+		s, err := myJson.MarshalToString(&oldPosition.MongoPosition)
+		if err != nil {
+			return PositionMeta{}, "", true, errors.Trace(err)
+		}
+
+		return PositionMeta{Name: pipelineName, Stage: config.InputMode(oldPosition.Stage)}, s, true, nil
+
+	}
+
+	t, err := time.Parse(time.RFC3339Nano, mongoRet.LastUpdate)
+	if err != nil {
+		return PositionMeta{}, "", true, errors.Trace(err)
+	}
+
+	meta := PositionMeta{Name: mongoRet.Name, Stage: config.InputMode(mongoRet.Stage), UpdateTime: t}
+	if err := meta.Validate(); err != nil {
+		return PositionMeta{}, "", true, errors.Trace(err)
+	}
+
+	if mongoRet.Value == "" {
+		return PositionMeta{}, "", true, errors.Errorf("empty value")
+	}
+
+	return meta, mongoRet.Value, true, nil
+}
+
+func (repo *mongoPositionRepo) Put(pipelineName string, meta PositionMeta, v string) error {
+	meta.Name = pipelineName
+	meta.Version = Version
+	if err := meta.Validate(); err != nil {
+		return errors.Trace(err)
+	}
+
+	if v == "" {
+		return errors.Errorf("empty value")
+	}
+
 	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
 	_, err := collection.Upsert(
 		bson.M{"name": pipelineName}, bson.M{
 			"$set": bson.M{
-				"version":     Version,
-				"stage":       string(position.Stage),
-				"value":       position.Value,
+				"version":     meta.Version,
+				"stage":       string(meta.Stage),
+				"value":       v,
 				"last_update": time.Now().Format(time.RFC3339Nano),
 			},
 		})
