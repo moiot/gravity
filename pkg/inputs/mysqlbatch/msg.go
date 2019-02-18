@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/moiot/gravity/pkg/metrics"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 
@@ -60,9 +62,10 @@ func NewMsg(
 	msg.Done = make(chan struct{})
 	msg.AfterCommitCallback = callbackFunc
 	msg.InputContext = position
-	msg.Metrics = core.Metrics{
-		MsgCreateTime: time.Now(),
+	msg.Phase = core.Phase{
+		EnterInput: time.Now(),
 	}
+	metrics.InputCounter.WithLabelValues(core.PipelineName, msg.Database, msg.Table, string(msg.Type), string(dmlMsg.Operation)).Add(1)
 	return &msg
 }
 
@@ -86,9 +89,10 @@ func NewCreateTableMsg(parser *parser.Parser, table *schema_store.Table, createT
 	msg.InputStreamKey = utils.NewStringPtr(utils.TableIdentity(table.Schema, table.Name))
 	msg.OutputStreamKey = utils.NewStringPtr("")
 	msg.Done = make(chan struct{})
-	msg.Metrics = core.Metrics{
-		MsgCreateTime: time.Now(),
+	msg.Phase = core.Phase{
+		EnterInput: time.Now(),
 	}
+	metrics.InputCounter.WithLabelValues(core.PipelineName, msg.Database, msg.Table, string(msg.Type), "create-table").Add(1)
 	return &msg
 }
 
@@ -109,5 +113,6 @@ func NewCloseInputStreamMsg(tableDef *schema_store.Table) *core.Msg {
 		OutputStreamKey: utils.NewStringPtr(""),
 		Done:            make(chan struct{}),
 	}
+	metrics.InputCounter.WithLabelValues(core.PipelineName, msg.Database, msg.Table, string(msg.Type), "").Add(1)
 	return &msg
 }

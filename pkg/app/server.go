@@ -101,6 +101,7 @@ func ParsePlugins(pipelineConfig config.PipelineConfigV3) (*Server, error) {
 }
 
 func NewServer(pipelineConfig config.PipelineConfigV3) (*Server, error) {
+	core.PipelineName = pipelineConfig.PipelineName
 	server, err := ParsePlugins(pipelineConfig)
 	if err != nil {
 		return nil, err

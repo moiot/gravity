@@ -30,43 +30,6 @@ import (
 	"github.com/moiot/gravity/pkg/utils"
 )
 
-var (
-	GravityTableInsertCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "gravity",
-		Name:      "table_insert_rows_counter",
-		Help:      "table insert rows counter",
-	}, []string{metrics.PipelineTag, "db"})
-
-	GravityTableUpdateCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "gravity",
-		Name:      "table_update_rows_counter",
-		Help:      "table update rows counter",
-	}, []string{metrics.PipelineTag, "db"})
-
-	GravityTableDeleteCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "drc_v2",
-		Subsystem: "gravity",
-		Name:      "table_delete_rows_counter",
-		Help:      "table delete rows counter",
-	}, []string{metrics.PipelineTag, "db"})
-
-	GravityTableRowsEventSize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "drc_v2",
-		Subsystem: "gravity",
-		Name:      "rows_event_size",
-		Help:      "rows event size per txn",
-	}, []string{metrics.PipelineTag})
-)
-
-func init() {
-	prometheus.MustRegister(GravityTableInsertCounter)
-	prometheus.MustRegister(GravityTableUpdateCounter)
-	prometheus.MustRegister(GravityTableDeleteCounter)
-	prometheus.MustRegister(GravityTableRowsEventSize)
-}
-
 type BinlogEventSchemaFilterFunc func(schemaName string) bool
 
 type BinlogTailer struct {
@@ -269,6 +232,7 @@ func (tailer *BinlogTailer) Start() error {
 				log.Fatalf("[binlogTailer] unexpected err: %v", errors.ErrorStack(err))
 			}
 
+			received := time.Now()
 			tryReSync = true
 
 			if tailer.cfg.DebugBinlog && e.Header.EventType != replication.HEARTBEAT_EVENT {
@@ -297,9 +261,6 @@ func (tailer *BinlogTailer) Start() error {
 			case *replication.RowsEvent:
 
 				schemaName, tableName := string(ev.Table.Schema), string(ev.Table.Table)
-				GravityTableRowsEventSize.
-					WithLabelValues(tailer.pipelineName).
-					Add(float64(len(ev.Rows)))
 				// dead signal is received from special internal table.
 				// it is only used for test purpose right now.
 				isDeadSignal := mysql_test.IsDeadSignal(schemaName, tableName)
@@ -357,8 +318,6 @@ func (tailer *BinlogTailer) Start() error {
 
 				switch e.Header.EventType {
 				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-					GravityTableInsertCounter.WithLabelValues(tailer.pipelineName, schemaName).Add(1)
-
 					log.Debugf("[binlogTailer] Insert rows %s.%s.", schemaName, tableName)
 
 					msgs, err := NewInsertMsgs(
@@ -366,6 +325,7 @@ func (tailer *BinlogTailer) Start() error {
 						schemaName,
 						tableName,
 						int64(e.Header.Timestamp),
+						received,
 						ev,
 						tableDef,
 					)
@@ -377,8 +337,6 @@ func (tailer *BinlogTailer) Start() error {
 						tailer.AppendMsgTxnBuffer(m)
 					}
 				case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-					GravityTableUpdateCounter.WithLabelValues(tailer.pipelineName, schemaName).Add(1)
-
 					if isBinlogChecker {
 						log.Debug(".")
 					} else {
@@ -390,6 +348,7 @@ func (tailer *BinlogTailer) Start() error {
 						schemaName,
 						tableName,
 						int64(e.Header.Timestamp),
+						received,
 						ev,
 						tableDef)
 					if err != nil {
@@ -399,13 +358,12 @@ func (tailer *BinlogTailer) Start() error {
 						tailer.AppendMsgTxnBuffer(m)
 					}
 				case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-					GravityTableDeleteCounter.WithLabelValues(tailer.pipelineName, schemaName).Add(1)
-
 					msgs, err := NewDeleteMsgs(
 						tailer.cfg.Source.Host,
 						schemaName,
 						tableName,
 						int64(e.Header.Timestamp),
+						received,
 						ev,
 						tableDef)
 					if err != nil {
@@ -466,6 +424,7 @@ func (tailer *BinlogTailer) Start() error {
 					ast,
 					ddlSQL,
 					int64(e.Header.Timestamp),
+					received,
 					currentPosition)
 				if err := tailer.emitter.Emit(ddlMsg); err != nil {
 					log.Fatalf("failed to emit ddl msg: %v", errors.ErrorStack(err))
@@ -521,12 +480,6 @@ func (tailer *BinlogTailer) Start() error {
 				s.AddSet(eventUUIDSet)
 
 				currentPosition.BinlogGTID = s.String()
-
-				metrics.GravityBinlogGTIDGaugeVec.WithLabelValues(tailer.pipelineName, "gravity").Set(float64(ev.GNO))
-				GravityTableRowsEventSize.
-					WithLabelValues(tailer.pipelineName).
-					Set(0.0)
-
 				tailer.ClearMsgTxnBuffer()
 			case *replication.XIDEvent:
 				// An XID event is generated for a commit of a transaction that modifies one or
@@ -539,7 +492,7 @@ func (tailer *BinlogTailer) Start() error {
 				//  XID: 243
 				//  GTIDSet: 58ff439a-c2e2-11e6-bdc7-125c95d674c1:1-2225062
 				//
-				m := NewXIDMsg(int64(e.Header.Timestamp), tailer.AfterMsgCommit, currentPosition)
+				m := NewXIDMsg(int64(e.Header.Timestamp), received, tailer.AfterMsgCommit, currentPosition)
 				if err != nil {
 					log.Fatalf("[binlogTailer] failed: %v", errors.ErrorStack(err))
 				}
@@ -590,10 +543,18 @@ func (tailer *BinlogTailer) Wait() {
 
 // AppendMsgTxnBuffer adds basic job information to txn buffer
 func (tailer *BinlogTailer) AppendMsgTxnBuffer(msg *core.Msg) {
+	var c prometheus.Counter
+	if msg.Type == core.MsgDML {
+		c = metrics.InputCounter.WithLabelValues(core.PipelineName, msg.Database, msg.Table, string(msg.Type), string(msg.DmlMsg.Operation))
+	} else {
+		c = metrics.InputCounter.WithLabelValues(core.PipelineName, msg.Database, msg.Table, string(msg.Type), "")
+	}
+	c.Add(1)
 	if msg.Database != consts.GravityDBName && msg.Type != core.MsgCtl && tailer.router != nil && !tailer.router.Exists(msg) {
 		return
 	}
 	tailer.msgTxnBuffer = append(tailer.msgTxnBuffer, msg)
+	metrics.QueueLength.WithLabelValues(tailer.pipelineName, "input-buffer", "").Set(float64(len(tailer.msgTxnBuffer)))
 
 	// the main purpose of txn buffer is to filter out internal data,
 	// since we don't have internal txn that updates rows exceed the TxnBufferLimit,

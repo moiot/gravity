@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/moiot/gravity/mock/sliding_window"
+	mock_sliding_window "github.com/moiot/gravity/mock/sliding_window"
 	. "github.com/moiot/gravity/pkg/sliding_window"
 )
 
@@ -25,6 +25,7 @@ var _ = Describe("static sliding window test", func() {
 			item := mock_sliding_window.NewMockWindowItem(mockCtrl)
 			item.EXPECT().SequenceNumber().Return(int64(i)).AnyTimes()
 			item.EXPECT().EventTime().Return(time.Now()).AnyTimes()
+			item.EXPECT().ProcessTime().Return(time.Now()).AnyTimes()
 			commitCalls = append(commitCalls, item.EXPECT().BeforeWindowMoveForward().Return().Times(1))
 
 			items = append(items, item)
@@ -32,7 +33,7 @@ var _ = Describe("static sliding window test", func() {
 
 		gomock.InOrder(commitCalls...)
 
-		window := NewStaticSlidingWindow(100, "test")
+		window := NewStaticSlidingWindow(100)
 
 		for i := 0; i < 10; i++ {
 			window.AddWindowItem(items[i])
@@ -54,6 +55,7 @@ var _ = Describe("static sliding window test", func() {
 
 			item.EXPECT().SequenceNumber().Return(int64(i)).AnyTimes()
 			item.EXPECT().EventTime().Return(time.Now()).AnyTimes()
+			item.EXPECT().ProcessTime().Return(time.Now()).AnyTimes()
 
 			commitCalls = append(commitCalls, item.EXPECT().BeforeWindowMoveForward().Times(1))
 
@@ -62,7 +64,7 @@ var _ = Describe("static sliding window test", func() {
 
 		gomock.InOrder(commitCalls...)
 
-		window := NewStaticSlidingWindow(100, "test")
+		window := NewStaticSlidingWindow(100)
 
 		for i := 0; i < 10; i++ {
 			window.AddWindowItem(items[i])
@@ -90,12 +92,13 @@ var _ = Describe("static sliding window test", func() {
 			calls = append(calls, item.EXPECT().BeforeWindowMoveForward())
 			item.EXPECT().BeforeWindowMoveForward().Return().AnyTimes()
 			item.EXPECT().EventTime().Return(time.Now()).AnyTimes()
+			item.EXPECT().ProcessTime().Return(time.Now()).AnyTimes()
 			items = append(items, item)
 		}
 
 		gomock.InOrder(calls...)
 
-		window := NewStaticSlidingWindow(n+1, "test")
+		window := NewStaticSlidingWindow(n + 1)
 
 		for i := 0; i < n; i++ {
 			window.AddWindowItem(items[i])
@@ -122,7 +125,7 @@ var _ = Describe("static sliding window test", func() {
 
 	It("should show correct watermark", func() {
 		mockCtrl := gomock.NewController(GinkgoT())
-		window := NewStaticSlidingWindow(10, "test")
+		window := NewStaticSlidingWindow(10)
 		Expect(window.Watermark().ProcessTime.Unix()).Should(BeEquivalentTo(0))
 		var watermark1 Watermark
 
@@ -131,6 +134,7 @@ var _ = Describe("static sliding window test", func() {
 			item.EXPECT().SequenceNumber().Return(int64(1)).AnyTimes()
 			item.EXPECT().BeforeWindowMoveForward().Return().AnyTimes()
 			item.EXPECT().EventTime().Return(time.Now()).AnyTimes()
+			item.EXPECT().ProcessTime().Return(time.Now()).AnyTimes()
 			start := time.Now()
 			window.AddWindowItem(item)
 			watermark1 = window.Watermark()
@@ -144,6 +148,7 @@ var _ = Describe("static sliding window test", func() {
 			item2.EXPECT().SequenceNumber().Return(int64(2)).AnyTimes()
 			item2.EXPECT().BeforeWindowMoveForward().Return().AnyTimes()
 			item2.EXPECT().EventTime().Return(time.Now()).AnyTimes()
+			item2.EXPECT().ProcessTime().Return(time.Now()).AnyTimes()
 
 			start2 := time.Now()
 			window.AddWindowItem(item2)

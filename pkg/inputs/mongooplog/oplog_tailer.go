@@ -7,6 +7,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
@@ -14,6 +15,7 @@ import (
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
 	"github.com/moiot/gravity/pkg/position_store"
 	"github.com/moiot/gravity/pkg/utils"
@@ -70,7 +72,7 @@ func (tailer *OplogTailer) Filter(op *gtm.Op, option *filterOpt) bool {
 
 	// handle heartbeat before route filter
 	if op.IsUpdate() && dbName == consts.GravityDBName && tableName == OplogCheckerCollectionName {
-		tailer.oplogChecker.MarkActive(tailer.sourceHost, op.Data)
+		tailer.oplogChecker.MarkActive(op.Data)
 	}
 
 	// handle control msg
@@ -152,6 +154,7 @@ func (tailer *OplogTailer) Run() {
 		case err := <-tailer.opCtx.ErrC:
 			log.Fatalf("[oplog_tailer] err: %v", err)
 		case op := <-tailer.opCtx.OpC:
+			received := time.Now()
 			if op.GetDatabase() == consts.GravityDBName && op.GetCollection() == deadSignalCollection {
 				if op.Data["name"] == tailer.pipelineName {
 					log.Info("[oplog_tailer] receive dead signal, exit")
@@ -164,6 +167,9 @@ func (tailer *OplogTailer) Run() {
 			}
 
 			msg := core.Msg{
+				Phase: core.Phase{
+					EnterInput: received,
+				},
 				Host:      tailer.sourceHost,
 				Database:  op.GetDatabase(),
 				Table:     op.GetCollection(),
@@ -171,15 +177,18 @@ func (tailer *OplogTailer) Run() {
 				Oplog:     op,
 				Done:      make(chan struct{}),
 			}
+			var c prometheus.Counter
 
 			if op.IsCommand() {
 				stmt, err := jsoniter.MarshalToString(op.Data)
 				if err != nil {
 					log.Fatalf("[oplog_tailer] fail to marshal command. data: %v, err: %s", op.Data, err)
 				}
+				msg.Type = core.MsgDDL
 				msg.DdlMsg = &core.DDLMsg{
 					Statement: stmt,
 				}
+				c = metrics.InputCounter.WithLabelValues(tailer.pipelineName, msg.Database, msg.Table, string(msg.Type), "")
 			} else {
 				var o core.DMLOp
 				var data map[string]interface{}
@@ -192,6 +201,7 @@ func (tailer *OplogTailer) Run() {
 				} else if op.IsDelete() {
 					o = core.Delete
 				}
+				msg.Type = core.MsgDML
 				msg.DmlMsg = &core.DMLMsg{
 					Operation: o,
 					Data:      data,
@@ -200,13 +210,13 @@ func (tailer *OplogTailer) Run() {
 						"_id": op.Id,
 					},
 				}
+				c = metrics.InputCounter.WithLabelValues(tailer.pipelineName, msg.Database, msg.Table, string(msg.Type), string(o))
 			}
-
+			c.Add(1)
 			msg.InputStreamKey = utils.NewStringPtr("mongooplog")
 			msg.OutputStreamKey = utils.NewStringPtr(outputStreamKey(msg.Oplog))
 			msg.InputContext = config.MongoPosition(op.Timestamp)
 			msg.AfterCommitCallback = tailer.AfterMsgCommit
-			msg.Metrics = core.Metrics{MsgCreateTime: time.Now()}
 			if err := tailer.emitter.Emit(&msg); err != nil {
 				log.Fatalf("failed to emit: %v", errors.ErrorStack(err))
 			}

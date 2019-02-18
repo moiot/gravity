@@ -56,6 +56,20 @@ func (mr *MockWindowItemMockRecorder) EventTime() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EventTime", reflect.TypeOf((*MockWindowItem)(nil).EventTime))
 }
 
+// ProcessTime mocks base method
+func (m *MockWindowItem) ProcessTime() time.Time {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ProcessTime")
+	ret0, _ := ret[0].(time.Time)
+	return ret0
+}
+
+// ProcessTime indicates an expected call of ProcessTime
+func (mr *MockWindowItemMockRecorder) ProcessTime() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessTime", reflect.TypeOf((*MockWindowItem)(nil).ProcessTime))
+}
+
 // SequenceNumber mocks base method
 func (m *MockWindowItem) SequenceNumber() int64 {
 	ret := m.ctrl.Call(m, "SequenceNumber")

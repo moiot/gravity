@@ -99,9 +99,6 @@ func (checker *binlogChecker) probe() {
 		sentOffset := checker.lastProbeSentOffset + 1
 		checker.lastProbeSentOffset = sentOffset
 
-		metrics.GravityBinlogProbeLagGauge.WithLabelValues(checker.pipelineName).Set(float64(checker.lastProbeSentOffset - checker.lastProbeReceivedOffset.Get()))
-		metrics.GravityBinlogProbeSentGauge.WithLabelValues(checker.pipelineName).Set(float64(checker.lastProbeSentOffset))
-
 		queryWithPlaceHolder := fmt.Sprintf(
 			"%sUPDATE %s SET offset = ?, update_time_at_gravity = ? WHERE name = ?",
 			checker.annotation,
@@ -154,21 +151,9 @@ func (checker *binlogChecker) IsEventBelongsToMySelf(row Row) bool {
 // update_time_at_gravity DATETIME(6),
 // update_time_at_source DATETIME(6) NOT NULL ON UPDATE CURRENT_TIMESTAMP
 // )
-// MarkActive will parse the timestamp in RowsEvent and update lastProbeReceivedAt
-// CREATE TABLE IF NOT EXISTS binlog_heartbeat (
-// id INT PRIMARY KEY,
-// Offset BIGINT,
-// update_time_at_gravity DATETIME(6),
-// update_time_at_source DATETIME(6) NOT NULL ON UPDATE CURRENT_TIMESTAMP
-// )
 func (checker *binlogChecker) MarkActive(row Row) {
-	pipelineName := checker.pipelineName
-
 	checker.lastProbeReceivedOffset.Set(row.Offset)
-
-	metrics.GravityBinlogProbeReceivedGauge.WithLabelValues(pipelineName).Set(float64(row.Offset))
-	metrics.GravityBinlogDurationFromGravity.WithLabelValues(pipelineName).Observe(time.Since(row.UpdateTimeAtGravity).Seconds())
-	metrics.GravityBinlogDurationFromSource.WithLabelValues(pipelineName).Observe(time.Since(row.UpdateTimeAtSource).Seconds())
+	metrics.ProbeHistogram.WithLabelValues(checker.pipelineName).Observe(time.Since(row.UpdateTimeAtGravity).Seconds())
 }
 
 func ParseMySQLRowEvent(event *replication.RowsEvent) (Row, error) {
@@ -197,15 +182,15 @@ func ParseMySQLRowEvent(event *replication.RowsEvent) (Row, error) {
 
 	updatedAtGravity, ok := data[2].(time.Time)
 	if !ok {
-		return checkerRow, errors.Errorf("BinlogChecker type conversion error: updatedAtGravity, value: %v", data[2])
 		log.Errorf("BinlogChecker type conversion error: updatedAtGravity: %v", data[2])
+		return checkerRow, errors.Errorf("BinlogChecker type conversion error: updatedAtGravity, value: %v", data[2])
 	}
 	checkerRow.UpdateTimeAtGravity = updatedAtGravity
 
 	updatedAtSource, ok := data[2].(time.Time)
 	if !ok {
-		return checkerRow, errors.Errorf("BinlogChecker type conversion error: updatedAtSource, value: %v", data[3])
 		log.Errorf("BinlogChecker type conversion error: updatedAtGravity: %v", data[2])
+		return checkerRow, errors.Errorf("BinlogChecker type conversion error: updatedAtSource, value: %v", data[3])
 	}
 	checkerRow.UpdateTimeAtSource = updatedAtSource
 	return checkerRow, nil

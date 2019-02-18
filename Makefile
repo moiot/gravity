@@ -25,7 +25,7 @@ dev-down:
 	docker-compose -f docker-compose-gravity-dev.yml down
 
 go-test:
-	go test -failfast -race -v ./integration_test
+	go test -failfast -race ./integration_test
 	go test -timeout 10m -coverprofile=cover.out $(TEST_DIRS) && go tool cover -func=cover.out | tail -n 1
 
 test-local:
@@ -35,7 +35,7 @@ test:
 	docker-compose -f docker-compose-gravity-test.yml up --build --abort-on-container-exit
 
 test-down:
-	docker-compose -f docker-compose-gravity-test.yml down -v
+	docker-compose -f docker-compose-gravity-test.yml down -v --rmi local
 
 run-dev:
 	docker-compose -f docker-compose-gravity-dev.yml up -d --force-recreate

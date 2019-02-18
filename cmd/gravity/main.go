@@ -11,7 +11,7 @@ import (
 	"syscall"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
