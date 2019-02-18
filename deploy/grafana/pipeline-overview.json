@@ -44,72 +44,11 @@
   },
   "editable": true,
   "gnetId": null,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
   "links": [],
   "panels": [
     {
-      "alert": {
-        "conditions": [
-          {
-            "evaluator": {
-              "params": [
-                30
-              ],
-              "type": "gt"
-            },
-            "operator": {
-              "type": "or"
-            },
-            "query": {
-              "params": [
-                "A",
-                "10m",
-                "now"
-              ]
-            },
-            "reducer": {
-              "params": [],
-              "type": "max"
-            },
-            "type": "query"
-          },
-          {
-            "evaluator": {
-              "params": [
-                1
-              ],
-              "type": "lt"
-            },
-            "operator": {
-              "type": "or"
-            },
-            "query": {
-              "params": [
-                "A",
-                "10m",
-                "now"
-              ]
-            },
-            "reducer": {
-              "params": [],
-              "type": "sum"
-            },
-            "type": "query"
-          }
-        ],
-        "executionErrorState": "alerting",
-        "frequency": "60s",
-        "handler": 1,
-        "message": "",
-        "name": "5分钟内无调度或调度次数过多",
-        "noDataState": "no_data",
-        "notifications": [
-          {
-            "id": 122
-          }
-        ]
-      },
       "aliasColors": {},
       "bars": false,
       "dashLength": 10,
@@ -117,22 +56,20 @@
       "datasource": "${DS_GRAVITY}",
       "fill": 1,
       "gridPos": {
-        "h": 17,
+        "h": 9,
         "w": 12,
         "x": 0,
         "y": 0
       },
-      "id": 1,
+      "id": 2,
       "legend": {
         "alignAsTable": true,
-        "avg": false,
+        "avg": true,
         "current": true,
         "max": true,
-        "min": true,
-        "rightSide": false,
+        "min": false,
+        "rightSide": true,
         "show": true,
-        "sort": "current",
-        "sortDesc": true,
         "total": false,
         "values": true
       },
@@ -150,25 +87,17 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(increase(drc_v2_master_v2_sync_counter{result=\"success\", task=~\"ALL\"}[60s])) by (pipeline)",
+          "expr": "histogram_quantile(0.8, sum(rate(gravity_event_time_latency_bucket[1m])) by (le, pipeline))",
           "format": "time_series",
-          "intervalFactor": 2,
+          "intervalFactor": 1,
           "legendFormat": "{{pipeline}}",
           "refId": "A"
         }
       ],
-      "thresholds": [
-        {
-          "colorMode": "critical",
-          "fill": true,
-          "line": true,
-          "op": "gt",
-          "value": 30
-        }
-      ],
+      "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Transition Success Count",
+      "title": "Event Time Low Watermark (E2E Latency)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -184,7 +113,7 @@
       },
       "yaxes": [
         {
-          "format": "short",
+          "format": "s",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -206,44 +135,6 @@
       }
     },
     {
-      "alert": {
-        "conditions": [
-          {
-            "evaluator": {
-              "params": [
-                0.1
-              ],
-              "type": "gt"
-            },
-            "operator": {
-              "type": "and"
-            },
-            "query": {
-              "params": [
-                "A",
-                "5m",
-                "now"
-              ]
-            },
-            "reducer": {
-              "params": [],
-              "type": "sum"
-            },
-            "type": "query"
-          }
-        ],
-        "executionErrorState": "alerting",
-        "frequency": "60s",
-        "handler": 1,
-        "message": "",
-        "name": "调度失败",
-        "noDataState": "no_data",
-        "notifications": [
-          {
-            "id": 122
-          }
-        ]
-      },
       "aliasColors": {},
       "bars": false,
       "dashLength": 10,
@@ -251,7 +142,7 @@
       "datasource": "${DS_GRAVITY}",
       "fill": 1,
       "gridPos": {
-        "h": 17,
+        "h": 9,
         "w": 12,
         "x": 12,
         "y": 0
@@ -263,144 +154,8 @@
         "current": true,
         "max": true,
         "min": false,
-        "rightSide": false,
-        "show": true,
-        "sort": "current",
-        "sortDesc": true,
-        "total": false,
-        "values": true
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 5,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "sum(increase(drc_v2_master_v2_sync_counter{result=\"error\", task!~\"ALL\"}[1m])) by (pipeline, task)",
-          "format": "time_series",
-          "intervalFactor": 2,
-          "legendFormat": "{{pipeline}}-{{task}}",
-          "refId": "A"
-        }
-      ],
-      "thresholds": [
-        {
-          "colorMode": "critical",
-          "fill": true,
-          "line": true,
-          "op": "gt",
-          "value": 0.1
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Transition Error Count",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "alert": {
-        "conditions": [
-          {
-            "evaluator": {
-              "params": [
-                1
-              ],
-              "type": "gt"
-            },
-            "operator": {
-              "type": "and"
-            },
-            "query": {
-              "params": [
-                "A",
-                "1m",
-                "now"
-              ]
-            },
-            "reducer": {
-              "params": [],
-              "type": "max"
-            },
-            "type": "query"
-          }
-        ],
-        "executionErrorState": "alerting",
-        "frequency": "60s",
-        "handler": 1,
-        "message": "",
-        "name": "进程意外退出",
-        "noDataState": "no_data",
-        "notifications": [
-          {
-            "id": 122
-          }
-        ]
-      },
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "${DS_GRAVITY}",
-      "fill": 1,
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 17
-      },
-      "id": 3,
-      "legend": {
-        "alignAsTable": true,
-        "avg": true,
-        "current": true,
-        "max": true,
-        "min": false,
         "rightSide": true,
         "show": true,
-        "sort": "current",
-        "sortDesc": true,
         "total": false,
         "values": true
       },
@@ -418,107 +173,9 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(increase(drc_v2_master_v2_process_down[1m])) by (pipeline,task)",
+          "expr": "histogram_quantile(0.8, sum(rate(gravity_process_time_latency_bucket[1m])) by (le, pipeline))",
           "format": "time_series",
-          "intervalFactor": 2,
-          "legendFormat": "{{pipeline}}: {{task}}",
-          "refId": "A"
-        }
-      ],
-      "thresholds": [
-        {
-          "colorMode": "critical",
-          "fill": true,
-          "line": true,
-          "op": "gt",
-          "value": 1
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "master check Process Down",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "${DS_GRAVITY}",
-      "fill": 1,
-      "gridPos": {
-        "h": 6,
-        "w": 24,
-        "x": 0,
-        "y": 24
-      },
-      "id": 2,
-      "legend": {
-        "alignAsTable": true,
-        "avg": true,
-        "current": true,
-        "hideEmpty": false,
-        "hideZero": false,
-        "max": true,
-        "min": false,
-        "rightSide": true,
-        "show": true,
-        "sort": "current",
-        "sortDesc": true,
-        "total": false,
-        "values": true
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 5,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.80, sum(rate(drc_v2_master_v2_schedule_duration_seconds_bucket[1m])) by (le, pipeline))",
-          "format": "time_series",
-          "intervalFactor": 2,
+          "intervalFactor": 1,
           "legendFormat": "{{pipeline}}",
           "refId": "A"
         }
@@ -526,7 +183,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Schedule Duration 80%",
+      "title": "Process Time Low Watermark (Internal Latency)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -550,12 +207,270 @@
           "show": true
         },
         {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_GRAVITY}",
+      "fill": 1,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "id": 6,
+      "legend": {
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "max": true,
+        "min": false,
+        "rightSide": true,
+        "show": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "sum(rate(gravity_output_counter[1m])) by (pipeline)",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "{{pipeline}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Output Msg Per Second",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_GRAVITY}",
+      "fill": 1,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 8,
+      "legend": {
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "max": true,
+        "min": false,
+        "rightSide": true,
+        "show": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.8, sum(rate(gravity_output_latency_bucket[1m])) by (le, pipeline))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "{{pipeline}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Output Latency",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
           "format": "s",
           "label": null,
           "logBase": 1,
           "max": null,
           "min": null,
-          "show": false
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_GRAVITY}",
+      "fill": 1,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "id": 10,
+      "legend": {
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "max": true,
+        "min": false,
+        "rightSide": true,
+        "show": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "sum(gravity_queue_length) by (pipeline)",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "{{pipeline}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Queue Length",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
         }
       ],
       "yaxis": {
@@ -564,7 +479,7 @@
       }
     }
   ],
-  "refresh": "5s",
+  "refresh": "10s",
   "schemaVersion": 16,
   "style": "dark",
   "tags": [],
@@ -572,7 +487,7 @@
     "list": []
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {
@@ -601,7 +516,7 @@
     ]
   },
   "timezone": "",
-  "title": "drc-master2",
-  "uid": "000002113",
-  "version": 50
+  "title": "Gravity Pipeline Overview 2",
+  "uid": "oyM8DUuiz",
+  "version": 3
 }

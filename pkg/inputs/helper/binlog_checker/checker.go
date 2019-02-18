@@ -151,13 +151,6 @@ func (checker *binlogChecker) IsEventBelongsToMySelf(row Row) bool {
 // update_time_at_gravity DATETIME(6),
 // update_time_at_source DATETIME(6) NOT NULL ON UPDATE CURRENT_TIMESTAMP
 // )
-// MarkActive will parse the timestamp in RowsEvent and update lastProbeReceivedAt
-// CREATE TABLE IF NOT EXISTS binlog_heartbeat (
-// id INT PRIMARY KEY,
-// Offset BIGINT,
-// update_time_at_gravity DATETIME(6),
-// update_time_at_source DATETIME(6) NOT NULL ON UPDATE CURRENT_TIMESTAMP
-// )
 func (checker *binlogChecker) MarkActive(row Row) {
 	checker.lastProbeReceivedOffset.Set(row.Offset)
 	metrics.ProbeHistogram.WithLabelValues(checker.pipelineName).Observe(time.Since(row.UpdateTimeAtGravity).Seconds())
