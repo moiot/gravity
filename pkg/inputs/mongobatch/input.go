@@ -144,7 +144,11 @@ func (input *mongoBatchInput) Stage() config.InputMode {
 }
 
 func (input *mongoBatchInput) NewPositionCache() (position_store.PositionCacheInterface, error) {
-	positionRepo, err := position_store.NewMongoPositionRepo(input.session)
+	session, err := mongo.CreateMongoSession(input.cfg.Source)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	positionRepo, err := position_store.NewMongoPositionRepo(session)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
