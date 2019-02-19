@@ -203,7 +203,7 @@ buffer-duration-ms = "750ms"
 ```toml
 [input]
 type = "mongo"
-mode = "stream"
+mode = "batch"
 
 [input.config]
 # how many documents to fetch per query
