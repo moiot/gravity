@@ -258,7 +258,7 @@ func (input *mongoBatchInput) runWorker(ch chan chunk) {
 						Namespace: fmt.Sprintf("%s.%s", task.Database, task.Collection),
 						Data:      result,
 						Row:       nil,
-						Timestamp: bson.MongoTimestamp(now.Unix()),
+						Timestamp: bson.MongoTimestamp(now.Unix() << 32),
 						Source:    gtm.DirectQuerySource,
 					}
 
