@@ -75,7 +75,7 @@ func (f *renameDmlColumnFilter) Configure(data map[string]interface{}) error {
 }
 
 func (f *renameDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err error) {
-	if !f.matchers.Match(msg) {
+	if !f.Matchers.Match(msg) {
 		return true, nil
 	}
 
