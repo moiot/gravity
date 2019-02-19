@@ -8,23 +8,23 @@ import (
 )
 
 type BaseFilter struct {
-	matchers core.IMatcherGroup
+	Matchers core.IMatcherGroup
 }
 
 func (baseFilter *BaseFilter) ConfigureMatchers(configData map[string]interface{}) error {
-	// find matchers based on configData
+	// find Matchers based on configData
 	retMatchers, err := matchers.NewMatchers(configData)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	baseFilter.matchers = retMatchers
+	baseFilter.Matchers = retMatchers
 
-	if len(baseFilter.matchers) == 0 {
+	if len(baseFilter.Matchers) == 0 {
 		return errors.Errorf("no matcher configured for this filter. config: %v", configData)
 	}
 	return nil
 }
 
 func (baseFilter *BaseFilter) MatchMsg(msg *core.Msg) bool {
-	return baseFilter.matchers.Match(msg)
+	return baseFilter.Matchers.Match(msg)
 }

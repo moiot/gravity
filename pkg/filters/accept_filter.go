@@ -22,7 +22,7 @@ func (f *acceptFilterType) Configure(configData map[string]interface{}) error {
 }
 
 func (f *acceptFilterType) Filter(msg *core.Msg) (continueNext bool, err error) {
-	if f.matchers.Match(msg) {
+	if f.Matchers.Match(msg) {
 		return true, nil
 	}
 	return false, nil

@@ -50,7 +50,7 @@ func (f *deleteDmlColumnFilter) Configure(data map[string]interface{}) error {
 }
 
 func (f *deleteDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err error) {
-	if !f.matchers.Match(msg) {
+	if !f.Matchers.Match(msg) {
 		return true, nil
 	}
 
