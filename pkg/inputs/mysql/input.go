@@ -1,18 +1,15 @@
 package mysql
 
 import (
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/moiot/gravity/pkg/config"
+	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/inputs/helper"
 	"github.com/moiot/gravity/pkg/inputs/mysqlbatch"
 	"github.com/moiot/gravity/pkg/inputs/mysqlstream"
-
-	"github.com/moiot/gravity/pkg/config"
-	"github.com/moiot/gravity/pkg/inputs/helper"
-
-	"github.com/juju/errors"
-
-	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/position_store"
 	"github.com/moiot/gravity/pkg/registry"
 )
 

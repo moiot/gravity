@@ -123,7 +123,7 @@ func (tailer *OplogTailer) Run() {
 		log.Infof("[oplog_tailer] start from the latest timestamp")
 		after = nil
 	} else {
-		log.Infof("[oplog_tailer] start from the configured timestamp %v", t)
+		log.Infof("[oplog_tailer] start from the configured timestamp %v", positionValue.CurrentPosition)
 	}
 
 	filter := func(op *gtm.Op) bool {

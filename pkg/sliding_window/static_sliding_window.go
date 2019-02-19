@@ -9,7 +9,6 @@ import (
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/metrics"
 
-	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 )
 

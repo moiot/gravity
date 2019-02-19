@@ -2,15 +2,14 @@ package mongo
 
 import (
 	"github.com/juju/errors"
-	"github.com/moiot/gravity/pkg/position_store"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/moiot/gravity/pkg/inputs/helper"
-	"github.com/moiot/gravity/pkg/inputs/mongobatch"
-	"github.com/moiot/gravity/pkg/inputs/mongostream"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/inputs/helper"
+	"github.com/moiot/gravity/pkg/inputs/mongobatch"
+	"github.com/moiot/gravity/pkg/inputs/mongostream"
+	"github.com/moiot/gravity/pkg/position_store"
 	"github.com/moiot/gravity/pkg/registry"
 )
 

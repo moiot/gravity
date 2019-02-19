@@ -1,10 +1,11 @@
-package mongooplog
+package mongostream
 
 import (
 	"time"
 
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
+
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/position_store"
 )

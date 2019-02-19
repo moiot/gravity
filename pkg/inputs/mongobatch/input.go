@@ -2,8 +2,6 @@ package mongobatch
 
 import (
 	"fmt"
-	"math"
-	"strconv"
 	"sync"
 	"time"
 
@@ -13,14 +11,15 @@ import (
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
-	"github.com/moiot/gravity/pkg/utils"
-
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/inputs/mongostream"
+	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
 	"github.com/moiot/gravity/pkg/position_store"
 	"github.com/moiot/gravity/pkg/registry"
+	"github.com/moiot/gravity/pkg/utils"
 )
 
 type Config struct {
@@ -66,48 +65,12 @@ type mongoBatchInput struct {
 	wg     sync.WaitGroup
 	closeC chan struct{}
 
-	*memPositionStore
-}
+	positionCache position_store.PositionCacheInterface
 
-type memPositionStore struct {
-	name     string
-	startPos bson.MongoTimestamp
-	chunks   []chunk
-}
-
-func (ps *memPositionStore) Start() error {
-	return nil
-}
-
-func (ps *memPositionStore) Close() {
-}
-
-func (ps *memPositionStore) Stage() config.InputMode {
-	return config.Batch
-}
-
-func (ps *memPositionStore) Position() position_store.Position {
-	return position_store.Position{
-		Name:       ps.name,
-		Stage:      config.Batch,
-		Raw:        ps,
-		UpdateTime: time.Now(),
-	}
-}
-
-func (ps *memPositionStore) Update(pos position_store.Position) {
-	*ps = *pos.Raw.(*memPositionStore)
-}
-
-func (ps *memPositionStore) Clear() {
-}
-
-type chunk struct {
-	database   string
-	collection string
-	seq        int
-	min        interface{}
-	max        interface{}
+	chunkMap map[string]int
+	pos      PositionValue
+	posMeta  position_store.PositionMeta
+	posLock  sync.Mutex
 }
 
 func (input *mongoBatchInput) Configure(pipelineName string, data map[string]interface{}) error {
@@ -127,7 +90,7 @@ func (input *mongoBatchInput) Configure(pipelineName string, data map[string]int
 	return nil
 }
 
-func (input *mongoBatchInput) Start(emitter core.Emitter, router core.Router) error {
+func (input *mongoBatchInput) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
 	session, err := mongo.CreateMongoSession(input.cfg.Source)
 	if err != nil {
 		return errors.Trace(err)
@@ -135,14 +98,29 @@ func (input *mongoBatchInput) Start(emitter core.Emitter, router core.Router) er
 	input.session = session
 	input.emitter = emitter
 	input.router = router
+	input.positionCache = positionCache
 
-	// TODO restore position from store
-	input.initPosition()
-	log.Debugf("[mongoBatchInput] chunks: %v", input.chunks)
+	rawPos, exists, err := positionCache.Get()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if !exists {
+		return errors.Errorf("[mongoBatchInput.Start] position not initialized")
+	}
+	input.posMeta = rawPos.PositionMeta
+	pos := rawPos.Value.(PositionValue)
+	input.pos = pos
+	for i, c := range pos.Chunks {
+		input.chunkMap[c.key()] = i
+	}
 
-	taskC := make(chan chunk, len(input.chunks))
-	for _, c := range input.chunks {
-		taskC <- c
+	log.Debugf("[mongoBatchInput] chunks: %v", pos.Chunks)
+
+	taskC := make(chan chunk, len(input.pos.Chunks))
+	for _, c := range input.pos.Chunks {
+		if !c.Done {
+			taskC <- c
+		}
 	}
 	close(taskC)
 
@@ -165,15 +143,27 @@ func (input *mongoBatchInput) Stage() config.InputMode {
 	return config.Batch
 }
 
-func (input *mongoBatchInput) NewPositionStore() (position_store.PositionStore, error) {
-	input.memPositionStore = &memPositionStore{
-		name: input.pipelineName,
+func (input *mongoBatchInput) NewPositionCache() (position_store.PositionCacheInterface, error) {
+	positionRepo, err := position_store.NewMongoPositionRepo(input.session)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
-	return input.memPositionStore, nil
-}
 
-func (input *mongoBatchInput) PositionStore() position_store.PositionStore {
-	return input.memPositionStore
+	positionCache, err := position_store.NewPositionCache(
+		input.pipelineName,
+		positionRepo,
+		Encode,
+		Decode,
+		position_store.DefaultFlushPeriod)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if err := SetupInitialPosition(positionCache, input.session, input.router, input.cfg); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return positionCache, nil
 }
 
 func (input *mongoBatchInput) Done() chan position_store.Position {
@@ -185,15 +175,19 @@ func (input *mongoBatchInput) Done() chan position_store.Position {
 			log.Info("[mongoBatchInput] canceled")
 			close(ret)
 		default:
-			log.Info("[mongoBatchInput] done with start position: ", input.startPos)
+			log.Info("[mongoBatchInput] done with start position: ", input.pos.Start)
+			start := config.MongoPosition(input.pos.Start)
 			ret <- position_store.Position{
-				Name:  input.name,
-				Stage: config.Batch,
-				Raw: position_store.MongoPosition{
-					StartPosition:   config.MongoPosition(input.startPos),
-					CurrentPosition: config.MongoPosition(input.startPos),
+				PositionMeta: position_store.PositionMeta{
+					Version:    input.posMeta.Version,
+					Name:       input.posMeta.Name,
+					Stage:      config.Stream,
+					UpdateTime: time.Time{},
 				},
-				UpdateTime: time.Now(),
+				Value: mongostream.OplogPositionValue{
+					StartPosition:   &start,
+					CurrentPosition: config.MongoPosition(input.pos.Start),
+				},
 			}
 			close(ret)
 		}
@@ -210,28 +204,6 @@ func (input *mongoBatchInput) Wait() {
 	input.wg.Wait()
 }
 
-func (input *mongoBatchInput) initPosition() {
-	options := gtm.DefaultOptions()
-	options.Fill(input.session, "")
-	input.startPos = gtm.LastOpTimestamp(input.session, options)
-
-	collections := make(map[string][]string)
-	for db, colls := range mongo.ListAllCollections(input.session) {
-		for _, coll := range colls {
-			msg := core.Msg{
-				Database: db,
-				Table:    coll,
-			}
-			if input.router.Exists(&msg) {
-				log.Infof("add %s.%s to scan", db, coll)
-				collections[db] = append(collections[db], coll)
-			}
-		}
-	}
-
-	input.chunks = calculateChunks(input.session, collections, input.cfg.ChunkThreshold, input.cfg.WorkerCnt)
-}
-
 func (input *mongoBatchInput) runWorker(ch chan chunk) {
 	defer input.wg.Done()
 
@@ -242,16 +214,18 @@ func (input *mongoBatchInput) runWorker(ch chan chunk) {
 				log.Infof("[mongoBatchInput] no more chunk, exit worker.")
 				return
 			}
-			currentMin := task.min
+			if task.Current == nil {
+				task.Current = task.Min
+			}
 			var actualCount int
 			for {
-				c := input.session.DB(task.database).C(task.collection)
+				c := input.session.DB(task.Database).C(task.Collection)
 				var query bson.D
-				if currentMin != nil {
-					query = append(query, bson.DocElem{Name: "_id", Value: bson.D{{Name: "$gt", Value: currentMin}}})
+				if task.Current != nil {
+					query = append(query, bson.DocElem{Name: "_id", Value: bson.D{{Name: "$gt", Value: task.Current}}})
 				}
-				if task.max != nil {
-					query = append(query, bson.DocElem{Name: "_id", Value: bson.D{{Name: "$lte", Value: task.max}}})
+				if task.Max != nil {
+					query = append(query, bson.DocElem{Name: "_id", Value: bson.D{{Name: "$lte", Value: task.Max}}})
 				}
 				var results []map[string]interface{}
 				err := c.Find(query).Sort("_id").Limit(input.cfg.BatchSize).Hint("_id").All(&results)
@@ -260,18 +234,20 @@ func (input *mongoBatchInput) runWorker(ch chan chunk) {
 				}
 				actualCount = len(results)
 				if actualCount == 0 {
-					log.Infof("[mongoBatchInput] done chunk %v", task)
+					log.Infof("[mongoBatchInput] done chunk %#v", task)
+					input.finishChunk(task)
 					break
 				} else {
 					log.Debugf("[mongoBatchInput] %d records returned from query %v", actualCount, query)
 				}
-				currentMin = results[len(results)-1]["_id"]
+				task.Current = results[len(results)-1]["_id"]
 				now := time.Now()
+				metrics.InputCounter.WithLabelValues(input.pipelineName, task.Database, task.Collection, string(core.MsgDML), string(core.Insert)).Add(float64(len(results)))
 				for _, result := range results {
 					op := gtm.Op{
 						Id:        result["_id"],
 						Operation: "i",
-						Namespace: fmt.Sprintf("%s.%s", task.database, task.collection),
+						Namespace: fmt.Sprintf("%s.%s", task.Database, task.Collection),
 						Data:      result,
 						Row:       nil,
 						Timestamp: bson.MongoTimestamp(now.Unix()),
@@ -281,8 +257,8 @@ func (input *mongoBatchInput) runWorker(ch chan chunk) {
 					msg := core.Msg{
 						Type:     core.MsgDML,
 						Host:     input.cfg.Source.Host,
-						Database: task.database,
-						Table:    task.collection,
+						Database: task.Database,
+						Table:    task.Collection,
 						DmlMsg: &core.DMLMsg{
 							Operation: core.Insert,
 							Data:      result,
@@ -291,11 +267,13 @@ func (input *mongoBatchInput) runWorker(ch chan chunk) {
 								"_id": op.Id,
 							},
 						},
-						Timestamp:       now,
-						Oplog:           &op,
-						Done:            make(chan struct{}),
-						InputStreamKey:  utils.NewStringPtr(op.Namespace + "-" + strconv.Itoa(task.seq)),
-						OutputStreamKey: utils.NewStringPtr(op.Namespace + "-" + fmt.Sprint(op.Id)),
+						AfterCommitCallback: input.AfterMsgCommit,
+						InputContext:        task,
+						Timestamp:           now,
+						Oplog:               &op,
+						Done:                make(chan struct{}),
+						InputStreamKey:      utils.NewStringPtr(task.key()),
+						OutputStreamKey:     utils.NewStringPtr(op.Namespace + "-" + fmt.Sprint(op.Id)),
 					}
 					if err := input.emitter.Emit(&msg); err != nil {
 						log.Fatalf("failed to emit: %v", errors.ErrorStack(err))
@@ -315,54 +293,52 @@ func (input *mongoBatchInput) runWorker(ch chan chunk) {
 	}
 }
 
-const maxSampleSize = 100000
-
-func calculateChunks(session *mgo.Session, collections map[string][]string, chunkThreshold int, chunkCnt int) []chunk {
-	var ret []chunk
-	for db, colls := range collections {
-		for _, coll := range colls {
-			count := mongo.Count(session, db, coll)
-			if count == 0 {
-				continue
-			} else if count > chunkThreshold {
-				seq := 0
-				sampleCnt := int(math.Min(maxSampleSize, float64(count)*0.05))
-				for i, mm := range mongo.BucketAuto(session, db, coll, sampleCnt, chunkCnt) {
-					if i == 0 {
-						ret = append(ret, chunk{
-							database:   db,
-							collection: coll,
-							min:        nil,
-							max:        mm.Min,
-							seq:        seq,
-						})
-						seq++
-					}
-					ret = append(ret, chunk{
-						database:   db,
-						collection: coll,
-						min:        mm.Min,
-						max:        mm.Max,
-						seq:        seq,
-					})
-					seq++
-				}
-				ret = append(ret, chunk{
-					database:   db,
-					collection: coll,
-					min:        ret[len(ret)-1].max,
-					max:        nil,
-					seq:        seq,
-				})
-			} else {
-				ret = append(ret, chunk{
-					database:   db,
-					collection: coll,
-					min:        nil,
-					max:        nil,
-				})
-			}
-		}
+func (input *mongoBatchInput) finishChunk(c chunk) {
+	c.Done = true
+	msg := &core.Msg{
+		Type:            core.MsgCtl,
+		InputStreamKey:  utils.NewStringPtr(c.key()),
+		OutputStreamKey: utils.NewStringPtr(""),
+		Done:            make(chan struct{}),
 	}
-	return ret
+	if err := input.emitter.Emit(msg); err != nil {
+		log.Fatalf("failed to emit: %v", errors.ErrorStack(err))
+	}
+	<-msg.Done
+	msg = &core.Msg{
+		Type:            core.MsgCloseInputStream,
+		InputStreamKey:  utils.NewStringPtr(c.key()),
+		OutputStreamKey: utils.NewStringPtr(""),
+		Done:            make(chan struct{}),
+	}
+	metrics.InputCounter.WithLabelValues(input.pipelineName, msg.Database, msg.Table, string(msg.Type), "").Add(1)
+	if err := input.emitter.Emit(msg); err != nil {
+		log.Fatalf("failed to emit: %v", errors.ErrorStack(err))
+	}
+	<-msg.Done
+	if err := input.saveChunk(c); err != nil {
+		log.Fatalf("failed to save chunk: %v", errors.ErrorStack(err))
+	}
+	if err := input.positionCache.Flush(); err != nil {
+		log.Fatalf("failed to flush position: %v", errors.ErrorStack(err))
+	}
+}
+
+func (input *mongoBatchInput) AfterMsgCommit(msg *core.Msg) error {
+	c := msg.InputContext.(chunk)
+	return input.saveChunk(c)
+}
+
+func (input *mongoBatchInput) saveChunk(c chunk) error {
+	input.pos.Chunks[input.chunkMap[c.key()]] = c
+
+	input.posLock.Lock()
+	if err := input.positionCache.Put(position_store.Position{
+		PositionMeta: input.posMeta,
+		Value:        input.pos,
+	}); err != nil {
+		return errors.Trace(err)
+	}
+	input.posLock.Unlock()
+	return nil
 }
