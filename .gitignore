@@ -39,3 +39,5 @@ scripts/set_position.py
 default.etcd
 
 gravity_mongo.meta.toml
+
+private_plugins
