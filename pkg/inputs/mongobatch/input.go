@@ -246,7 +246,8 @@ func (input *mongoBatchInput) runWorker(ch chan chunk) {
 				} else {
 					log.Debugf("[mongoBatchInput] %d records returned from query %v", actualCount, query)
 				}
-				task.Current = results[len(results)-1]["_id"]
+				id := results[len(results)-1]["_id"].(bson.ObjectId)
+				task.Current = &id
 				now := time.Now()
 				metrics.InputCounter.WithLabelValues(input.pipelineName, task.Database, task.Collection, string(core.MsgDML), string(core.Insert)).Add(float64(len(results)))
 				for _, result := range results {
@@ -305,6 +306,9 @@ func (input *mongoBatchInput) runWorker(ch chan chunk) {
 func (input *mongoBatchInput) finishChunk(c chunk) {
 	c.Done = true
 	msg := &core.Msg{
+		Phase: core.Phase{
+			EnterInput: time.Now(),
+		},
 		Type:            core.MsgCtl,
 		InputStreamKey:  utils.NewStringPtr(c.key()),
 		OutputStreamKey: utils.NewStringPtr(""),
@@ -315,6 +319,9 @@ func (input *mongoBatchInput) finishChunk(c chunk) {
 	}
 	<-msg.Done
 	msg = &core.Msg{
+		Phase: core.Phase{
+			EnterInput: time.Now(),
+		},
 		Type:            core.MsgCloseInputStream,
 		InputStreamKey:  utils.NewStringPtr(c.key()),
 		OutputStreamKey: utils.NewStringPtr(""),

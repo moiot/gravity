@@ -35,10 +35,11 @@ var (
 )
 
 type AsyncKafkaPluginConfig struct {
-	KafkaConfig   *config.KafkaGlobalConfig `mapstructure:"kafka-global-config" json:"kafka-global-config"`
-	Routes        []map[string]interface{}  `mapstructure:"routes" json:"routes"`
-	OutputFormat  string                    `mapstructure:"output-format" json:"output-format"`
-	SchemaVersion string                    `mapstructure:"schema-version" json:"schema-version"`
+	KafkaConfig    *config.KafkaGlobalConfig `mapstructure:"kafka-global-config" json:"kafka-global-config"`
+	Routes         []map[string]interface{}  `mapstructure:"routes" json:"routes"`
+	OutputFormat   string                    `mapstructure:"output-format" json:"output-format"`
+	SchemaVersion  string                    `mapstructure:"schema-version" json:"schema-version"`
+	IgnoreLargeMsg int                       `mapstructure:"ignore-large-msg" json:"ignore-large-msg"`
 }
 
 type AsyncKafka struct {
@@ -168,7 +169,9 @@ func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 		}
 
 		if !matched {
-			output.msgAcker.AckMsg(msg)
+			if err := output.msgAcker.AckMsg(msg); err != nil {
+				return errors.Trace(err)
+			}
 			continue
 		}
 
@@ -200,6 +203,10 @@ func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 		size := byteSize(&kafkaMsg)
 		if size > 1024*1024 {
 			log.Warnf("[output_async_kafka] large msg size %d.", size)
+		}
+		if output.cfg.IgnoreLargeMsg > 0 && size > output.cfg.IgnoreLargeMsg {
+			log.Warnf("[output_async_kafka] ignore msg size %d", size)
+			continue
 		}
 
 		KafkaMsgSizeGaugeVec.WithLabelValues(output.pipelineName, topic).Set(float64(size))

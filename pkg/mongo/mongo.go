@@ -4,16 +4,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/siddontang/go/bson"
-
-	"github.com/moiot/gravity/pkg/consts"
-	"github.com/moiot/gravity/pkg/mongo/gtm"
-
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 	mgo "gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 
 	"github.com/moiot/gravity/pkg/config"
+	"github.com/moiot/gravity/pkg/consts"
+	"github.com/moiot/gravity/pkg/mongo/gtm"
 )
 
 func CreateMongoSession(cfg *config.MongoConnConfig) (*mgo.Session, error) {
@@ -114,8 +112,8 @@ func Count(session *mgo.Session, db string, collection string) int {
 }
 
 type MinMax struct {
-	Min interface{}
-	Max interface{}
+	Min bson.ObjectId
+	Max bson.ObjectId
 }
 
 func BucketAuto(session *mgo.Session, db string, collection string, sampleCnt int, bucketCnt int) []MinMax {
@@ -136,8 +134,8 @@ func BucketAuto(session *mgo.Session, db string, collection string, sampleCnt in
 	for iter.Next(&record) {
 		t := record["_id"].(bson.M)
 		ret = append(ret, MinMax{
-			Min: t["min"],
-			Max: t["max"],
+			Min: t["min"].(bson.ObjectId),
+			Max: t["max"].(bson.ObjectId),
 		})
 	}
 	if err := iter.Close(); err != nil {

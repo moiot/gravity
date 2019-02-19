@@ -21,13 +21,13 @@ import (
 var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
 
 type chunk struct {
-	Database   string      `json:"database" bson:"database"`
-	Collection string      `json:"collection" bson:"collection"`
-	Seq        int         `json:"seq" bson:"seq"`
-	Done       bool        `json:"done" bson:"done"`
-	Min        interface{} `json:"min,omitempty" bson:"min,omitempty"`
-	Max        interface{} `json:"max,omitempty" bson:"max,omitempty"`
-	Current    interface{} `json:"current,omitempty" bson:"current,omitempty"`
+	Database   string         `json:"database" bson:"database"`
+	Collection string         `json:"collection" bson:"collection"`
+	Seq        int            `json:"seq" bson:"seq"`
+	Done       bool           `json:"done" bson:"done"`
+	Min        *bson.ObjectId `json:"min,omitempty" bson:"min,omitempty"`
+	Max        *bson.ObjectId `json:"max,omitempty" bson:"max,omitempty"`
+	Current    *bson.ObjectId `json:"current,omitempty" bson:"current,omitempty"`
 }
 
 func (c *chunk) key() string {
@@ -114,7 +114,7 @@ func calculateChunks(session *mgo.Session, collections map[string][]string, chun
 							Database:   db,
 							Collection: coll,
 							Min:        nil,
-							Max:        mm.Min,
+							Max:        &mm.Min,
 							Seq:        seq,
 						})
 						seq++
@@ -122,8 +122,8 @@ func calculateChunks(session *mgo.Session, collections map[string][]string, chun
 					ret = append(ret, chunk{
 						Database:   db,
 						Collection: coll,
-						Min:        mm.Min,
-						Max:        mm.Max,
+						Min:        &mm.Min,
+						Max:        &mm.Max,
 						Seq:        seq,
 					})
 					seq++
