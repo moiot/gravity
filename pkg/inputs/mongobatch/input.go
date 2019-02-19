@@ -248,6 +248,7 @@ func (input *mongoBatchInput) runWorker(ch chan chunk) {
 				}
 				id := results[len(results)-1]["_id"].(bson.ObjectId)
 				task.Current = &id
+				task.Scanned += len(results)
 				now := time.Now()
 				metrics.InputCounter.WithLabelValues(input.pipelineName, task.Database, task.Collection, string(core.MsgDML), string(core.Insert)).Add(float64(len(results)))
 				for _, result := range results {

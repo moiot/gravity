@@ -28,6 +28,7 @@ type chunk struct {
 	Min        *bson.ObjectId `json:"min,omitempty" bson:"min,omitempty"`
 	Max        *bson.ObjectId `json:"max,omitempty" bson:"max,omitempty"`
 	Current    *bson.ObjectId `json:"current,omitempty" bson:"current,omitempty"`
+	Scanned    int            `json:"scanned" bson:"scanned"`
 }
 
 func (c *chunk) key() string {

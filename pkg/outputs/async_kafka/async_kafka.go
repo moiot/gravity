@@ -206,6 +206,9 @@ func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 		}
 		if output.cfg.IgnoreLargeMsg > 0 && size > output.cfg.IgnoreLargeMsg {
 			log.Warnf("[output_async_kafka] ignore msg size %d", size)
+			if err := output.msgAcker.AckMsg(msg); err != nil {
+				log.Fatalf("failed to ack job, err: %v", errors.ErrorStack(err))
+			}
 			continue
 		}
 
