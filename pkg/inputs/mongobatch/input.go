@@ -100,6 +100,10 @@ func (input *mongoBatchInput) Start(emitter core.Emitter, router core.Router, po
 	input.router = router
 	input.positionCache = positionCache
 
+	if err := SetupInitialPosition(positionCache, session, router, input.cfg); err != nil {
+		return errors.Trace(err)
+	}
+
 	rawPos, exists, err := positionCache.Get()
 	if err != nil {
 		return errors.Trace(err)
@@ -110,6 +114,8 @@ func (input *mongoBatchInput) Start(emitter core.Emitter, router core.Router, po
 	input.posMeta = rawPos.PositionMeta
 	pos := rawPos.Value.(PositionValue)
 	input.pos = pos
+
+	input.chunkMap = make(map[string]int)
 	for i, c := range pos.Chunks {
 		input.chunkMap[c.key()] = i
 	}
@@ -160,10 +166,6 @@ func (input *mongoBatchInput) NewPositionCache() (position_store.PositionCacheIn
 		Decode,
 		position_store.DefaultFlushPeriod)
 	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	if err := SetupInitialPosition(positionCache, input.session, input.router, input.cfg); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -259,6 +261,9 @@ func (input *mongoBatchInput) runWorker(ch chan chunk) {
 					}
 
 					msg := core.Msg{
+						Phase: core.Phase{
+							EnterInput: time.Now(),
+						},
 						Type:     core.MsgDML,
 						Host:     input.cfg.Source.Host,
 						Database: task.Database,
