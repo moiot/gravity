@@ -173,6 +173,8 @@
     "gogoproto",
     "proto",
     "protoc-gen-gogo/descriptor",
+    "sortkeys",
+    "types",
   ]
   pruneopts = "T"
   revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
@@ -228,6 +230,25 @@
   revision = "be39683deade1b3613258f751a2fad316d7b5e7c"
 
 [[projects]]
+  digest = "1:f875435d4b0d0fcc6c12ef808b453acdb36f6d9e7f5aa56ed11fc5e2ea7abce9"
+  name = "github.com/hashicorp/go-hclog"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "90f2fbc4844c54471c74c1395e1d06ce0582ec59"
+  version = "v0.7.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:0b44e120e4f5911ca181b757690339ae0392a8e8c8bc6d9677f057d282ab1fe1"
+  name = "github.com/hashicorp/go-plugin"
+  packages = [
+    ".",
+    "internal/plugin",
+  ]
+  pruneopts = "T"
+  revision = "b838ffee39ce7c7c38226c1413aa4ecae61b4d27"
+
+[[projects]]
   digest = "1:605c47454db9040e30b20dc1b29e3e9d42d6ee742545729cdef74afb1b898ad0"
   name = "github.com/hashicorp/go-safetemp"
   packages = ["."]
@@ -242,6 +263,14 @@
   pruneopts = "T"
   revision = "b5a281d3160aa11950a6182bd9a9dc2cb1e02d50"
   version = "v1.0.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:a4826c308e84f5f161b90b54a814f0be7d112b80164b9b884698a6903ea47ab3"
+  name = "github.com/hashicorp/yamux"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "2f1d1f20f75d5404f53b9edf6b53ed5505508675"
 
 [[projects]]
   digest = "1:52885e16e8412eb69db7d8d4255cb3214b70ffaef144cad91e9737684f838936"
@@ -332,6 +361,14 @@
   pruneopts = "T"
   revision = "4b7aa43c6742a2c18fdef89dd197aaae7dac7ccd"
   version = "1.0.1"
+
+[[projects]]
+  digest = "1:9ec6cf1df5ad1d55cf41a43b6b1e7e118a91bade4f68ff4303379343e40c0e25"
+  name = "github.com/oklog/run"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "4dadeb3030eda0273a12382bb2348ffc7c9d1a39"
+  version = "v1.0.0"
 
 [[projects]]
   digest = "1:0e65a0b6d1aa037a552285666ed4ed79c1c1944c95d3123750f618920ade9033"
@@ -715,6 +752,7 @@
     "encoding",
     "grpclb/grpc_lb_v1/messages",
     "grpclog",
+    "health",
     "health/grpc_health_v1",
     "internal",
     "keepalive",
@@ -795,9 +833,12 @@
     "github.com/coreos/etcd/mvcc/mvccpb",
     "github.com/fsnotify/fsnotify",
     "github.com/go-sql-driver/mysql",
+    "github.com/gogo/protobuf/types",
     "github.com/golang/mock/gomock",
     "github.com/golang/protobuf/proto",
+    "github.com/golang/protobuf/ptypes/any",
     "github.com/hashicorp/go-getter",
+    "github.com/hashicorp/go-plugin",
     "github.com/jinzhu/gorm",
     "github.com/jinzhu/gorm/dialects/mysql",
     "github.com/json-iterator/go",

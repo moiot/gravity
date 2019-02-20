@@ -11,11 +11,12 @@ import (
 	"syscall"
 
 	"github.com/fsnotify/fsnotify"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/json-iterator/go"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 
+	rpcplugin "github.com/hashicorp/go-plugin"
 	"github.com/moiot/gravity/pkg/app"
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
@@ -64,6 +65,10 @@ func main() {
 	utils.LogRawInfo("gravity")
 
 	logutil.PipelineName = cfg.PipelineConfig.PipelineName
+
+	log.RegisterExitHandler(func() {
+		rpcplugin.CleanupClients()
+	})
 
 	server, err := app.NewServer(cfg.PipelineConfig)
 	if err != nil {

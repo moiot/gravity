@@ -72,8 +72,11 @@ lint:
 proto:
 	@ which protoc >/dev/null || brew install protobuf
 	@ which protoc-gen-gofast >/dev/null || go get github.com/gogo/protobuf/protoc-gen-gofast
-	protoc --gofast_out=Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types:./pkg protocol/msgpb/message.proto
-	protoc --gofast_out=plugins=grpc:./pkg protocol/dcp/message.proto
+	protoc -I=protocol/msgpb --gofast_out=Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types:./pkg/protocol/msgpb protocol/msgpb/dml.proto
+	protoc -I=protocol/msgpb --gofast_out=Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types:./pkg/protocol/msgpb protocol/msgpb/message.proto
+	protoc -I=protocol/msgpb --gofast_out=plugins=grpc,Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types:./pkg/protocol/msgpb protocol/msgpb/filter_api.proto
+
+
 
 mock:
 	mockgen -destination ./mock/binlog_checker/mock.go github.com/moiot/gravity/pkg/inputs/helper/binlog_checker BinlogChecker

@@ -30,6 +30,10 @@ func (f *rejectFilterType) Filter(msg *core.Msg) (continueNext bool, err error) 
 	return true, nil
 }
 
+func (f *rejectFilterType) Close() error {
+	return nil
+}
+
 type rejectFilterFactoryType struct{}
 
 func (factory *rejectFilterFactoryType) Configure(_ string, _ map[string]interface{}) error {

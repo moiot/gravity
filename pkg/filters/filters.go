@@ -13,8 +13,8 @@ import (
 func NewFilters(filterConfigs []config.GenericConfig) ([]core.IFilter, error) {
 	var retFilters []core.IFilter
 	for _, c := range filterConfigs {
-		if c.Type == "go-plugin" {
-			name, p, err := registry.DownloadGoPlugin(c.Config)
+		if c.Type == "go-native-plugin" {
+			name, p, err := registry.DownloadGoNativePlugin(c.Config)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}

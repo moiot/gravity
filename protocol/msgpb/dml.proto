@@ -1,0 +1,15 @@
+syntax = "proto3";
+package msgpb;
+
+import "google/protobuf/any.proto";
+
+message DMLMsg {
+    // Data is the changed data
+    map<string, google.protobuf.Any> data = 2;
+    // Old is the original data (if it is not empty)
+    map<string, google.protobuf.Any> old = 3;
+    // Pks is the pkColumnName -> pkColumnValue mapping,
+    map<string, google.protobuf.Any> pks = 4;
+
+}
+

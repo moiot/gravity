@@ -123,3 +123,7 @@
 [[constraint]]
   branch = "master"
   name = "github.com/pingcap/tidb"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/hashicorp/go-plugin"

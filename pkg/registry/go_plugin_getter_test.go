@@ -28,7 +28,7 @@ func TestGoPluginGetter(t *testing.T) {
 		"url":  fileUrl,
 	}
 
-	_, _, err := DownloadGoPlugin(configData)
+	_, _, err := DownloadGoNativePlugin(configData)
 	if err != nil {
 		assert.FailNow(errors.ErrorStack(err))
 	}
