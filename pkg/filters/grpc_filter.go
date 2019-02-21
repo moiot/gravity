@@ -91,6 +91,11 @@ func (f *grpcFilterType) Configure(data map[string]interface{}) error {
 	delegate := raw.(core.IFilter)
 	f.delegate = delegate
 
+	err = f.ConfigureMatchers(data)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	if err := f.delegate.Configure(data); err != nil {
 		return errors.Trace(err)
 	}
@@ -99,6 +104,10 @@ func (f *grpcFilterType) Configure(data map[string]interface{}) error {
 }
 
 func (f *grpcFilterType) Filter(msg *core.Msg) (bool, error) {
+	if !f.Matchers.Match(msg) {
+		return true, nil
+	}
+
 	// only supports dml msg right now
 	if msg.Type != core.MsgDML {
 		return true, nil
