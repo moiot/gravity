@@ -2,8 +2,9 @@ package mysql
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
+
+	"github.com/pingcap/parser/ast"
 
 	"github.com/pingcap/parser/format"
 
@@ -101,12 +102,25 @@ func TestSplitBatch(t *testing.T) {
 }
 
 func TestDDL(t *testing.T) {
-	s := `create table t(dt datetime(6) not null default current_timestamp(6) on update current_timestamp(6))`
+	s := "ALTER TABLE `mbk_redpacket`.`_mbk_redpacket_water_gho` ADD COLUMN `mt_userid` VARCHAR(25) DEFAULT NULL COMMENT '美团用户ID' AFTER `userid`, ADD INDEX `idx_mt_userid`(`mt_userid`)"
+
+	expected := []string{
+		"ALTER TABLE `mbk_redpacket`.`_mbk_redpacket_water_gho` ADD COLUMN `mt_userid` VARCHAR(25) DEFAULT NULL COMMENT '美团用户ID' AFTER `userid`",
+		"ALTER TABLE `mbk_redpacket`.`_mbk_redpacket_water_gho` ADD INDEX `idx_mt_userid`(`mt_userid`)",
+	}
 	p := parser.New()
 	stmt, err := p.ParseOneStmt(s, "", "")
 	require.NoError(t, err)
-	b := bytes.NewBufferString("")
-	ctx := format.NewRestoreCtx(format.DefaultRestoreFlags, b)
-	require.NoError(t, stmt.Restore(ctx))
-	fmt.Println(b.String())
+
+	alter := stmt.(*ast.AlterTableStmt)
+	for i, spec := range alter.Specs {
+		n := &ast.AlterTableStmt{
+			Table: alter.Table,
+			Specs: []*ast.AlterTableSpec{spec},
+		}
+		b := bytes.NewBufferString("")
+		ctx := format.NewRestoreCtx(format.DefaultRestoreFlags, b)
+		require.NoError(t, n.Restore(ctx))
+		require.Equal(t, expected[i], b.String())
+	}
 }

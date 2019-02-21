@@ -638,3 +638,13 @@ func NewBinlogSyncer(serverID uint32, dbConfig *DBConfig) *replication.BinlogSyn
 	}
 	return replication.NewBinlogSyncer(syncerConfig)
 }
+
+func IsTiDB(db *sql.DB) bool {
+	r := db.QueryRow("select version()")
+	var s string
+	err := r.Scan(&s)
+	if err != nil {
+		log.Panic(err)
+	}
+	return strings.Contains(strings.ToLower(s), "tidb")
+}

@@ -43,6 +43,7 @@ type MySQLOutput struct {
 	sqlExecutionEnginePlugin registry.Plugin
 	sqlExecutor              sql_execution_engine.EngineExecutor
 	tableConfigs             []config.TableConfig
+	isTiDB                   bool
 }
 
 func init() {
@@ -123,6 +124,7 @@ func (output *MySQLOutput) Start() error {
 	}
 
 	output.sqlExecutor = sqlExecutor
+	output.isTiDB = utils.IsTiDB(db)
 	return nil
 }
 
@@ -170,15 +172,15 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					return nil
 				}
 
-				copy := *node
-				copy.Table.Name = model.CIStr{
+				tmp := *node
+				tmp.Table.Name = model.CIStr{
 					O: targetTable,
 				}
-				copy.Table.Schema = model.CIStr{
+				tmp.Table.Schema = model.CIStr{
 					O: targetSchema,
 				}
-				copy.IfNotExists = true
-				stmt := restore(&copy)
+				tmp.IfNotExists = true
+				stmt := restore(&tmp)
 				err := output.executeDDL(targetSchema, stmt)
 				if err != nil {
 					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
@@ -192,25 +194,45 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
 					return nil
 				}
-				copy := *node
-				copy.Table.Name = model.CIStr{
-					O: targetTable,
-				}
-				copy.Table.Schema = model.CIStr{
-					O: targetSchema,
-				}
-				stmt := restore(&copy)
-				err := output.executeDDL(targetSchema, stmt)
-				if err != nil {
-					if e := errors.Cause(err).(*mysqldriver.MySQLError); e.Number == 1060 {
-						log.Errorf("[output-mysql] ignore duplicate column. ddl: %s. err: %s", stmt, e)
-					} else {
-						log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
+				var targetDDLs []string
+				if output.isTiDB {
+					for _, spec := range node.Specs {
+						tmp := &ast.AlterTableStmt{
+							Table: &ast.TableName{
+								Name: model.CIStr{
+									O: targetTable,
+								},
+								Schema: model.CIStr{
+									O: targetSchema,
+								},
+							},
+							Specs: []*ast.AlterTableSpec{spec},
+						}
+						targetDDLs = append(targetDDLs, restore(tmp))
 					}
 				} else {
-					log.Info("[output-mysql] executed ddl: ", stmt)
-					metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "alter-table").Add(1)
-					output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
+					tmp := *node
+					tmp.Table.Name = model.CIStr{
+						O: targetTable,
+					}
+					tmp.Table.Schema = model.CIStr{
+						O: targetSchema,
+					}
+					targetDDLs = append(targetDDLs, restore(&tmp))
+				}
+				for _, stmt := range targetDDLs {
+					err := output.executeDDL(targetSchema, stmt)
+					if err != nil {
+						if e := errors.Cause(err).(*mysqldriver.MySQLError); e.Number == 1060 {
+							log.Errorf("[output-mysql] ignore duplicate column. ddl: %s. err: %s", stmt, e)
+						} else {
+							log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
+						}
+					} else {
+						log.Info("[output-mysql] executed ddl: ", stmt)
+						metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "alter-table").Add(1)
+						output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
+					}
 				}
 
 			default:
