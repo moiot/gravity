@@ -2,7 +2,9 @@ syntax = "proto3";
 package msgpb;
 
 import "google/protobuf/timestamp.proto";
-import "dml.proto";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/any.proto";
+
 
 enum MsgType {
     UNKNOWN_MSG = 0;
@@ -60,4 +62,37 @@ message Msg {
 message DDLMsg {
     // The DDL SQL
     string SQL = 2;
+}
+
+message DMLMsg {
+    // Data is the changed data
+    map<string, google.protobuf.Any> data = 2;
+    // Old is the original data (if it is not empty)
+    map<string, google.protobuf.Any> old = 3;
+    // Pks is the pkColumnName -> pkColumnValue mapping,
+    map<string, google.protobuf.Any> pks = 4;
+
+}
+
+message ConfigureRequest {
+    map<string, google.protobuf.Any> data = 1;
+}
+
+message ConfigureResponse {
+    google.protobuf.StringValue error = 1;
+}
+
+message FilterRequest {
+    Msg msg = 1;
+}
+
+message FilterResponse {
+    Msg msg = 1;
+    bool continueNext = 2;
+    google.protobuf.StringValue error = 3;
+}
+
+service FilterPlugin {
+    rpc Configure(ConfigureRequest) returns (ConfigureResponse);
+    rpc Filter(FilterRequest) returns (FilterResponse);
 }

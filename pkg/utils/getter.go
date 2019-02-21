@@ -39,7 +39,7 @@ func GetExecutable(url string, dir string, name string) (string, error) {
 		return "", errors.Trace(err)
 	}
 
-	log.Infof("[registry] downloading plugin pwd %s, dstFileName: %s from %s", pwd, dstFileName, pluginUrlString)
+	log.Infof("[registry] downloading plugin pwd %s, dstFileName: %s from %s", pwd, dstFileName, url)
 
 	client := getter.Client{
 		Src:     url,
