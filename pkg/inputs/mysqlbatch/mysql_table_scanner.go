@@ -238,7 +238,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 			posV := mysql.NormalizeSQLType(reflect.ValueOf(rowPtrs[scanIdx]).Elem().Interface())
 			position := TablePosition{Value: posV, Column: scanColumn}
 
-			msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, position)
+			msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, position, queryStartTime)
 
 			if err := tableScanner.emitter.Emit(msg); err != nil {
 				log.Fatalf("[LoopInBatch] failed to emit job: %v", errors.ErrorStack(err))
@@ -302,6 +302,7 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 
 	statement := fmt.Sprintf("SELECT * FROM `%s`.`%s`", tableDef.Schema, tableDef.Name)
 
+	queryStartTime := time.Now()
 	allData, err := utils.QueryGeneralRowsDataWithSQL(db, statement)
 	if err != nil {
 		log.Fatalf("[FindAll] failed to find all, err: %v", errors.ErrorStack(err))
@@ -309,7 +310,7 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 
 	for i := range allData {
 		rowPtrs := allData[i]
-		msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, TablePosition{Column: "*", Type: PlainInt, Value: i + 1})
+		msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, TablePosition{Column: "*", Type: PlainInt, Value: i + 1}, queryStartTime)
 		if err := tableScanner.emitter.Emit(msg); err != nil {
 			log.Fatalf("[FindAll] failed to emit: %v", errors.ErrorStack(err))
 		}
