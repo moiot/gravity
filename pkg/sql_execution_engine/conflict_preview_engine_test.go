@@ -12,7 +12,6 @@ import (
 
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/mysql_test"
-	"github.com/moiot/gravity/pkg/protocol/msgpb"
 	"github.com/moiot/gravity/pkg/schema_store"
 )
 
@@ -98,7 +97,7 @@ var _ = Describe("padder preview engine test", func() {
 						"name": "name",
 					},
 					Pks: map[string]interface{}{
-						"id": msgpb.NewMySQLValidColumnDataInt64("1"),
+						"id": 1,
 					},
 				}
 				err = engine.Execute([]*core.Msg{msg}, table)
