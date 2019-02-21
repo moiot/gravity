@@ -79,3 +79,11 @@ func EncodeMsgToPB(msg *core.Msg) (*msgpb.Msg, error) {
 
 	return pb, nil
 }
+
+func DecodePBToMsg(pbmsg *msgpb.Msg) (*core.Msg, error) {
+	msg, err := DecodePBToMsg(pbmsg)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return msg, nil
+}

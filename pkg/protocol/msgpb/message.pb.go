@@ -25,6 +25,11 @@ import google_protobuf "github.com/gogo/protobuf/types"
 import google_protobuf1 "github.com/gogo/protobuf/types"
 import google_protobuf2 "github.com/gogo/protobuf/types"
 
+import (
+	context "golang.org/x/net/context"
+	grpc "google.golang.org/grpc"
+)
+
 import io "io"
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -345,6 +350,112 @@ func init() {
 	proto.RegisterEnum("msgpb.MsgType", MsgType_name, MsgType_value)
 	proto.RegisterEnum("msgpb.DataSourceType", DataSourceType_name, DataSourceType_value)
 }
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ context.Context
+var _ grpc.ClientConn
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the grpc package it is being compiled against.
+const _ = grpc.SupportPackageIsVersion4
+
+// Client API for FilterPlugin service
+
+type FilterPluginClient interface {
+	Configure(ctx context.Context, in *ConfigureRequest, opts ...grpc.CallOption) (*ConfigureResponse, error)
+	Filter(ctx context.Context, in *FilterRequest, opts ...grpc.CallOption) (*FilterResponse, error)
+}
+
+type filterPluginClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewFilterPluginClient(cc *grpc.ClientConn) FilterPluginClient {
+	return &filterPluginClient{cc}
+}
+
+func (c *filterPluginClient) Configure(ctx context.Context, in *ConfigureRequest, opts ...grpc.CallOption) (*ConfigureResponse, error) {
+	out := new(ConfigureResponse)
+	err := grpc.Invoke(ctx, "/msgpb.FilterPlugin/Configure", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filterPluginClient) Filter(ctx context.Context, in *FilterRequest, opts ...grpc.CallOption) (*FilterResponse, error) {
+	out := new(FilterResponse)
+	err := grpc.Invoke(ctx, "/msgpb.FilterPlugin/Filter", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Server API for FilterPlugin service
+
+type FilterPluginServer interface {
+	Configure(context.Context, *ConfigureRequest) (*ConfigureResponse, error)
+	Filter(context.Context, *FilterRequest) (*FilterResponse, error)
+}
+
+func RegisterFilterPluginServer(s *grpc.Server, srv FilterPluginServer) {
+	s.RegisterService(&_FilterPlugin_serviceDesc, srv)
+}
+
+func _FilterPlugin_Configure_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigureRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilterPluginServer).Configure(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/msgpb.FilterPlugin/Configure",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilterPluginServer).Configure(ctx, req.(*ConfigureRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilterPlugin_Filter_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FilterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilterPluginServer).Filter(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/msgpb.FilterPlugin/Filter",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilterPluginServer).Filter(ctx, req.(*FilterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _FilterPlugin_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "msgpb.FilterPlugin",
+	HandlerType: (*FilterPluginServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Configure",
+			Handler:    _FilterPlugin_Configure_Handler,
+		},
+		{
+			MethodName: "Filter",
+			Handler:    _FilterPlugin_Filter_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "message.proto",
+}
+
 func (m *Msg) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)

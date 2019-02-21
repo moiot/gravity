@@ -49,6 +49,7 @@ run-dev:
 
 build:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity cmd/gravity/main.go
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/filter-server cmd/gravity/filter_server.go
 	#$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/padder cmd/padder/main.go
 
 
@@ -75,7 +76,7 @@ proto:
 	@ which protoc-gen-gofast >/dev/null || go get github.com/gogo/protobuf/protoc-gen-gofast
 
 	protoc -I=protocol/msgpb -I=${GOPATH}/src -I=${GOPATH}/src/github.com/gogo/protobuf/protobuf --gofast_out=\
-	lugins=grpc,\
+	plugins=grpc,\
 	Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,\
 	Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types,\
 	Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,\

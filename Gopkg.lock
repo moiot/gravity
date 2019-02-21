@@ -189,8 +189,7 @@
   revision = "e698a2ea17fee71b248fc2bba82fc544c2017f93"
 
 [[projects]]
-  branch = "master"
-  digest = "1:00cc3887f1c48e11a03c224b13e06e596bc61277c56bcac50d2c70ce97ad6e6e"
+  digest = "1:a2ecb56e5053d942aafc86738915fb94c9131bac848c543b8b6764365fd69080"
   name = "github.com/golang/protobuf"
   packages = [
     "proto",
@@ -200,7 +199,8 @@
     "ptypes/timestamp",
   ]
   pruneopts = "T"
-  revision = "1e59b77b52bf8e4b449a57e6f79f21226d571845"
+  revision = "aa810b61a9c79d51363740d207bb46cf8e620ed5"
+  version = "v1.2.0"
 
 [[projects]]
   branch = "master"
@@ -239,14 +239,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:0b44e120e4f5911ca181b757690339ae0392a8e8c8bc6d9677f057d282ab1fe1"
+  digest = "1:7ad13e4db39a2f33a895efdeed23e8784d8c6ee1bae28bed9f1ccf939c1ed8db"
   name = "github.com/hashicorp/go-plugin"
   packages = [
     ".",
     "internal/plugin",
   ]
   pruneopts = "T"
-  revision = "b838ffee39ce7c7c38226c1413aa4ecae61b4d27"
+  revision = "3f118e8ee104b6f22aeb12453fab56aed1356186"
 
 [[projects]]
   digest = "1:605c47454db9040e30b20dc1b29e3e9d42d6ee742545729cdef74afb1b898ad0"

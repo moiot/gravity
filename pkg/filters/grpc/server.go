@@ -19,6 +19,9 @@ package grpc
 import (
 	"context"
 
+	"github.com/juju/errors"
+	"github.com/moiot/gravity/pkg/core/encoding"
+
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/protocol/msgpb"
 )
@@ -27,10 +30,35 @@ type GRPCServer struct {
 	Impl core.IFilter
 }
 
-func (m *GRPCServer) Configure(context.Context, *msgpb.ConfigureRequest) (*msgpb.ConfigureResponse, error) {
+func (m *GRPCServer) Configure(ctx context.Context, req *msgpb.ConfigureRequest) (*msgpb.ConfigureResponse, error) {
+	rsp := msgpb.ConfigureResponse{}
+
+	data, err := encoding.PBToDataMap(req.Data)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if err := m.Impl.Configure(data); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return &rsp, nil
 
 }
 
-func (m *GRPCServer) Filter(context.Context, *msgpb.FilterRequest) (*msgpb.FilterResponse, error) {
+func (m *GRPCServer) Filter(ctx context.Context, req *msgpb.FilterRequest) (*msgpb.FilterResponse, error) {
+	rsp := msgpb.FilterResponse{}
 
+	msg, err := encoding.DecodePBToMsg(req.Msg)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	continueNext, err := m.Impl.Filter(msg)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	rsp.ContinueNext = continueNext
+	return &rsp, nil
 }
