@@ -6,29 +6,6 @@ import "google/protobuf/wrappers.proto";
 import "google/protobuf/any.proto";
 
 
-enum MsgType {
-    UNKNOWN_MSG = 0;
-    // below are DML types
-    CREATE = 1;
-    UPDATE = 2;
-    DELETE = 3;
-    // DML types end
-
-    // below are DDL types
-    CREATE_DATABASE = 4;
-    DROP_DATABASE = 5;
-    CREATE_TABLE = 6;
-    DROP_TABLE = 7;
-    ALTER_TABLE = 8;
-    TRUNCATE_TABLE = 9;
-    RENAME_TABLE = 10;
-    CREATE_INDEX = 11;
-    DROP_INDEX = 12;
-    GENERAL_DDL = 13;
-    // DDL types end
-
-}
-
 enum DataSourceType {
     UNKNOWN_DATA_SOURCE = 0;
     MYSQL = 1;
@@ -49,7 +26,7 @@ message Msg {
     // is the collection name for Mongo
     string table = 3;
     // MsgType is the message type
-    MsgType msgType = 4;
+    string msgType = 4;
 
     // Timestamp is the binlog event header timestamp for MySQL
     google.protobuf.Timestamp timestamp = 5;
@@ -64,7 +41,9 @@ message DDLMsg {
     string SQL = 2;
 }
 
+
 message DMLMsg {
+    string Op = 1;
     // Data is the changed data
     map<string, google.protobuf.Any> data = 2;
     // Old is the original data (if it is not empty)

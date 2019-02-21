@@ -49,7 +49,7 @@ func (m *GRPCServer) Configure(ctx context.Context, req *msgpb.ConfigureRequest)
 func (m *GRPCServer) Filter(ctx context.Context, req *msgpb.FilterRequest) (*msgpb.FilterResponse, error) {
 	rsp := msgpb.FilterResponse{}
 
-	msg, err := encoding.DecodePBToMsg(req.Msg)
+	msg, err := encoding.DecodeMsgFromPB(req.Msg)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -59,6 +59,12 @@ func (m *GRPCServer) Filter(ctx context.Context, req *msgpb.FilterRequest) (*msg
 		return nil, errors.Trace(err)
 	}
 
+	pbmsg, err := encoding.EncodeMsgToPB(msg)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
 	rsp.ContinueNext = continueNext
+	rsp.Msg = pbmsg
 	return &rsp, nil
 }

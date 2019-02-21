@@ -31,8 +31,8 @@ const PluginName = "filter_grpc"
 var (
 	HandshakeConfig = hplugin.HandshakeConfig{
 		ProtocolVersion:  1,
-		MagicCookieKey:   "",
-		MagicCookieValue: "",
+		MagicCookieKey:   "BASIC_PLUGIN",
+		MagicCookieValue: "hello",
 	}
 
 	PluginMap = map[string]hplugin.Plugin{

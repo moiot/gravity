@@ -64,5 +64,16 @@ func (m *GRPCClient) Filter(msg *core.Msg) (bool, error) {
 		return false, errors.Errorf(rsp.GetError().Value)
 	}
 
+	newMsg, err := encoding.DecodeMsgFromPB(rsp.Msg)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+
+	msg.DmlMsg = newMsg.DmlMsg
+
 	return rsp.GetContinueNext(), nil
+}
+
+func (m *GRPCClient) Close() error {
+	return nil
 }

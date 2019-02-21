@@ -29,6 +29,7 @@ func (f *myFilter) Configure(data map[string]interface{}) error {
 }
 
 func (f *myFilter) Filter(msg *core.Msg) (bool, error) {
+	msg.DmlMsg.Data["v"] = 100
 	return true, nil
 }
 

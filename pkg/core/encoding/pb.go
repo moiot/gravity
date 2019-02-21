@@ -86,7 +86,7 @@ func InterfaceValueToPB(v interface{}) (*types.Any, error) {
 	case []byte:
 		return types.MarshalAny(&types.BytesValue{Value: v})
 	case nil:
-		return nil, errors.Errorf("nil value")
+		return types.MarshalAny(&types.Empty{})
 	default:
 		return nil, errors.Errorf("unknown type: %v", reflect.TypeOf(v))
 	}
@@ -160,6 +160,8 @@ func PbToInterface(v *types.Any) (interface{}, error) {
 			return nil, errors.Trace(err)
 		}
 		return t, nil
+	case "type.googleapis.com/google.protobuf.Empty":
+		return nil, nil
 	default:
 		return nil, errors.Errorf("unknown type: %v", v)
 	}

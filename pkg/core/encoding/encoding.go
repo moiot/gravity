@@ -51,9 +51,25 @@ func EncodeMsgHeaderToPB(msg *core.Msg) (*msgpb.Msg, error) {
 		Database:  msg.Database,
 		Table:     msg.Table,
 		Timestamp: timestamp,
+		MsgType:   string(msg.Type),
 	}
 
 	return &pb, nil
+}
+
+func DecodeMsgHeaderFromPB(pbmsg *msgpb.Msg) (*core.Msg, error) {
+	msg := core.Msg{
+		Database: pbmsg.Database,
+		Table:    pbmsg.Table,
+		Type:     core.MsgType(pbmsg.MsgType),
+	}
+	t, err := types.TimestampFromProto(pbmsg.Timestamp)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	msg.Timestamp = t
+	return &msg, nil
 }
 
 func EncodeMsgToPB(msg *core.Msg) (*msgpb.Msg, error) {
@@ -64,7 +80,7 @@ func EncodeMsgToPB(msg *core.Msg) (*msgpb.Msg, error) {
 	}
 
 	// only supports dml message right now
-	if msg.DmlMsg != nil {
+	if msg.DmlMsg == nil {
 		return nil, errors.Errorf("dml is nil")
 	}
 
@@ -74,16 +90,29 @@ func EncodeMsgToPB(msg *core.Msg) (*msgpb.Msg, error) {
 	}
 
 	pb.DmlMsg = &msgpb.DMLMsg{
+		Op:   string(msg.DmlMsg.Operation),
 		Data: data,
 	}
 
 	return pb, nil
 }
 
-func DecodePBToMsg(pbmsg *msgpb.Msg) (*core.Msg, error) {
-	msg, err := DecodePBToMsg(pbmsg)
+func DecodeMsgFromPB(pbmsg *msgpb.Msg) (*core.Msg, error) {
+	msg, err := DecodeMsgHeaderFromPB(pbmsg)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+
+	msg.DmlMsg = &core.DMLMsg{
+		Operation: core.DMLOp(pbmsg.DmlMsg.Op),
+		Data:      make(map[string]interface{}),
+	}
+
+	data, err := PBToDataMap(pbmsg.DmlMsg.Data)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	msg.DmlMsg.Data = data
 	return msg, nil
 }
