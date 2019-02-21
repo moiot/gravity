@@ -55,6 +55,7 @@ build:
 
 build-linux:
 	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-linux-amd64 cmd/gravity/main.go
+	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/filter-server cmd/gravity/filter_server.go
 
 check:
 	@echo "gofmt"
