@@ -27,7 +27,7 @@ import (
 
 func GetExecutable(url string, dir string, name string) (string, error) {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := os.Mkdir(dir, 755); err != nil {
+		if err := os.Mkdir(dir, 0700); err != nil {
 			return "", errors.Trace(err)
 		}
 	}
@@ -52,5 +52,10 @@ func GetExecutable(url string, dir string, name string) (string, error) {
 	if err := client.Get(); err != nil {
 		return "", errors.Trace(err)
 	}
+
+	if err := os.Chmod(dstFileName, 0700); err != nil {
+		return "", errors.Trace(err)
+	}
+
 	return dstFileName, nil
 }
