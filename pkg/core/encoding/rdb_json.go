@@ -42,6 +42,10 @@ const timeLayout = "2006-01-02 15:04:05.999999999"
 func formatVersion01Data(d map[string]interface{}) map[string]*string {
 	ret := make(map[string]*string)
 	for k, v := range d {
+		if v == nil {
+			ret[k] = nil
+			continue
+		}
 		switch v := v.(type) {
 		case string:
 			ret[k] = new(string)
