@@ -104,14 +104,14 @@ var End2EndEventTimeHistogram = prometheus.NewHistogramVec(prometheus.HistogramO
 	Namespace: "gravity",
 	Name:      "event_time_latency",
 	Help:      "Latency of end to end event time in seconds.",
-	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22), // ~ 17min
+	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 30), // ~ 74h
 }, []string{PipelineTag})
 
 var End2EndProcessTimeHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 	Namespace: "gravity",
 	Name:      "process_time_latency",
 	Help:      "Latency of end to end process time in seconds.",
-	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 22), // ~ 17min
+	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 19), // ~ 2min
 }, []string{PipelineTag})
 
 var QueueLength = prometheus.NewGaugeVec(prometheus.GaugeOpts{
