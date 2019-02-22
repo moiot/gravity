@@ -256,7 +256,8 @@ func (tailer *BinlogTailer) Start() error {
 					)
 					continue
 				}
-				currentPos = sourcePosition
+				currentPosition.BinLogFileName = string(ev.NextLogName)
+				currentPosition.BinLogFilePos = uint32(ev.Position)
 				log.Infof("[binlogTailer] rotate binlog to %v", sourcePosition)
 			case *replication.RowsEvent:
 
