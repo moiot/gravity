@@ -60,6 +60,7 @@ func (e *defaultEmitter) Emit(msg *core.Msg) error {
 		}
 
 		if !continueNext {
+			close(msg.Done)
 			return nil
 		}
 
