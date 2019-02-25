@@ -102,11 +102,11 @@ func TestSplitBatch(t *testing.T) {
 }
 
 func TestDDL(t *testing.T) {
-	s := "ALTER TABLE `mbk_redpacket`.`_mbk_redpacket_water_gho` ADD COLUMN `mt_userid` VARCHAR(25) DEFAULT NULL COMMENT '美团用户ID' AFTER `userid`, ADD INDEX `idx_mt_userid`(`mt_userid`)"
+	s := "ALTER TABLE `foo`.`bar` ADD COLUMN `zoo` VARCHAR(25) DEFAULT NULL COMMENT 'zoo', ADD INDEX `idx_zoo`(`zoo`)"
 
 	expected := []string{
-		"ALTER TABLE `mbk_redpacket`.`_mbk_redpacket_water_gho` ADD COLUMN `mt_userid` VARCHAR(25) DEFAULT NULL COMMENT '美团用户ID' AFTER `userid`",
-		"ALTER TABLE `mbk_redpacket`.`_mbk_redpacket_water_gho` ADD INDEX `idx_mt_userid`(`mt_userid`)",
+		"ALTER TABLE `foo`.`bar` ADD COLUMN `zoo` VARCHAR(25) DEFAULT NULL COMMENT 'zoo'",
+		"ALTER TABLE `foo`.`bar` ADD INDEX `idx_zoo`(`zoo`)",
 	}
 	p := parser.New()
 	stmt, err := p.ParseOneStmt(s, "", "")
