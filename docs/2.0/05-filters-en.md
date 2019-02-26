@@ -92,7 +92,7 @@ implemented in Golang can be found [here](https://github.com/moiot/gravity-grpc-
 The protocol of the GRPC plugin can be found [here](https://github.com/moiot/gravity/blob/master/protocol/msgpb/message.proto)
 ```toml
 [[filters]]
-type = "grp-sidecar"
+type = "grpc-sidecar"
 [filters.config]
 match-schema = "test"
 match-table = "test_table"
