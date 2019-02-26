@@ -109,6 +109,10 @@ func (f *renameDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err er
 	return true, nil
 }
 
+func (f *renameDmlColumnFilter) Close() error {
+	return nil
+}
+
 type renameDMLColumnFilterFactoryType struct{}
 
 func (factory *renameDMLColumnFilterFactoryType) Configure(_ string, _ map[string]interface{}) error {

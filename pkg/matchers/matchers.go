@@ -29,7 +29,6 @@ func NewMatchers(configData map[string]interface{}) (core.IMatcherGroup, error) 
 				return nil, errors.Trace(err)
 			}
 			retMatchers = append(retMatchers, matcher)
-			delete(configData, k)
 		}
 	}
 	return retMatchers, nil

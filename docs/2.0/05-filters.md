@@ -60,3 +60,18 @@ from = ["a", "b"]
 to = ["c", "d"]
 ```
 
+## `grpc-sidecar`
+
+`grpc-sidecar` Filter 会下载一个你指定的二进制文件并启动一个进程。你的这个程序需要实现一个 GRPC 的服务。一个 Golang 的例子在[这里](https://github.com/moiot/gravity-grpc-sidecar-filter-example)
+
+
+GRPC 协议的定义在[这里](https://github.com/moiot/gravity/blob/master/protocol/msgpb/message.proto)
+```toml
+[[filters]]
+type = "grp-sidecar"
+[filters.config]
+match-schema = "test"
+match-table = "test_table"
+binary-url = "binary url that stores the binary"
+name = "unique name of this plugin"
+```

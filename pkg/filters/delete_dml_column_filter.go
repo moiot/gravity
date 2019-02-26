@@ -74,6 +74,10 @@ func (f *deleteDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err er
 	return true, nil
 }
 
+func (f *deleteDmlColumnFilter) Close() error {
+	return nil
+}
+
 type deleteDMLColumnFilterFactoryType struct{}
 
 func (factory *deleteDMLColumnFilterFactoryType) Configure(_ string, _ map[string]interface{}) error {

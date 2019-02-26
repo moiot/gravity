@@ -16,7 +16,7 @@ const (
 	InterfaceName = "Plugin"
 )
 
-func DownloadGoPlugin(goPluginConfig map[string]interface{}) (string, Plugin, error) {
+func DownloadGoNativePlugin(goPluginConfig map[string]interface{}) (string, Plugin, error) {
 	pluginName, ok := goPluginConfig["name"]
 	if !ok {
 		return "", nil, errors.Errorf("go-plugin filter should have a unique name")

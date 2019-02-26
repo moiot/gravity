@@ -1,6 +1,7 @@
 package emitter
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -84,6 +85,21 @@ func (e *defaultEmitter) Emit(msg *core.Msg) error {
 	}
 	msg.LeaveEmitter = time.Now()
 	metrics.EmitterHistogram.WithLabelValues(core.PipelineName).Observe(msg.LeaveEmitter.Sub(msg.EnterEmitter).Seconds())
+	return nil
+}
+
+func (e *defaultEmitter) Close() error {
+	var es []string
+
+	for _, f := range e.fs {
+		if err := f.Close(); err != nil {
+			es = append(es, errors.ErrorStack(err))
+		}
+	}
+
+	if len(es) > 0 {
+		return errors.Errorf(strings.Join(es, " "))
+	}
 	return nil
 }
 

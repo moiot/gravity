@@ -173,6 +173,8 @@
     "gogoproto",
     "proto",
     "protoc-gen-gogo/descriptor",
+    "sortkeys",
+    "types",
   ]
   pruneopts = "T"
   revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
@@ -187,8 +189,7 @@
   revision = "e698a2ea17fee71b248fc2bba82fc544c2017f93"
 
 [[projects]]
-  branch = "master"
-  digest = "1:00cc3887f1c48e11a03c224b13e06e596bc61277c56bcac50d2c70ce97ad6e6e"
+  digest = "1:a2ecb56e5053d942aafc86738915fb94c9131bac848c543b8b6764365fd69080"
   name = "github.com/golang/protobuf"
   packages = [
     "proto",
@@ -198,7 +199,8 @@
     "ptypes/timestamp",
   ]
   pruneopts = "T"
-  revision = "1e59b77b52bf8e4b449a57e6f79f21226d571845"
+  revision = "aa810b61a9c79d51363740d207bb46cf8e620ed5"
+  version = "v1.2.0"
 
 [[projects]]
   branch = "master"
@@ -228,6 +230,25 @@
   revision = "be39683deade1b3613258f751a2fad316d7b5e7c"
 
 [[projects]]
+  digest = "1:f875435d4b0d0fcc6c12ef808b453acdb36f6d9e7f5aa56ed11fc5e2ea7abce9"
+  name = "github.com/hashicorp/go-hclog"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "90f2fbc4844c54471c74c1395e1d06ce0582ec59"
+  version = "v0.7.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:7ad13e4db39a2f33a895efdeed23e8784d8c6ee1bae28bed9f1ccf939c1ed8db"
+  name = "github.com/hashicorp/go-plugin"
+  packages = [
+    ".",
+    "internal/plugin",
+  ]
+  pruneopts = "T"
+  revision = "3f118e8ee104b6f22aeb12453fab56aed1356186"
+
+[[projects]]
   digest = "1:605c47454db9040e30b20dc1b29e3e9d42d6ee742545729cdef74afb1b898ad0"
   name = "github.com/hashicorp/go-safetemp"
   packages = ["."]
@@ -242,6 +263,14 @@
   pruneopts = "T"
   revision = "b5a281d3160aa11950a6182bd9a9dc2cb1e02d50"
   version = "v1.0.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:a4826c308e84f5f161b90b54a814f0be7d112b80164b9b884698a6903ea47ab3"
+  name = "github.com/hashicorp/yamux"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "2f1d1f20f75d5404f53b9edf6b53ed5505508675"
 
 [[projects]]
   digest = "1:52885e16e8412eb69db7d8d4255cb3214b70ffaef144cad91e9737684f838936"
@@ -332,6 +361,14 @@
   pruneopts = "T"
   revision = "4b7aa43c6742a2c18fdef89dd197aaae7dac7ccd"
   version = "1.0.1"
+
+[[projects]]
+  digest = "1:9ec6cf1df5ad1d55cf41a43b6b1e7e118a91bade4f68ff4303379343e40c0e25"
+  name = "github.com/oklog/run"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "4dadeb3030eda0273a12382bb2348ffc7c9d1a39"
+  version = "v1.0.0"
 
 [[projects]]
   digest = "1:0e65a0b6d1aa037a552285666ed4ed79c1c1944c95d3123750f618920ade9033"
@@ -715,6 +752,7 @@
     "encoding",
     "grpclb/grpc_lb_v1/messages",
     "grpclog",
+    "health",
     "health/grpc_health_v1",
     "internal",
     "keepalive",
@@ -795,9 +833,11 @@
     "github.com/coreos/etcd/mvcc/mvccpb",
     "github.com/fsnotify/fsnotify",
     "github.com/go-sql-driver/mysql",
+    "github.com/gogo/protobuf/types",
     "github.com/golang/mock/gomock",
     "github.com/golang/protobuf/proto",
     "github.com/hashicorp/go-getter",
+    "github.com/hashicorp/go-plugin",
     "github.com/jinzhu/gorm",
     "github.com/jinzhu/gorm/dialects/mysql",
     "github.com/json-iterator/go",

@@ -13,6 +13,7 @@ Currently, DRC supports the following Filter plugins:
 - `accept`: A whitelist filter that only accept specific messages.
 - `delete-dml-column`: Deletes specific columns in the source DML messages.
 - `rename-dml-column`: Renames specific columns in the source DML messages.
+- `grpc-sidecar`: Filters that deployed as a grpc server that can do anything you like.
 
 ## `reject` configuration
 
@@ -81,4 +82,20 @@ from = ["a", "b"]
 to = ["c", "d"]
 ```
 
-For the above configuration, the "a" column is renamed to "c" and the "b" column is renamed to "d".
+## `grpc-sidecar`
+
+The `grpc-sidecar` Filter will download the binary you specified and run the binary. This binary
+should start a GRPC server that talks with filter plugin's protocol. An example of the filter
+implemented in Golang can be found [here](https://github.com/moiot/gravity-grpc-sidecar-filter-example)
+
+
+The protocol of the GRPC plugin can be found [here](https://github.com/moiot/gravity/blob/master/protocol/msgpb/message.proto)
+```toml
+[[filters]]
+type = "grpc-sidecar"
+[filters.config]
+match-schema = "test"
+match-table = "test_table"
+binary-url = "binary url that stores the binary"
+name = "unique name of this plugin"
+```

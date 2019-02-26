@@ -1,28 +1,10 @@
 syntax = "proto3";
 package msgpb;
 
-enum MsgType {
-    UNKNOWN_MSG = 0;
-    // below are DML types
-    CREATE = 1;
-    UPDATE = 2;
-    DELETE = 3;
-    // DML types end
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/any.proto";
 
-    // below are DDL types
-    CREATE_DATABASE = 4;
-    DROP_DATABASE = 5;
-    CREATE_TABLE = 6;
-    DROP_TABLE = 7;
-    ALTER_TABLE = 8;
-    TRUNCATE_TABLE = 9;
-    RENAME_TABLE = 10;
-    CREATE_INDEX = 11;
-    DROP_INDEX = 12;
-    GENERAL_DDL = 13;
-    // DDL types end
-
-}
 
 enum DataSourceType {
     UNKNOWN_DATA_SOURCE = 0;
@@ -32,16 +14,6 @@ enum DataSourceType {
     REDIS = 4;
     CODIS = 5;
 
-}
-
-// Position is binlog-file + binlog-position + gtidset for MySQL
-// and is the timestamp for mongo
-message Position {
-    string binlogFile = 1;
-    int32 binlogPosition = 2;
-    string binlogGTIDSet = 3;
-
-    int64 mongoTimestamp = 4;
 }
 
 message Msg {
@@ -54,40 +26,13 @@ message Msg {
     // is the collection name for Mongo
     string table = 3;
     // MsgType is the message type
-    MsgType msgType = 4;
+    string msgType = 4;
+
     // Timestamp is the binlog event header timestamp for MySQL
-    // It is to be decided for Mongo
-    int64 timestamp = 5;
-    // Position is the GTID Set for MySQL
-    // and is timestamp? for Mongo
-    Position position = 6;
-    // GravityID is the gravity server id
-    int32 gravityID = 7;
-    // UniqueSourceName is the Unique Name of the data source
-    string uniqueSourceName = 8;
-    // SourceType is the database type of the data source
-    DataSourceType sourceType = 9;
-    // TimeZone is the Time zone of the data source
-    string timeZone = 10;
-    // Host is the Host name or IP address of the data source
-    string host = 11;
+    google.protobuf.Timestamp timestamp = 5;
 
-    DMLMsg dmlMsg = 12;
-    DDLMsg ddlMsg = 13;
-    string gravitySentTimestamp = 14;
-}
-
-
-message DMLMsg {
-    // Data is the changed data
-    map<string, MySQLColumnData> data = 2;
-    // Old is the original data (if it is not empty)
-    map<string, MySQLColumnData> old = 3;
-    // Pks is the pkColumnName -> pkColumnValue mapping,
-    map<string, MySQLColumnData> pks = 4;
-
-    map<string, bytes> mongoBsonBytes = 5;
-
+    DMLMsg dmlMsg = 6;
+    DDLMsg ddlMsg = 7;
 }
 
 // DDLMsg is not available for Mongo?
@@ -97,25 +42,36 @@ message DDLMsg {
 }
 
 
-enum MySQLColumnType {
-    UNKNOWN = 0;
-    INT64 = 1;
-    FLOAT64 = 2;
-    BOOL = 3;
-    BYTES = 4;
-    STRING = 5;
-    TIMESTAMP = 6;
-    DATETIME = 7;
-    UINT64 = 8;
+message DMLMsg {
+    string Op = 1;
+    // Data is the changed data
+    map<string, google.protobuf.Any> data = 2;
+    // Old is the original data (if it is not empty)
+    map<string, google.protobuf.Any> old = 3;
+    // Pks is the pkColumnName -> pkColumnValue mapping,
+    map<string, google.protobuf.Any> pks = 4;
+
 }
 
-message MySQLColumnValue {
-    string valueString = 1;
-    bool isNull = 2;
+message ConfigureRequest {
+    map<string, google.protobuf.Any> data = 1;
 }
 
-message MySQLColumnData {
-    MySQLColumnType columnType = 1;
-    MySQLColumnValue value = 2;
-    MySQLColumnValue defaultValue = 3;
+message ConfigureResponse {
+    google.protobuf.StringValue error = 1;
+}
+
+message FilterRequest {
+    Msg msg = 1;
+}
+
+message FilterResponse {
+    Msg msg = 1;
+    bool continueNext = 2;
+    google.protobuf.StringValue error = 3;
+}
+
+service FilterPlugin {
+    rpc Configure(ConfigureRequest) returns (ConfigureResponse);
+    rpc Filter(FilterRequest) returns (FilterResponse);
 }

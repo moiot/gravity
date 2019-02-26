@@ -6,6 +6,7 @@ import (
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 
+	rpcplugin "github.com/hashicorp/go-plugin"
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/emitter"
@@ -29,6 +30,8 @@ type Server struct {
 	// add a lock here to prevent race condition
 	isClosed bool
 	sync.Mutex
+
+	rpcClient *rpcplugin.Client
 }
 
 func ParsePlugins(pipelineConfig config.PipelineConfigV3) (*Server, error) {

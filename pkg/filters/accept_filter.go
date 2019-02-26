@@ -28,6 +28,10 @@ func (f *acceptFilterType) Filter(msg *core.Msg) (continueNext bool, err error) 
 	return false, nil
 }
 
+func (f *acceptFilterType) Close() error {
+	return nil
+}
+
 type acceptFilterFactoryType struct{}
 
 func (factory *acceptFilterFactoryType) Configure(_ string, _ map[string]interface{}) error {

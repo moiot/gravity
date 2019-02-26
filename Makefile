@@ -8,6 +8,7 @@ LDFLAGS += -X "$(GRAVITY_PKG)/pkg/utils.BuildTS=$(shell date -u '+%Y-%m-%d %I:%M
 LDFLAGS += -X "$(GRAVITY_PKG)/pkg/utils.GitHash=$(shell git rev-parse HEAD)"
 LDFLAGS += -X "$(GRAVITY_PKG)/pkg/utils.GitBranch=$(shell git rev-parse --abbrev-ref HEAD)"
 
+
 GO      := go
 GOBUILD := $(GO) build
 GOTEST  := $(GO) test
@@ -72,8 +73,15 @@ lint:
 proto:
 	@ which protoc >/dev/null || brew install protobuf
 	@ which protoc-gen-gofast >/dev/null || go get github.com/gogo/protobuf/protoc-gen-gofast
-	protoc --gofast_out=Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types:./pkg protocol/msgpb/message.proto
-	protoc --gofast_out=plugins=grpc:./pkg protocol/dcp/message.proto
+
+	protoc -I=protocol/msgpb -I=${GOPATH}/src -I=${GOPATH}/src/github.com/gogo/protobuf/protobuf --gofast_out=\
+	plugins=grpc,\
+	Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,\
+	Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types,\
+	Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,\
+	Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types:./pkg/protocol/msgpb \
+	protocol/msgpb/message.proto
+
 
 mock:
 	mockgen -destination ./mock/binlog_checker/mock.go github.com/moiot/gravity/pkg/inputs/helper/binlog_checker BinlogChecker

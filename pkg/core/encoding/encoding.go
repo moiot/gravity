@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gogo/protobuf/types"
+	"github.com/juju/errors"
+	"github.com/moiot/gravity/pkg/protocol/msgpb"
+
 	"github.com/moiot/gravity/pkg/core"
 )
 
@@ -35,4 +39,80 @@ func NewEncoder(input string, format string) Encoder {
 	}
 
 	panic(fmt.Sprintf("no serde find for input %s, format %s", input, format))
+}
+
+func EncodeMsgHeaderToPB(msg *core.Msg) (*msgpb.Msg, error) {
+	timestamp, err := types.TimestampProto(msg.Timestamp)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	pb := msgpb.Msg{
+		Database:  msg.Database,
+		Table:     msg.Table,
+		Timestamp: timestamp,
+		MsgType:   string(msg.Type),
+	}
+
+	return &pb, nil
+}
+
+func DecodeMsgHeaderFromPB(pbmsg *msgpb.Msg) (*core.Msg, error) {
+	msg := core.Msg{
+		Database: pbmsg.Database,
+		Table:    pbmsg.Table,
+		Type:     core.MsgType(pbmsg.MsgType),
+	}
+	t, err := types.TimestampFromProto(pbmsg.Timestamp)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	msg.Timestamp = t
+	return &msg, nil
+}
+
+func EncodeMsgToPB(msg *core.Msg) (*msgpb.Msg, error) {
+
+	pb, err := EncodeMsgHeaderToPB(msg)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	// only supports dml message right now
+	if msg.DmlMsg == nil {
+		return nil, errors.Errorf("dml is nil")
+	}
+
+	data, err := DataMapToPB(msg.DmlMsg.Data)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	pb.DmlMsg = &msgpb.DMLMsg{
+		Op:   string(msg.DmlMsg.Operation),
+		Data: data,
+	}
+
+	return pb, nil
+}
+
+func DecodeMsgFromPB(pbmsg *msgpb.Msg) (*core.Msg, error) {
+	msg, err := DecodeMsgHeaderFromPB(pbmsg)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	msg.DmlMsg = &core.DMLMsg{
+		Operation: core.DMLOp(pbmsg.DmlMsg.Op),
+		Data:      make(map[string]interface{}),
+	}
+
+	data, err := PBToDataMap(pbmsg.DmlMsg.Data)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	msg.DmlMsg.Data = data
+	return msg, nil
 }
