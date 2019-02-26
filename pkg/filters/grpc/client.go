@@ -69,8 +69,7 @@ func (m *GRPCClient) Filter(msg *core.Msg) (bool, error) {
 		return false, errors.Trace(err)
 	}
 
-	msg.DmlMsg = newMsg.DmlMsg
-
+	*msg = *newMsg
 	return rsp.GetContinueNext(), nil
 }
 
