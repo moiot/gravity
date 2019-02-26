@@ -2,8 +2,9 @@ package mysql
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
+
+	"github.com/pingcap/parser/ast"
 
 	"github.com/pingcap/parser/format"
 
@@ -101,12 +102,25 @@ func TestSplitBatch(t *testing.T) {
 }
 
 func TestDDL(t *testing.T) {
-	s := `create table t(dt datetime(6) not null default current_timestamp(6) on update current_timestamp(6))`
+	s := "ALTER TABLE `foo`.`bar` ADD COLUMN `zoo` VARCHAR(25) DEFAULT NULL COMMENT 'zoo', ADD INDEX `idx_zoo`(`zoo`)"
+
+	expected := []string{
+		"ALTER TABLE `foo`.`bar` ADD COLUMN `zoo` VARCHAR(25) DEFAULT NULL COMMENT 'zoo'",
+		"ALTER TABLE `foo`.`bar` ADD INDEX `idx_zoo`(`zoo`)",
+	}
 	p := parser.New()
 	stmt, err := p.ParseOneStmt(s, "", "")
 	require.NoError(t, err)
-	b := bytes.NewBufferString("")
-	ctx := format.NewRestoreCtx(format.DefaultRestoreFlags, b)
-	require.NoError(t, stmt.Restore(ctx))
-	fmt.Println(b.String())
+
+	alter := stmt.(*ast.AlterTableStmt)
+	for i, spec := range alter.Specs {
+		n := &ast.AlterTableStmt{
+			Table: alter.Table,
+			Specs: []*ast.AlterTableSpec{spec},
+		}
+		b := bytes.NewBufferString("")
+		ctx := format.NewRestoreCtx(format.DefaultRestoreFlags, b)
+		require.NoError(t, n.Restore(ctx))
+		require.Equal(t, expected[i], b.String())
+	}
 }

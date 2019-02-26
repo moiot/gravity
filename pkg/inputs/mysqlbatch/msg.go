@@ -27,7 +27,8 @@ func NewMsg(
 	columnTypes []*sql.ColumnType,
 	sourceTableDef *schema_store.Table,
 	callbackFunc core.AfterMsgCommitFunc,
-	position TablePosition) *core.Msg {
+	position TablePosition,
+	scanTime time.Time) *core.Msg {
 
 	columnDataMap := mysql.SQLDataPtrs2Val(rowPtrs, columnTypes)
 	msg := core.Msg{
@@ -63,7 +64,7 @@ func NewMsg(
 	msg.AfterCommitCallback = callbackFunc
 	msg.InputContext = position
 	msg.Phase = core.Phase{
-		EnterInput: time.Now(),
+		EnterInput: scanTime,
 	}
 	metrics.InputCounter.WithLabelValues(core.PipelineName, msg.Database, msg.Table, string(msg.Type), string(dmlMsg.Operation)).Add(1)
 	return &msg
