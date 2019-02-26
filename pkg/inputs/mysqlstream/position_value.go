@@ -18,7 +18,7 @@ func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCache
 		return errors.Trace(err)
 	}
 
-	if !exist {
+	if !exist || position.Stage != config.Stream {
 		dbUtil := utils.NewMySQLDB(db)
 		binlogFilePos, gtid, err := dbUtil.GetMasterStatus()
 		if err != nil {

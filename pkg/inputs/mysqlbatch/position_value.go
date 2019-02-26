@@ -181,12 +181,12 @@ func DecodeBatchPositionValue(s string) (interface{}, error) {
 }
 
 func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB *sql.DB) error {
-	_, exist, err := cache.Get()
+	position, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	if !exist {
+	if !exist || position.Stage != config.Batch {
 		dbUtil := utils.NewMySQLDB(sourceDB)
 		binlogFilePos, gtid, err := dbUtil.GetMasterStatus()
 		if err != nil {
