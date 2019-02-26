@@ -38,7 +38,7 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 		return errors.Trace(err)
 	}
 
-	if !exist {
+	if !exist || position.Stage != config.Stream {
 		var currentPosition config.MongoPosition
 		if startPositionInSpec == nil {
 			p := config.MongoPosition(0)
