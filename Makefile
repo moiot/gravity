@@ -49,13 +49,13 @@ run-dev:
 
 build:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity cmd/gravity/main.go
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/filter-server cmd/gravity/filter_server.go
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/grpc-sidecar-filter-sample cmd/gravity/grpc_sidecar_filter.go
 	#$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/padder cmd/padder/main.go
 
 
 build-linux:
 	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-linux-amd64 cmd/gravity/main.go
-	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/filter-server cmd/gravity/filter_server.go
+	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/grpc-sidecar-filter-sample-linux cmd/gravity/grpc_sidecar_filter.go
 
 check:
 	@echo "gofmt"

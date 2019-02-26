@@ -28,14 +28,14 @@ import (
 )
 
 // [[filters]]
-// type = "grpc-plugin"
+// type = "grpc-sidecar"
 // [filters.config]
-// url = "some url"
+// binary-url = "some url"
 // name = "some name"
 
 const (
-	GRPCFilterName = "grpc-plugin"
-	BinaryDir      = "./go-plugins"
+	GRPCFilterName = "grpc-sidecar"
+	BinaryDir      = "./grpc-sidecar"
 )
 
 type grpcFilterType struct {
@@ -46,9 +46,9 @@ type grpcFilterType struct {
 
 func (f *grpcFilterType) Configure(data map[string]interface{}) error {
 	// url is the location of the binary
-	url, ok := data["url"]
+	url, ok := data["binary-url"]
 	if !ok {
-		return errors.Errorf("empty url")
+		return errors.Errorf("empty binary-url")
 	}
 
 	// name is the binary name. when we downloaded the binary, we use this name to
