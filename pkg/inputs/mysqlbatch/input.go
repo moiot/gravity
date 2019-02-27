@@ -438,6 +438,8 @@ func DetectScanColumn(sourceDB *sql.DB, dbName string, tableName string, estimat
 		return uniqueIndexes[0], nil
 	}
 
+	// Now there is no unique key detected, we end up trying a full dump.
+	// So we do a validation here to ensure we are not doing a dump on a really big table.
 	if estimatedRowsCount < maxFullDumpRowsCount {
 		return "*", nil
 	}
