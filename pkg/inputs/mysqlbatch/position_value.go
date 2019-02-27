@@ -188,15 +188,20 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB 
 
 	if !exist {
 		dbUtil := utils.NewMySQLDB(sourceDB)
-		binlogFilePos, gtid, err := dbUtil.GetMasterStatus()
-		if err != nil {
-			return errors.Trace(err)
-		}
+		var startPosition utils.MySQLBinlogPosition
 
-		startPosition := utils.MySQLBinlogPosition{
-			BinLogFileName: binlogFilePos.Name,
-			BinLogFilePos:  binlogFilePos.Pos,
-			BinlogGTID:     gtid.String(),
+		// For tidb, we just assume the binlog position is empty
+		if !utils.IsTiDB(sourceDB) {
+			binlogFilePos, gtid, err := dbUtil.GetMasterStatus()
+			if err != nil {
+				return errors.Trace(err)
+			}
+
+			startPosition = utils.MySQLBinlogPosition{
+				BinLogFileName: binlogFilePos.Name,
+				BinLogFilePos:  binlogFilePos.Pos,
+				BinlogGTID:     gtid.String(),
+			}
 		}
 
 		batchPositionValue := BatchPositionValue{
