@@ -161,6 +161,7 @@ type TableStats struct {
 	Current           *TablePosition `toml:"current" json:"current"`
 	EstimatedRowCount int64          `json:"estimated-count"`
 	ScannedCount      int64          `json:"scanned-count"`
+	Done              bool           `json:"done"`
 }
 
 type BatchPositionValue struct {
@@ -246,33 +247,33 @@ func GetStartBinlog(cache position_store.PositionCacheInterface) (utils.MySQLBin
 	return batchPositionValue.Start, nil
 }
 
-func GetCurrentPos(cache position_store.PositionCacheInterface, fullTableName string) (TablePosition, bool, error) {
+func GetCurrentPos(cache position_store.PositionCacheInterface, fullTableName string) (TablePosition, bool, bool, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
 	position, exist, err := cache.Get()
 	if err != nil {
-		return TablePosition{}, false, errors.Trace(err)
+		return TablePosition{}, false, false, errors.Trace(err)
 	}
 
 	if !exist {
-		return TablePosition{}, false, nil
+		return TablePosition{}, false, false, nil
 	}
 
 	batchPositionValue, ok := position.Value.(BatchPositionValue)
 	if !ok {
-		return TablePosition{}, true, errors.Errorf("invalid position type")
+		return TablePosition{}, false, true, errors.Errorf("invalid position type")
 	}
 
 	stats, ok := batchPositionValue.TableStates[fullTableName]
 	if !ok {
-		return TablePosition{}, false, errors.Errorf("empty stats for table: %v", fullTableName)
+		return TablePosition{}, false, false, errors.Errorf("empty stats for table: %v", fullTableName)
 	}
 
 	if stats.Current != nil {
-		return *stats.Current, true, nil
+		return *stats.Current, stats.Done, true, nil
 	} else {
-		return TablePosition{}, false, nil
+		return TablePosition{}, false, false, nil
 	}
 }
 
@@ -305,6 +306,35 @@ func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName st
 	}
 	batchPositionValue.TableStates[fullTableName] = stats
 
+	position.Value = batchPositionValue
+	return errors.Trace(cache.Put(position))
+}
+
+func PutDone(cache position_store.PositionCacheInterface, fullTableName string) error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	position, exists, err := cache.Get()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if !exists {
+		return errors.Errorf("empty position")
+	}
+
+	batchPositionValue, ok := position.Value.(BatchPositionValue)
+	if !ok {
+		return errors.Errorf("invalid position type")
+	}
+
+	stats, ok := batchPositionValue.TableStates[fullTableName]
+	if !ok {
+		return errors.Errorf("empty stats for table: %v", fullTableName)
+	}
+
+	stats.Done = true
+	batchPositionValue.TableStates[fullTableName] = stats
 	position.Value = batchPositionValue
 	return errors.Trace(cache.Put(position))
 }

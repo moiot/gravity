@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -382,6 +383,13 @@ func TestTableScanner_Start(t *testing.T) {
 			q <- &TableWork{TableDef: tableDefs[0], TableConfig: &tableConfigs[0], ScanColumn: c.scanColumn}
 			close(q)
 
+			// randomly and delete the max value
+			deleteMaxValueRandomly(
+				db,
+				utils.TableIdentity(tableDefs[0].Schema, tableDefs[0].Name),
+				positionCache,
+			)
+
 			tableScanner := NewTableScanner(
 				tt.Name(),
 				q,
@@ -429,4 +437,28 @@ func TestTableScanner_Start(t *testing.T) {
 			r.Equalf(0, len(submitter.msgs), "test case: %v", c.name)
 		}
 	})
+}
+
+func deleteMaxValueRandomly(db *sql.DB, fullTableName string, positionCache position_store.PositionCacheInterface) {
+	p, exists, err := positionCache.Get()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	if !exists {
+		panic("empty position")
+	}
+
+	batchPositionValue := p.Value.(BatchPositionValue)
+	stats := batchPositionValue.TableStates[fullTableName]
+	if stats.Max.Column == "*" {
+		return
+	}
+	if rand.Float32() < 0.5 {
+		_, err := db.Exec(fmt.Sprintf("DELETE FROM %s WHERE %s = ?", fullTableName, stats.Max.Column), stats.Max.Value)
+		if err != nil {
+			panic(err.Error())
+		}
+	}
+
 }

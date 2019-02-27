@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/moiot/gravity/pkg/mysql"
-
 	"github.com/moiot/gravity/pkg/inputs/helper"
 
 	"github.com/juju/errors"
@@ -365,7 +363,7 @@ func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.Pos
 
 func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInterface, tableDef *schema_store.Table, scanColumn string, estimatedRowCount int64) (bool, error) {
 	fullTableName := utils.TableIdentity(tableDef.Schema, tableDef.Name)
-	max, _, exists, err := GetMaxMin(positionCache, fullTableName)
+	_, _, exists, err := GetMaxMin(positionCache, fullTableName)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -397,7 +395,7 @@ func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInt
 		log.Infof("[InitTablePosition] schema: %v, table: %v, scanColumn: %v", tableDef.Schema, tableDef.Name, scanColumn)
 		return false, nil
 	} else {
-		current, exists, err := GetCurrentPos(positionCache, fullTableName)
+		_, done, exists, err := GetCurrentPos(positionCache, fullTableName)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -405,12 +403,7 @@ func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInt
 		if !exists {
 			return false, nil
 		}
-
-		if mysql.MySQLDataEquals(current.Value, max.Value) {
-			return true, nil
-		} else {
-			return false, nil
-		}
+		return done, nil
 	}
 }
 

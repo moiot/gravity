@@ -146,7 +146,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 	maxReached := false
 	var statement string
 
-	currentPosition, exists, err := GetCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name))
+	currentPosition, done, exists, err := GetCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name))
 	if err != nil {
 		log.Fatalf("[LoopInBatch] failed to get current pos: %v", errors.ErrorStack(err))
 	}
@@ -154,7 +154,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 	if !exists {
 		currentPosition = min
 	} else {
-		if mysql.MySQLDataEquals(currentPosition.Value, max.Value) {
+		if done {
 			log.Infof("[LoopInBatch] already scanned: %v", utils.TableIdentity(tableDef.Schema, tableDef.Name))
 			return
 		}
@@ -180,16 +180,16 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 	for {
 
 		if firstLoop {
-			statement = fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE %s >= ? ORDER BY %s LIMIT ?", tableDef.Schema, tableDef.Name, scanColumn, scanColumn)
+			statement = fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE %s >= ? AND %s < ? ORDER BY %s LIMIT ?", tableDef.Schema, tableDef.Name, scanColumn, scanColumn, scanColumn)
 			firstLoop = false
 		} else {
-			statement = fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE %s > ? ORDER BY %s LIMIT ?", tableDef.Schema, tableDef.Name, scanColumn, scanColumn)
+			statement = fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE %s > ? AND %s < ? ORDER BY %s LIMIT ?", tableDef.Schema, tableDef.Name, scanColumn, scanColumn, scanColumn)
 		}
 
 		<-tableScanner.throttle.C
 
 		queryStartTime := time.Now()
-		rows, err := db.Query(statement, currentMinValue, batch)
+		rows, err := db.Query(statement, currentMinValue, max.Value, batch)
 		if err != nil {
 			log.Fatalf("[LoopInBatch] table %s.%s, err: %v", tableDef.Schema, tableDef.Name, err)
 		}
@@ -225,6 +225,9 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 		// no result found for this query
 		if rowIdx == 0 {
 			log.Infof("[TableScanner] query result is 0, return")
+			if err := tableScanner.finishBatchScan(tableDef); err != nil {
+				log.Fatalf("[LoopInBatch] failed finish batch scan: %v", errors.ErrorStack(err))
+			}
 			return
 		}
 
@@ -252,13 +255,8 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 		if maxReached {
 
 			log.Infof("[LoopInBatch] finish table: %v", utils.TableIdentity(tableDef.Schema, tableDef.Name))
-
-			if err := waitAndCloseStream(tableDef, tableScanner.emitter); err != nil {
-				log.Fatalf("[LoopInBatch] failed to emit close stream closeMsg: %v", errors.ErrorStack(err))
-			}
-
-			if err := tableScanner.positionCache.Flush(); err != nil {
-				log.Fatalf("[LoopInBatch] failed to flush position cache: %v", errors.ErrorStack(err))
+			if err := tableScanner.finishBatchScan(tableDef); err != nil {
+				log.Fatalf("[LoopInBatch] failed finish batch scan: %v", errors.ErrorStack(err))
 			}
 			return
 		}
@@ -273,24 +271,33 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 	}
 }
 
+func (tableScanner *TableScanner) finishBatchScan(tableDef *schema_store.Table) error {
+	if err := waitAndCloseStream(tableDef, tableScanner.emitter); err != nil {
+		return errors.Trace(err)
+		log.Fatalf("[LoopInBatch] failed to emit close stream closeMsg: %v", errors.ErrorStack(err))
+	}
+
+	if err := PutDone(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name)); err != nil {
+		return errors.Trace(err)
+	}
+
+	if err := tableScanner.positionCache.Flush(); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
 func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Table, tableConfig *TableConfig) {
 	streamKey := utils.TableIdentity(tableDef.Schema, tableDef.Name)
 
 	// do not re-scan table that has already dumped
-	current, currentExists, err := GetCurrentPos(tableScanner.positionCache, streamKey)
+	_, done, _, err := GetCurrentPos(tableScanner.positionCache, streamKey)
 	if err != nil {
 		log.Fatalf("[FindAll] failed to get current pos: %v", errors.ErrorStack(err))
 	}
-
-	max, _, maxExists, err := GetMaxMin(tableScanner.positionCache, streamKey)
-	if err != nil {
-		log.Fatalf("[FindAll] failed to get max min: %v", errors.ErrorStack(err))
-	}
-	if currentExists && maxExists {
-		if reflect.DeepEqual(max.Value, current.Value) {
-			log.Infof("[FindAll] table: %v already dumped", streamKey)
-			return
-		}
+	if done {
+		log.Infof("[FindAll] table: %v already dumped", streamKey)
+		return
 	}
 
 	log.Infof("[tableScanner] dump table: %s", streamKey)
@@ -319,7 +326,7 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 	// set the current and max position to be the same
 	p := TablePosition{Column: "*", Type: PlainInt, Value: len(allData)}
 
-	if err := PutCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), p, false); err != nil {
+	if err := PutCurrentPos(tableScanner.positionCache, streamKey, p, false); err != nil {
 		log.Fatalf("[FindAll] failed to put current pos: %v", errors.ErrorStack(err))
 	}
 
@@ -329,6 +336,10 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 		p,
 		TablePosition{Column: "*", Type: PlainInt, Value: 0}); err != nil {
 		log.Fatalf("[FindAll] failed to put max min: %v", errors.ErrorStack(err))
+	}
+
+	if err := PutDone(tableScanner.positionCache, streamKey); err != nil {
+		log.Fatalf("[FindAll] failed to put done: %v", errors.ErrorStack(err))
 	}
 
 	log.Infof("[FindAll] finished dump table: %v", streamKey)
