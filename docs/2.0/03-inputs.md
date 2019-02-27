@@ -135,6 +135,11 @@ table = "test_source_*"
 [[input.config.table-configs]]
 schema = "test_2"
 table = "test_source_*"
+# - 可选
+# 指定扫描的列名字。默认情况下，如果不指定的话，系统会自动探测唯一键作为扫描的列。
+# 请仔细核对这个配置，确保这个列上面有唯一索引。
+scan-column = "id"
+
 ```
 
 对于上面的默认配置，最多允许 10 个并发线程扫描源库，每个线程一次拉取 10000 行；
