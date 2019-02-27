@@ -123,7 +123,7 @@ schema = "test_2"
 table = "test_source_*"
 # Optional
 # Enforce the column to scan for tables. If you don't specifiy this value, the system will use a column that has unique index.
-# Make sure you know what you are doing: YOU NEED TO SPECIFY SOMETHING COLUMN THAT HAVE A UNIQUE INDEX.
+# Make sure you know what you are doing: YOU NEED TO SPECIFY A COLUMN THAT HAVE A UNIQUE INDEX.
 scan-column = "id"
 
 [input.config]
