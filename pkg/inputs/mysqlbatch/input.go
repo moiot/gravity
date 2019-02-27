@@ -210,7 +210,7 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 			return errors.Trace(err)
 		}
 
-		if tableConfigs[i].ScanColumn != "" {
+		if tableConfigs[i].ScanColumn == "" {
 			column, err := DetectScanColumn(plugin.scanDB, t.Schema, t.Name, rowCount, plugin.cfg.MaxFullDumpCount)
 			if err != nil {
 				log.Errorf("failed to detect scan column, schema: %v, table: %v", t.Schema, t.Name)
