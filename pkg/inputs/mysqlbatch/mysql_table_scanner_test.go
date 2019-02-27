@@ -115,7 +115,7 @@ func TestDetectScanColumn(t *testing.T) {
 		testDBName := "mysql_table_scanner_test_4"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-		col, _, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableIdPrimary, 1000)
+		col, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableIdPrimary, 1000, 10000)
 		r.Nil(err)
 		r.Equal("id", col)
 	})
@@ -124,7 +124,7 @@ func TestDetectScanColumn(t *testing.T) {
 		testDBName := "mysql_table_scanner_test_5"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-		c, _, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 1000)
+		c, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 1000, 10000)
 		r.Nil(err)
 		r.Equal("*", c)
 	})
@@ -133,7 +133,7 @@ func TestDetectScanColumn(t *testing.T) {
 		testDBName := "mysql_table_scanner_test_6"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-		_, _, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 0)
+		_, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 10001, 10000)
 		r.NotNil(err)
 	})
 
@@ -141,7 +141,7 @@ func TestDetectScanColumn(t *testing.T) {
 		testDBName := "mysql_table_scanner_test_7"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-		col, _, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableUniqueIndexEmailString, 1000)
+		col, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableUniqueIndexEmailString, 1000, 10000)
 		r.Nil(err)
 		r.Equal("email", col)
 	})
