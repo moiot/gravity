@@ -99,6 +99,9 @@ func NewCreateTableMsg(parser *parser.Parser, table *schema_store.Table, createT
 
 func NewBarrierMsg(tableDef *schema_store.Table) *core.Msg {
 	msg := core.Msg{
+		Phase: core.Phase{
+			EnterInput: time.Now(),
+		},
 		Type:            core.MsgCtl,
 		InputStreamKey:  utils.NewStringPtr(utils.TableIdentity(tableDef.Schema, tableDef.Name)),
 		OutputStreamKey: utils.NewStringPtr(""),
@@ -109,6 +112,9 @@ func NewBarrierMsg(tableDef *schema_store.Table) *core.Msg {
 
 func NewCloseInputStreamMsg(tableDef *schema_store.Table) *core.Msg {
 	msg := core.Msg{
+		Phase: core.Phase{
+			EnterInput: time.Now(),
+		},
 		Type:            core.MsgCloseInputStream,
 		InputStreamKey:  utils.NewStringPtr(utils.TableIdentity(tableDef.Schema, tableDef.Name)),
 		OutputStreamKey: utils.NewStringPtr(""),

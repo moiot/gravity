@@ -2,17 +2,22 @@ package mongo
 
 import (
 	"github.com/juju/errors"
-	"github.com/moiot/gravity/pkg/position_store"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/inputs/helper"
+	"github.com/moiot/gravity/pkg/inputs/mongobatch"
+	"github.com/moiot/gravity/pkg/inputs/mongostream"
+	"github.com/moiot/gravity/pkg/position_store"
 	"github.com/moiot/gravity/pkg/registry"
 )
 
 // TODO: remove duplicate with inputs/mysql
+const Name = "mongo"
+
 func init() {
-	registry.RegisterPlugin(registry.InputPlugin, "mongo", &input{}, false)
+	registry.RegisterPlugin(registry.InputPlugin, Name, &input{}, false)
 }
 
 type input struct {
@@ -22,23 +27,39 @@ type input struct {
 func (i *input) Configure(pipelineName string, data map[string]interface{}) error {
 	mode := data["mode"]
 	if mode == nil {
-		return errors.Errorf("mongo input should have mode %s", config.Stream)
+		return errors.Errorf("mongo input should have mode")
 	}
 
 	var err error
 
 	switch mode.(config.InputMode) {
 	case config.Batch:
-		return errors.Errorf("mongo does not support 'batch' right now")
+		i.Input, err = helper.GetInputFromPlugin(mongobatch.Name, pipelineName, data)
+		if err != nil {
+			return errors.Trace(err)
+		}
 
 	case config.Stream:
-		i.Input, err = getDelegate("mongooplog", pipelineName, data)
+		i.Input, err = helper.GetInputFromPlugin(mongostream.Name, pipelineName, data)
 		if err != nil {
 			return errors.Trace(err)
 		}
 
 	case config.Replication:
-		return errors.Errorf("mongo does not support 'replication' mode right now")
+		batch, err := helper.GetInputFromPlugin(mongobatch.Name, pipelineName, data)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		stream, err := helper.GetInputFromPlugin(mongostream.Name, pipelineName, data)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		i.Input, err = helper.NewTwoStageInputPlugin(batch, stream)
+		if err != nil {
+			return errors.Trace(err)
+		}
 
 	default:
 		log.Panic("unknown mode ", mode)
@@ -54,17 +75,4 @@ func (i *input) NewPositionCache() (position_store.PositionCacheInterface, error
 	}
 
 	return newer.NewPositionCache()
-}
-
-// TODO: remove duplicate with inputs/mysql
-func getDelegate(pluginName string, pipelineName string, data map[string]interface{}) (core.Input, error) {
-	plugin, err := registry.GetPlugin(registry.InputPlugin, pluginName)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	err = plugin.Configure(pipelineName, data)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	return plugin.(core.Input), nil
 }

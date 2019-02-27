@@ -1,8 +1,8 @@
-package integration_test
+package utils
 
 import "encoding/json"
 
-func struct2Map(i interface{}) (ret map[string]interface{}) {
+func Struct2Map(i interface{}) (ret map[string]interface{}) {
 	t, err := json.Marshal(i)
 	if err != nil {
 		panic(err)
