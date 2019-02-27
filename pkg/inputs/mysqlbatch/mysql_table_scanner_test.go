@@ -133,7 +133,7 @@ func TestDetectScanColumn(t *testing.T) {
 		testDBName := "mysql_table_scanner_test_6"
 
 		db := mysql_test.MustSetupSourceDB(testDBName)
-		_, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 0, 10000)
+		_, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 10001, 10000)
 		r.NotNil(err)
 	})
 

@@ -419,7 +419,7 @@ func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInt
 // Pick primary key, if there is only one primary key
 // If pk not found try using unique index
 // fail
-func DetectScanColumn(sourceDB *sql.DB, dbName string, tableName string, estimatedRowsCount int64, maxFullDumpRowsCount int64) (string, error) {
+func DetectScanColumn(sourceDB *sql.DB, dbName string, tableName string, estimatedRowsCount int64, maxFullDumpRowsCountLimit int64) (string, error) {
 	pks, err := utils.GetPrimaryKeys(sourceDB, dbName, tableName)
 	if err != nil {
 		return "", errors.Trace(err)
@@ -440,7 +440,7 @@ func DetectScanColumn(sourceDB *sql.DB, dbName string, tableName string, estimat
 
 	// Now there is no unique key detected, we end up trying a full dump.
 	// So we do a validation here to ensure we are not doing a dump on a really big table.
-	if estimatedRowsCount < maxFullDumpRowsCount {
+	if estimatedRowsCount < maxFullDumpRowsCountLimit {
 		return "*", nil
 	}
 
