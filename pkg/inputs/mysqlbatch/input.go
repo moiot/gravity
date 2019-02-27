@@ -27,6 +27,9 @@ type TableConfig struct {
 	// Table is an array of string, each string is a glob expression
 	// that describes the table name
 	Table []string `mapstructure:"table" toml:"table" json:"table"`
+
+	// ScanColumn enforces these table's scan column
+	ScanColumn string `mapstructure:"scan-column" toml:"scan-column" json:"scan-column"`
 }
 
 type PluginConfig struct {
@@ -202,12 +205,22 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 	estimatedRowCount := make([]int64, len(tableDefs))
 	var allErrors []error
 	for i, t := range tableDefs {
-		column, rowCount, err := DetectScanColumn(plugin.scanDB, t.Schema, t.Name, plugin.cfg.MaxFullDumpCount)
+		rowCount, err := utils.EstimateRowsCount(plugin.scanDB, t.Schema, t.Name)
 		if err != nil {
-			log.Errorf("failed to detect scan column, schema: %v, table: %v", t.Schema, t.Name)
-			allErrors = append(allErrors, err)
+			return errors.Trace(err)
 		}
-		scanColumns[i] = column
+
+		if tableConfigs[i].ScanColumn != "" {
+			column, err := DetectScanColumn(plugin.scanDB, t.Schema, t.Name, rowCount, plugin.cfg.MaxFullDumpCount)
+			if err != nil {
+				log.Errorf("failed to detect scan column, schema: %v, table: %v", t.Schema, t.Name)
+				allErrors = append(allErrors, err)
+			}
+			scanColumns[i] = column
+		} else {
+			scanColumns[i] = tableConfigs[i].ScanColumn
+		}
+
 		estimatedRowCount[i] = rowCount
 	}
 	if len(allErrors) > 0 {
@@ -406,33 +419,28 @@ func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInt
 // Pick primary key, if there is only one primary key
 // If pk not found try using unique index
 // fail
-func DetectScanColumn(sourceDB *sql.DB, dbName string, tableName string, maxFullDumpRowsCount int64) (string, int64, error) {
-	rowsCount, err := utils.EstimateRowsCount(sourceDB, dbName, tableName)
-	if err != nil {
-		return "", 0, errors.Trace(err)
-	}
-
+func DetectScanColumn(sourceDB *sql.DB, dbName string, tableName string, estimatedRowsCount int64, maxFullDumpRowsCount int64) (string, error) {
 	pks, err := utils.GetPrimaryKeys(sourceDB, dbName, tableName)
 	if err != nil {
-		return "", 0, errors.Trace(err)
+		return "", errors.Trace(err)
 	}
 
 	if len(pks) == 1 {
-		return pks[0], rowsCount, nil
+		return pks[0], nil
 	}
 
 	uniqueIndexes, err := utils.GetUniqueIndexesWithoutPks(sourceDB, dbName, tableName)
 	if err != nil {
-		return "", 0, errors.Trace(err)
+		return "", errors.Trace(err)
 	}
 
 	if len(uniqueIndexes) > 0 {
-		return uniqueIndexes[0], rowsCount, nil
+		return uniqueIndexes[0], nil
 	}
 
-	if rowsCount < maxFullDumpRowsCount {
-		return "*", rowsCount, nil
+	if estimatedRowsCount < maxFullDumpRowsCount {
+		return "*", nil
 	}
 
-	return "", rowsCount, errors.Errorf("no scan column can be found automatically for %s.%s", dbName, tableName)
+	return "", errors.Errorf("no scan column can be found automatically for %s.%s", dbName, tableName)
 }
