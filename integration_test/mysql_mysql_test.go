@@ -345,7 +345,7 @@ func TestZeroTime(t *testing.T) {
 	_, err = sourceDB.Exec(fmt.Sprintf("insert into %s(dt, ts) values ('1970-01-01 00:00:01','1970-01-01 00:00:01'), ('0000-00-00 00:00:00', '0000-00-00 00:00:00');", fullTblName))
 	r.NoError(err)
 
-	r.NoError(server.Input.SendDeadSignal())
+	r.NoError(mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName))
 	<-server.Input.Done()
 	server.Close()
 
