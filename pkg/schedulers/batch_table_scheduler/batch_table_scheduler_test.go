@@ -249,29 +249,31 @@ func TestBatchScheduler(t *testing.T) {
 	}
 
 	for _, tt := range testCases {
-		plugin, err := registry.GetPlugin(registry.SchedulerPlugin, BatchTableSchedulerName)
-		if err != nil {
-			assert.FailNow(err.Error())
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			plugin, err := registry.GetPlugin(registry.SchedulerPlugin, BatchTableSchedulerName)
+			if err != nil {
+				assert.FailNow(err.Error())
+			}
 
-		s, ok := plugin.(core.Scheduler)
-		if !ok {
-			assert.FailNow(err.Error())
-		}
+			s, ok := plugin.(core.Scheduler)
+			if !ok {
+				assert.FailNow(err.Error())
+			}
 
-		if err := plugin.Configure("test", tt.schedulerConfigs); err != nil {
-			assert.FailNow(err.Error())
-		}
+			if err := plugin.Configure(tt.name, tt.schedulerConfigs); err != nil {
+				assert.FailNow(err.Error())
+			}
 
-		output := &outputCollector{}
-		assert.NoError(output.Start())
-		assert.NoError(s.Start(output))
+			output := &outputCollector{}
+			assert.NoError(output.Start())
+			assert.NoError(s.Start(output))
 
-		inputMsgs := submitTestMsgs(s, tt.eventSources, tt.nrTables, tt.nrRows, tt.nrEventsPerRow)
-		log.Infof("submitted all msgs")
-		s.Close()
-		log.Infof("scheduler closed")
-		testTableMsgsEqual(t, inputMsgs, output.receivedRows)
+			inputMsgs := submitTestMsgs(s, tt.eventSources, tt.nrTables, tt.nrRows, tt.nrEventsPerRow)
+			log.Infof("submitted all msgs")
+			s.Close()
+			log.Infof("scheduler closed")
+			testTableMsgsEqual(t, inputMsgs, output.receivedRows)
+		})
 	}
 
 }
@@ -283,9 +285,9 @@ type benchmarkStreamConfig struct {
 }
 
 func BenchmarkStream(b *testing.B) {
-	workers := []int{1, 10, 100}
+	workers := []int{10, 100}
 	batches := []int{1, 10}
-	tables := []int{1, 32, 512}
+	tables := []int{16, 32}
 	testCases := make([]benchmarkStreamConfig, 0, len(workers)*len(batches)*len(tables))
 	for _, b := range batches {
 		for _, t := range tables {
@@ -321,19 +323,19 @@ func BenchmarkStream(b *testing.B) {
 				messages := make([]*core.Msg, totalRecords, totalRecords)
 				for i := 0; i < totalRecords; i++ {
 					seq := int64(i + 1)
-					pk := strconv.Itoa(rand.Intn(hotRecords))
 					msg := &core.Msg{
-						Type:            core.MsgDML,
-						Table:           strconv.Itoa(rand.Intn(tt.tables)),
-						InputSequence:   &seq,
-						InputStreamKey:  &inputStream,
-						OutputStreamKey: &pk,
-						Done:            make(chan struct{}),
+						Type:           core.MsgDML,
+						Table:          strconv.Itoa(rand.Intn(tt.tables)),
+						InputSequence:  &seq,
+						InputStreamKey: &inputStream,
+						Done:           make(chan struct{}),
 						AfterCommitCallback: func(m *core.Msg) error {
 							wg.Done()
 							return nil
 						},
 					}
+					pk := msg.Table + strconv.Itoa(rand.Intn(hotRecords))
+					msg.OutputStreamKey = &pk
 					messages[i] = msg
 				}
 				wg.Add(totalRecords)
@@ -350,9 +352,9 @@ func BenchmarkStream(b *testing.B) {
 }
 
 func BenchmarkBatch(b *testing.B) {
-	workers := []int{1, 10, 20}
+	workers := []int{10}
 	batches := []int{1, 10}
-	tables := []int{1, 32, 64}
+	tables := []int{1, 32}
 	testCases := make([]benchmarkStreamConfig, 0, len(workers)*len(batches)*len(tables))
 	for _, b := range batches {
 		for _, t := range tables {

@@ -284,7 +284,7 @@ func (input *mongoBatchInput) runWorker(ch chan chunk) {
 						Oplog:               &op,
 						Done:                make(chan struct{}),
 						InputStreamKey:      utils.NewStringPtr(task.key()),
-						OutputStreamKey:     utils.NewStringPtr(op.Namespace + "-" + fmt.Sprint(op.Id)),
+						OutputStreamKey:     core.NoDependencyOutput,
 					}
 					if err := input.emitter.Emit(&msg); err != nil {
 						log.Fatalf("failed to emit: %v", errors.ErrorStack(err))

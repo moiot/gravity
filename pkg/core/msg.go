@@ -3,14 +3,16 @@ package core
 import (
 	"fmt"
 	"hash/fnv"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/juju/errors"
-
 	"github.com/pingcap/parser/ast"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/mongo/gtm"
+	"github.com/moiot/gravity/pkg/utils"
 )
 
 var PipelineName string
@@ -37,6 +39,13 @@ const (
 	Delete DMLOp = "delete"
 )
 
+var noDependencyOutput = "__no_dependency_output"
+var noDependencyOutputHash = uint64(0)
+var NoDependencyOutput = &noDependencyOutput
+
+var serializeDependencyOutput = ""
+var SerializeDependencyOutput = &serializeDependencyOutput
+
 type AfterMsgCommitFunc func(m *Msg) error
 
 type Msg struct {
@@ -59,12 +68,14 @@ type Msg struct {
 
 	InputStreamKey  *string
 	OutputStreamKey *string
+	outputHash      *uint
 	Done            chan struct{}
 
 	InputSequence *int64
 
 	InputContext        interface{}
 	AfterCommitCallback AfterMsgCommitFunc
+	AfterAckCallback    func() error
 }
 
 func (msg *Msg) SequenceNumber() int64 {
@@ -96,16 +107,34 @@ type MsgAcker interface {
 	AckMsg(msg *Msg) error
 }
 
-func (msg Msg) GetPkSign() string {
-	var sign string
+func (msg *Msg) OutputHash() uint {
+	if msg.outputHash == nil {
+		msg.outputHash = new(uint)
+		if msg.OutputStreamKey == NoDependencyOutput {
+			*msg.outputHash = uint(atomic.AddUint64(&noDependencyOutputHash, 1))
+		} else {
+			*msg.outputHash = uint(utils.GenHashKey(*msg.OutputStreamKey))
+		}
+	}
+	return *msg.outputHash
+}
+
+func (msg *Msg) GetPkSign() string {
+	sign := strings.Builder{}
+	sign.Grow(20)
+	sign.WriteString(msg.Database)
+	sign.WriteString("`.`")
+	sign.WriteString(msg.Table)
+	sign.WriteString(":")
 	for _, v := range msg.DmlMsg.Pks {
 		pkString := fmt.Sprint(v)
 		if pkString == "" {
 			log.Warnf("[mysql/job_msg] GetPartitionKeyFromPayload: empty primary key")
 		}
-		sign += pkString + "_"
+		sign.WriteString(pkString)
+		sign.WriteString("_")
 	}
-	return sign
+	return sign.String()
 }
 
 type DDLMsg struct {
