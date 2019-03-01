@@ -410,13 +410,13 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 			round++
 			if !closing {
 				scheduler.workerQueues[queueIdx] <- curBatch
-			}
-			if len(batch) > scheduler.cfg.MaxBatchPerWorker {
-				batch = batch[scheduler.cfg.MaxBatchPerWorker:]
-			} else if cap(batch) <= scheduler.cfg.MaxBatchPerWorker*2 {
-				batch = batch[:0]
-			} else {
-				batch = nil
+				if len(batch) > scheduler.cfg.MaxBatchPerWorker {
+					batch = batch[scheduler.cfg.MaxBatchPerWorker:]
+				} else if cap(batch) <= scheduler.cfg.MaxBatchPerWorker*2 {
+					batch = batch[:0]
+				} else {
+					batch = nil
+				}
 			}
 		}
 
@@ -451,7 +451,7 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 				latch[c]--
 				if latch[c] == 0 {
 					delete(latch, c)
-					if len(batch) > 0 && len(latchC) == 0 && !closing {
+					if len(batch) > 0 && len(latchC) == 0 {
 						flushFunc()
 					}
 				}
