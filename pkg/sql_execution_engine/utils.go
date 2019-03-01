@@ -160,14 +160,10 @@ func adjustArgs(arg interface{}, column *schema_store.Column) interface{} {
 	if arg == nil {
 		return arg
 	}
-	t, ok := arg.(time.Time)
-	if ok && t.IsZero() {
-		return "0000-00-00 00:00:00"
-	}
 	if column.IsDatetime() { // datetime is in utc and should ignore location
 		// zero value will be string
 		t, ok := arg.(time.Time)
-		if ok {
+		if ok && !t.IsZero() {
 			return t.Format("2006-01-02 15:04:05.999999999")
 		}
 	}

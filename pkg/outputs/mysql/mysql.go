@@ -143,7 +143,6 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 	var targetMsgs []*core.Msg
 
 	for _, msg := range msgs {
-		log.Infof("%#v", msg.DmlMsg)
 		// ddl msg filter
 		if !output.cfg.EnableDDL && msg.Type == core.MsgDDL {
 			continue
