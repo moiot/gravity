@@ -346,7 +346,7 @@ func TestZeroTime(t *testing.T) {
 	r.NoError(err)
 
 	r.NoError(mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName))
-	<-server.Input.Done()
+	server.Input.Wait()
 	server.Close()
 
 	mysql_test.TestChecksum(t, []string{"foo"}, sourceDB, sourceDBName, targetDB, targetDBName)
