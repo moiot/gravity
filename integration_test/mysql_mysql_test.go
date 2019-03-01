@@ -333,7 +333,7 @@ func TestZeroTime(t *testing.T) {
 	fullTblName := fmt.Sprintf("`%s`.`foo`", sourceDBName)
 	_, err := sourceDB.Exec(fmt.Sprintf("CREATE TABLE %s (`id` int(11) unsigned NOT NULL AUTO_INCREMENT,`dt` datetime DEFAULT NULL,`ts` timestamp NULL DEFAULT NULL,PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", fullTblName))
 	r.NoError(err)
-	_, err = sourceDB.Exec(fmt.Sprintf("insert into %s(dt, ts) values ('1970-01-01 00:00:01','1970-01-01 00:00:01'), ('0000-00-00 00:00:00', '0000-00-00 00:00:00');", fullTblName))
+	_, err = sourceDB.Exec(fmt.Sprintf("insert into %s(dt, ts) values ('0000-00-00 00:00:00', '0000-00-00 00:00:00');", fullTblName))
 	r.NoError(err)
 
 	server, err := app.NewServer(pipelineConfig)
@@ -342,7 +342,7 @@ func TestZeroTime(t *testing.T) {
 
 	waitFullComplete(server.Input)
 
-	_, err = sourceDB.Exec(fmt.Sprintf("insert into %s(dt, ts) values ('1970-01-01 00:00:01','1970-01-01 00:00:01'), ('0000-00-00 00:00:00', '0000-00-00 00:00:00');", fullTblName))
+	_, err = sourceDB.Exec(fmt.Sprintf("insert into %s(dt, ts) values ('0000-00-00 00:00:00', '0000-00-00 00:00:00');", fullTblName))
 	r.NoError(err)
 
 	r.NoError(mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName))
