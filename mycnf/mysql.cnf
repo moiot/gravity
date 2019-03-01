@@ -5,3 +5,4 @@ gtid_mode=ON
 enforce-gtid-consistency=true
 transaction-isolation=READ-COMMITTED
 explicit_defaults_for_timestamp=true
+sql_mode=STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION
