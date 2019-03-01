@@ -97,7 +97,7 @@ type batchScheduler struct {
 	tableBuffers      map[string]chan *core.Msg
 	latchC            map[string]chan uint
 	bufferWg          sync.WaitGroup
-	ackWg             sync.WaitGroup
+	latchWg           sync.WaitGroup
 
 	workerQueues []chan []*core.Msg
 	workerWg     sync.WaitGroup
@@ -330,7 +330,7 @@ func (scheduler *batchScheduler) Close() {
 	for _, q := range scheduler.latchC {
 		close(q)
 	}
-	scheduler.ackWg.Wait()
+	scheduler.latchWg.Wait()
 
 	log.Infof("[batchScheduler] table acker closed")
 
@@ -357,7 +357,7 @@ func (scheduler *batchScheduler) dispatchMsg(msg *core.Msg) error {
 		scheduler.tableBuffers[tableKey] = make(chan *core.Msg, scheduler.cfg.MaxBatchPerWorker*10)
 		scheduler.latchC[tableKey] = make(chan uint, scheduler.cfg.MaxBatchPerWorker*10)
 		scheduler.bufferWg.Add(1)
-		scheduler.ackWg.Add(1)
+		scheduler.latchWg.Add(1)
 
 		scheduler.startTableDispatcher(tableKey)
 
@@ -374,6 +374,7 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 	go func(c chan *core.Msg, latchC chan uint, key string) {
 		var batch []*core.Msg
 		var round uint
+		var closing bool
 		latch := make(map[uint]uint)
 
 		flushFunc := func() {
@@ -407,7 +408,9 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 			}
 			queueIdx := round % uint(scheduler.cfg.NrWorker)
 			round++
-			scheduler.workerQueues[queueIdx] <- curBatch
+			if !closing {
+				scheduler.workerQueues[queueIdx] <- curBatch
+			}
 			if len(batch) > scheduler.cfg.MaxBatchPerWorker {
 				batch = batch[scheduler.cfg.MaxBatchPerWorker:]
 			} else if cap(batch) <= scheduler.cfg.MaxBatchPerWorker*2 {
@@ -424,6 +427,10 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 			case msg, ok := <-c:
 				if !ok {
 					once.Do(func() {
+						if len(batch) > 0 {
+							flushFunc()
+						}
+						closing = true
 						scheduler.bufferWg.Done()
 					})
 					continue
@@ -438,18 +445,15 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 
 			case c, ok := <-latchC:
 				if !ok {
-					for len(batch) > 0 {
-						flushFunc()
-					}
-					scheduler.ackWg.Done()
+					scheduler.latchWg.Done()
 					return
 				}
 				latch[c]--
 				if latch[c] == 0 {
 					delete(latch, c)
-				}
-				if len(batch) > 0 && len(latchC) == 0 {
-					flushFunc()
+					if len(batch) > 0 && len(latchC) == 0 && !closing {
+						flushFunc()
+					}
 				}
 				metrics.QueueLength.WithLabelValues(core.PipelineName, "table-latch", key).Set(float64(len(latchC)))
 			}
