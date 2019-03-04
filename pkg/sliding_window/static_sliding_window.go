@@ -135,7 +135,7 @@ func (w *staticSlidingWindow) start() {
 		log.Infof("[staticSlidingWindow] init nextItemToCommit: %v", w.nextItemToCommit.SequenceNumber())
 	}
 
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -174,13 +174,13 @@ func (w *staticSlidingWindow) start() {
 
 				w.nextItemToCommit, ok = w.removeItemFromSequence()
 				if !ok {
-					log.Infof("[staticSlidingWindow] closing")
 					return
 				}
 			}
 
 		case <-ticker.C:
 			w.reportWatermarkDelay()
+			log.Warnf("[staticSlidingWindow] %#v not ready for long", w.nextItemToCommit)
 		}
 	}
 }
