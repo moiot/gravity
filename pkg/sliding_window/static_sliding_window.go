@@ -180,7 +180,6 @@ func (w *staticSlidingWindow) start() {
 
 		case <-ticker.C:
 			w.reportWatermarkDelay()
-			log.Warnf("[staticSlidingWindow] %#v not ready for long", w.nextItemToCommit)
 		}
 	}
 }
