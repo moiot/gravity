@@ -11,17 +11,9 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
-
-	"github.com/moiot/gravity/pkg/utils"
 )
 
 var MsgVersion = sarama.V0_10_2_0
-
-type KafkaMetaData struct {
-	InputSequenceNumber int64
-	InputStreamKey      string
-	MysqlPositionConfig utils.MySQLBinlogPosition
-}
 
 // createTlsConfiguration creates TLS configuration.
 func createTlsConfiguration(certFile string, keyFile string, caFile string, verifySsl bool) (t *tls.Config) {

@@ -252,13 +252,13 @@ func TestMySQLBatchNoTableConfig(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
 			Mode: config.Batch,
-			Config: struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+			Config: utils.Struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
 				Source: sourceDBConfig,
 			}),
 		},
 		OutputPlugin: config.GenericConfig{
 			Type: "mysql",
-			Config: struct2Map(mysql.MySQLPluginConfig{
+			Config: utils.Struct2Map(mysql.MySQLPluginConfig{
 				DBConfig:  targetDBConfig,
 				EnableDDL: true,
 				Routes: []map[string]interface{}{
@@ -288,6 +288,68 @@ func TestMySQLBatchNoTableConfig(t *testing.T) {
 	server.Close()
 
 	r.NoError(generator.TestChecksum())
+}
+
+func TestZeroTime(t *testing.T) {
+	r := require.New(t)
+
+	sourceDBName := strings.ToLower(t.Name()) + "_source"
+	targetDBName := strings.ToLower(t.Name()) + "_target"
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	pipelineConfig := config.PipelineConfigV3{
+		PipelineName: t.Name(),
+		Version:      config.PipelineConfigV3Version,
+		InputPlugin: config.InputConfig{
+			Type: "mysql",
+			Mode: config.Replication,
+			Config: utils.Struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+				Source: sourceDBConfig,
+			}),
+		},
+		OutputPlugin: config.GenericConfig{
+			Type: "mysql",
+			Config: utils.Struct2Map(mysql.MySQLPluginConfig{
+				DBConfig:  targetDBConfig,
+				EnableDDL: true,
+				Routes: []map[string]interface{}{
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "*",
+						"target-schema": targetDBName,
+					},
+				},
+			}),
+		},
+	}
+
+	fullTblName := fmt.Sprintf("`%s`.`foo`", sourceDBName)
+	_, err := sourceDB.Exec(fmt.Sprintf("CREATE TABLE %s (`id` int(11) unsigned NOT NULL AUTO_INCREMENT,`dt` datetime DEFAULT NULL,`ts` timestamp NULL DEFAULT NULL,PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", fullTblName))
+	r.NoError(err)
+	_, err = sourceDB.Exec(fmt.Sprintf("insert into %s(dt, ts) values ('0000-00-00 00:00:00', '0000-00-00 00:00:00');", fullTblName))
+	r.NoError(err)
+
+	server, err := app.NewServer(pipelineConfig)
+	r.NoError(err)
+	r.NoError(server.Start())
+
+	waitFullComplete(server.Input)
+
+	_, err = sourceDB.Exec(fmt.Sprintf("insert into %s(dt, ts) values ('0000-00-00 00:00:00', '0000-00-00 00:00:00');", fullTblName))
+	r.NoError(err)
+
+	r.NoError(mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName))
+	server.Input.Wait()
+	server.Close()
+
+	mysql_test.TestChecksum(t, []string{"foo"}, sourceDB, sourceDBName, targetDB, targetDBName)
 }
 
 func TestMySQLBatchWithInsertIgnore(t *testing.T) {
@@ -636,14 +698,14 @@ func TestMySQLToMyBidirection(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
 			Mode: config.Stream,
-			Config: struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+			Config: utils.Struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
 				IgnoreBiDirectionalData: true,
 				Source:                  sourceDBConfig,
 			}),
 		},
 		OutputPlugin: config.GenericConfig{
 			Type: "mysql",
-			Config: struct2Map(mysql.MySQLPluginConfig{
+			Config: utils.Struct2Map(mysql.MySQLPluginConfig{
 				DBConfig:  targetDBConfig,
 				EnableDDL: true,
 				Routes: []map[string]interface{}{
@@ -655,7 +717,7 @@ func TestMySQLToMyBidirection(t *testing.T) {
 				},
 				EngineConfig: &config.GenericConfig{
 					Type: sql_execution_engine.MySQLReplaceEngine,
-					Config: struct2Map(sql_execution_engine.MysqlReplaceEngineConfig{
+					Config: utils.Struct2Map(sql_execution_engine.MysqlReplaceEngineConfig{
 						TagInternalTxn: true,
 					}),
 				},

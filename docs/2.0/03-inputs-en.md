@@ -3,7 +3,7 @@
 Currently, Gravity supports the following Input plugins:
 
 - `mysql`: Can be run as three modes: `batch`, `stream`, `replication`
-- `mongo`: Can be run as `stream` mode.
+- `mongo`: Can be run as three modes: `batch`, `stream`, `replication`
 
 ## `mysql` stream configuration
 
@@ -170,7 +170,6 @@ In `replication` mode, it will firs do a `batch` mode table scan, and then start
 ## `mongo` stream configuration
 
 ```toml
-
 #
 # The connection configuration of the source MongoDB
 # Required
@@ -203,3 +202,41 @@ buffer-size = 50
 channel-size = 512
 buffer-duration-ms = "750ms"
 ```
+
+## `mongo` batch configuration
+```toml
+[input]
+type = "mongo"
+mode = "batch"
+
+[input.config]
+# how many documents to fetch per query
+# Optional
+batch-size = 500 
+
+# how many concurrent workers
+# Optional
+worker-cnt = 10 
+
+# if collection has more rows than this threshold, it would be splitted into chunks to scan parallelly
+# Optional
+chunk-threshold = 500000 
+
+# Required
+[input.config.source]
+host = "127.0.0.1"
+port = 27017
+username = ""
+password = ""
+```
+
+### `mongo` replication mode
+
+```toml
+[input]
+type = "mongo"
+mode = "replication"
+```
+
+In `replication` mode, it will firs do a `batch` mode table scan, and then start `stream` mode automatically. 
+

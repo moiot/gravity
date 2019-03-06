@@ -68,8 +68,10 @@ type mysqlStreamInputPlugin struct {
 	closeOnce sync.Once
 }
 
+const Name = "mysql-stream"
+
 func init() {
-	registry.RegisterPlugin(registry.InputPlugin, "mysqlstream", &mysqlStreamInputPlugin{}, false)
+	registry.RegisterPlugin(registry.InputPlugin, Name, &mysqlStreamInputPlugin{}, false)
 }
 
 func (plugin *mysqlStreamInputPlugin) Configure(pipelineName string, configInput map[string]interface{}) error {

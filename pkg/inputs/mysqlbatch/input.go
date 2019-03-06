@@ -103,8 +103,10 @@ type TableWork struct {
 	EstimatedRowCount int64
 }
 
+const Name = "mysql-batch"
+
 func init() {
-	registry.RegisterPlugin(registry.InputPlugin, "mysqlbatch", &mysqlBatchInputPlugin{}, false)
+	registry.RegisterPlugin(registry.InputPlugin, Name, &mysqlBatchInputPlugin{}, false)
 }
 
 func (plugin *mysqlBatchInputPlugin) Configure(pipelineName string, data map[string]interface{}) error {

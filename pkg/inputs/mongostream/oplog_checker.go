@@ -1,4 +1,4 @@
-package mongooplog
+package mongostream
 
 import (
 	"context"

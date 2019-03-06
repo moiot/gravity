@@ -1,4 +1,4 @@
-package mongooplog
+package mongostream
 
 import (
 	"context"
@@ -39,8 +39,10 @@ type mongoStreamInputPlugin struct {
 	oplogChecker  *OplogChecker
 }
 
+const Name = "mongo-stream"
+
 func init() {
-	registry.RegisterPlugin(registry.InputPlugin, "mongooplog", &mongoStreamInputPlugin{}, false)
+	registry.RegisterPlugin(registry.InputPlugin, Name, &mongoStreamInputPlugin{}, false)
 }
 
 // TODO position store, gtm config, etc
@@ -53,7 +55,7 @@ func (plugin *mongoStreamInputPlugin) Configure(pipelineName string, data map[st
 	}
 
 	if cfg.Source == nil {
-		return errors.Errorf("no mongo source confgiured")
+		return errors.Errorf("no mongo source configured")
 	}
 	plugin.cfg = &cfg
 	return nil

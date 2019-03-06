@@ -1,14 +1,15 @@
-package mongooplog
+package mongostream
 
 import (
 	"testing"
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/stretchr/testify/require"
+
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/position_store"
 	"github.com/moiot/gravity/pkg/utils"
-	"github.com/stretchr/testify/require"
 )
 
 func TestSetupInitialPosition(t *testing.T) {

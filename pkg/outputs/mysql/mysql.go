@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	OutputMySQL = "mysql"
+	Name = "mysql"
 )
 
 type MySQLPluginConfig struct {
@@ -47,7 +47,7 @@ type MySQLOutput struct {
 }
 
 func init() {
-	registry.RegisterPlugin(registry.OutputPlugin, OutputMySQL, &MySQLOutput{}, false)
+	registry.RegisterPlugin(registry.OutputPlugin, Name, &MySQLOutput{}, false)
 }
 
 func (output *MySQLOutput) Configure(pipelineName string, data map[string]interface{}) error {
@@ -166,6 +166,38 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				return nil
 			}
 			switch node := msg.DdlMsg.AST.(type) {
+			case *ast.CreateDatabaseStmt:
+				if !matched {
+					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
+					return nil
+				}
+				tmp := *node
+				tmp.Name = targetSchema
+				tmp.IfNotExists = true
+				stmt := restore(&tmp)
+				err := output.executeDDL(targetSchema, stmt)
+				if err != nil {
+					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
+				}
+				log.Info("[output-mysql] executed ddl: ", stmt)
+				metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "create-db").Add(1)
+
+			case *ast.DropDatabaseStmt:
+				if !matched {
+					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
+					return nil
+				}
+				tmp := *node
+				tmp.Name = targetSchema
+				tmp.IfExists = true
+				stmt := restore(&tmp)
+				err := output.executeDDL(targetSchema, stmt)
+				if err != nil {
+					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
+				}
+				log.Info("[output-mysql] executed ddl: ", stmt)
+				metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "drop-db").Add(1)
+
 			case *ast.CreateTableStmt:
 				if !matched {
 					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
@@ -187,6 +219,29 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				}
 				log.Info("[output-mysql] executed ddl: ", stmt)
 				metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "create-table").Add(1)
+				output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
+
+			case *ast.DropTableStmt:
+				if !matched {
+					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
+					return nil
+				}
+
+				tmp := *node
+				tmp.Tables[0].Name = model.CIStr{
+					O: targetTable,
+				}
+				tmp.Tables[0].Schema = model.CIStr{
+					O: targetSchema,
+				}
+				tmp.IfExists = true
+				stmt := restore(&tmp)
+				err := output.executeDDL(targetSchema, stmt)
+				if err != nil {
+					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
+				}
+				log.Info("[output-mysql] executed ddl: ", stmt)
+				metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "drop-table").Add(1)
 				output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
 
 			case *ast.AlterTableStmt:
