@@ -180,10 +180,10 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 	for {
 
 		if firstLoop {
-			statement = fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE %s >= ? AND %s < ? ORDER BY %s LIMIT ?", tableDef.Schema, tableDef.Name, scanColumn, scanColumn, scanColumn)
+			statement = fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE %s >= ? AND %s <= ? ORDER BY %s LIMIT ?", tableDef.Schema, tableDef.Name, scanColumn, scanColumn, scanColumn)
 			firstLoop = false
 		} else {
-			statement = fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE %s > ? AND %s < ? ORDER BY %s LIMIT ?", tableDef.Schema, tableDef.Name, scanColumn, scanColumn, scanColumn)
+			statement = fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE %s > ? AND %s <= ? ORDER BY %s LIMIT ?", tableDef.Schema, tableDef.Name, scanColumn, scanColumn, scanColumn)
 		}
 
 		<-tableScanner.throttle.C
@@ -274,7 +274,6 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 func (tableScanner *TableScanner) finishBatchScan(tableDef *schema_store.Table) error {
 	if err := waitAndCloseStream(tableDef, tableScanner.emitter); err != nil {
 		return errors.Trace(err)
-		log.Fatalf("[LoopInBatch] failed to emit close stream closeMsg: %v", errors.ErrorStack(err))
 	}
 
 	if err := PutDone(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name)); err != nil {
