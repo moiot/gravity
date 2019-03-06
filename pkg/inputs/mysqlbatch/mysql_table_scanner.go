@@ -143,7 +143,7 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 	}
 	batchIdx := 0
 	firstLoop := true
-	maxReached := false
+
 	var statement string
 
 	currentPosition, done, exists, err := GetCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name))
@@ -209,10 +209,6 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 			currentMinValue = reflect.ValueOf(rowsBatchDataPtrs[rowIdx][scanIdx]).Elem().Interface()
 			rowIdx++
 
-			if mysql.MySQLDataEquals(max.Value, currentMinValue) {
-				maxReached = true
-				break
-			}
 		}
 
 		err = rows.Err()
@@ -250,16 +246,6 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 
 		log.Infof("[LoopInBatch] sourceDB: %s, table: %s, currentPosition: %v, maxMapString.column: %v, maxMapString.value: %v, maxMapString.type: %v, resultCount: %v",
 			tableDef.Schema, tableDef.Name, currentMinValue, maxMapString["column"], maxMapString["value"], maxMapString["type"], resultCount)
-
-		// we break the loop here in case the currentPosition comes larger than the max we have in the beginning.
-		if maxReached {
-
-			log.Infof("[LoopInBatch] finish table: %v", utils.TableIdentity(tableDef.Schema, tableDef.Name))
-			if err := tableScanner.finishBatchScan(tableDef); err != nil {
-				log.Fatalf("[LoopInBatch] failed finish batch scan: %v", errors.ErrorStack(err))
-			}
-			return
-		}
 
 		select {
 		case <-tableScanner.ctx.Done():
