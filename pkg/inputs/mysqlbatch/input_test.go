@@ -33,7 +33,7 @@ func TestStringOrStringSlice(t *testing.T) {
 
 func TestDetectScanColumn(t *testing.T) {
 	r := require.New(t)
-	t.Run("multiple primary", func(tt *testing.T) {
+	t.Run("composite primary", func(tt *testing.T) {
 		testDBName := utils.TestCaseMd5Name(tt)
 		db := mysql_test.MustSetupSourceDB(testDBName)
 
@@ -41,7 +41,7 @@ func TestDetectScanColumn(t *testing.T) {
 		r.NoError(err)
 		r.Equal([]string{"id", "name"}, col)
 	})
-	t.Run(" single the primary", func(tt *testing.T) {
+	t.Run("single the primary", func(tt *testing.T) {
 		testDBName := utils.TestCaseMd5Name(tt)
 		db := mysql_test.MustSetupSourceDB(testDBName)
 		col, err := DetectScanColumns(db, testDBName, mysql_test.TestScanColumnTableIdPrimary, 1000, 10000)
@@ -55,5 +55,12 @@ func TestDetectScanColumn(t *testing.T) {
 		col, err := DetectScanColumns(db, testDBName, mysql_test.TestScanColumnTableUniqueIndexEmailString, 1000, 10000)
 		r.Nil(err)
 		r.Equal([]string{"email"}, col)
+	})
+
+	t.Run("composite unique key is not supported", func(tt *testing.T) {
+		testDBName := utils.TestCaseMd5Name(tt)
+		db := mysql_test.MustSetupSourceDB(testDBName)
+		_, err := DetectScanColumns(db, testDBName, mysql_test.TestScanColumnTableCompositeUniqueKey, 1000, 900)
+		r.NotNil(err)
 	})
 }
