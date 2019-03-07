@@ -521,7 +521,7 @@ func deleteMaxValueRandomly(db *sql.DB, fullTableName string, positionCache posi
 		panic("empty position")
 	}
 
-	batchPositionValue := p.Value.(BatchPositionValue)
+	batchPositionValue := p.Value.(BatchPositionValueV1)
 	stats := batchPositionValue.TableStates[fullTableName]
 	// Skip multiple scan key and full dump
 	if len(stats.Max) != 1 || stats.Max[0].Column == "*" {
