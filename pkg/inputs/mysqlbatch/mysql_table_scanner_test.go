@@ -23,8 +23,44 @@ import (
 	"github.com/moiot/gravity/pkg/schema_store"
 )
 
+func TestFindMaxMinValueCompositePks(t *testing.T) {
+	r := require.New(t)
+
+	testDBName := utils.TestCaseMd5Name(t)
+	db := mysql_test.MustSetupSourceDB(testDBName)
+	defer db.Close()
+
+	for i := 1; i < 100; i++ {
+		args := map[string]interface{}{
+			"id":    i,
+			"name":  fmt.Sprintf("name_%d", i),
+			"email": fmt.Sprintf("email_%d", i),
+		}
+		err := mysql_test.InsertIntoTestTable(db, testDBName, mysql_test.TestScanColumnTableCompositePrimaryOutOfOrder, args)
+		r.NoError(err)
+	}
+
+	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestScanColumnTableCompositePrimaryOutOfOrder, []string{"email", "name"})
+
+	maxEmail, ok := max[0].(sql.NullString)
+	r.True(ok)
+	r.Equal("email_99", maxEmail.String)
+
+	maxName, ok := max[1].(sql.NullString)
+	r.True(ok)
+	r.Equal("name_99", maxName.String)
+
+	minEmail, ok := min[0].(sql.NullString)
+	r.True(ok)
+	r.Equal("email_1", minEmail.String)
+
+	minName, ok := min[1].(sql.NullString)
+	r.True(ok)
+	r.Equal("name_1", minName.String)
+}
+
 func TestFindMaxMinValueInt(t *testing.T) {
-	assert := assert.New(t)
+	r := require.New(t)
 	testDBName := "mysql_table_scanner_test_1"
 
 	db := mysql_test.MustSetupSourceDB(testDBName)
@@ -35,21 +71,19 @@ func TestFindMaxMinValueInt(t *testing.T) {
 			"id": i,
 		}
 		err := mysql_test.InsertIntoTestTable(db, testDBName, mysql_test.TestTableName, args)
-		if err != nil {
-			assert.FailNow(err.Error())
-		}
+		r.NoError(err)
 	}
 
-	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestTableName, "id")
+	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestTableName, []string{"id"})
 
-	maxVal, ok := max.(sql.NullInt64)
-	assert.True(ok)
+	maxVal, ok := max[0].(uint32)
 
-	assert.EqualValues(99, maxVal.Int64)
+	r.EqualValues(99, maxVal)
 
-	minVal, ok := min.(sql.NullInt64)
-	assert.True(ok)
-	assert.EqualValues(1, minVal.Int64)
+	minVal, ok := min[0].(uint32)
+	r.True(ok)
+
+	r.EqualValues(1, minVal)
 }
 
 func TestFindMaxMinValueString(t *testing.T) {
@@ -75,12 +109,12 @@ func TestFindMaxMinValueString(t *testing.T) {
 	r.NoError(err)
 	r.EqualValues(2, count)
 
-	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestTableName, "name")
+	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestTableName, []string{"name"})
 
-	maxV, ok1 := max.(sql.NullString)
+	maxV, ok1 := max[0].(sql.NullString)
 	r.True(ok1)
 
-	minV, ok2 := min.(sql.NullString)
+	minV, ok2 := min[0].(sql.NullString)
 	r.True(ok2)
 	r.Equal("test_2", maxV.String)
 	r.Equal("test_1", minV.String)
@@ -101,9 +135,9 @@ func TestFindMaxMinValueTime(t *testing.T) {
 		r.Nil(err)
 	}
 
-	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestTableName, "ts")
-	maxT := max.(mysql.NullTime)
-	minT := min.(mysql.NullTime)
+	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestTableName, []string{"ts"})
+	maxT := max[0].(mysql.NullTime)
+	minT := min[0].(mysql.NullTime)
 	// assert.True(t, reflect.DeepEqual(mysql.NullTime{Time: startTime.Add(99 * time.Second), Valid: true}, maxT))
 	// assert.True(t, reflect.DeepEqual(mysql.NullTime{Time: startTime, Valid: true}, minT))
 	assert.EqualValues(t, startTime.Add(99*time.Minute).Minute(), maxT.Time.Minute())

@@ -23,6 +23,7 @@ const (
 	Unknown       = "*"
 	PlainString   = "string"
 	PlainInt      = "int"
+	PlainUInt     = "uint"
 	PlainBytes    = "bytes"
 	PlainTime     = "time"
 	SQLNullInt64  = "sqlNullInt64"
@@ -50,6 +51,12 @@ func (p TablePosition) MapString() (map[string]string, error) {
 	case string:
 		pMapString["value"] = v
 		pMapString["type"] = PlainString
+	case uint32:
+		pMapString["value"] = strconv.FormatUint(uint64(v), 10)
+		pMapString["type"] = PlainUInt
+	case uint64:
+		pMapString["value"] = strconv.FormatUint(v, 10)
+		pMapString["type"] = PlainUInt
 	case int:
 		pMapString["value"] = strconv.FormatInt(int64(v), 10)
 		pMapString["type"] = PlainInt
@@ -122,6 +129,12 @@ func (p *TablePosition) UnmarshalJSON(value []byte) error {
 		p.Value = pMapString["value"]
 	case PlainInt:
 		v, err := strconv.Atoi(pMapString["value"])
+		if err != nil {
+			return errors.Trace(err)
+		}
+		p.Value = v
+	case PlainUInt:
+		v, err := strconv.ParseUint(pMapString["value"], 10, 64)
 		if err != nil {
 			return errors.Trace(err)
 		}

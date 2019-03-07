@@ -103,11 +103,22 @@ func (tableScanner *TableScanner) Wait() {
 	tableScanner.wg.Wait()
 }
 
-func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColumn string) (interface{}, interface{}) {
-	var max interface{}
-	var min interface{}
+func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColumns []string) ([]interface{}, []interface{}) {
+	retMax := make([]interface{}, len(scanColumns))
+	retMin := make([]interface{}, len(scanColumns))
 
-	maxStatement := fmt.Sprintf("SELECT MAX(`%s`) FROM `%s`.`%s`", scanColumn, dbName, tableName)
+	columnsString := strings.Join(scanColumns, ", ")
+	var descOrderString string
+	var ascOrderString string
+	if len(scanColumns) > 1 {
+		descOrderString = strings.Join(scanColumns, " DESC, ")
+		ascOrderString = strings.Join(scanColumns, " ASC, ")
+	} else {
+		descOrderString = fmt.Sprintf("%s DESC", scanColumns[0])
+		ascOrderString = fmt.Sprintf("%s ASC", scanColumns[0])
+	}
+
+	maxStatement := fmt.Sprintf("SELECT %s FROM `%s`.`%s` ORDER BY %s LIMIT 1", columnsString, dbName, tableName, descOrderString)
 	log.Infof("[FindMaxMinValueFromDB] statement: %s", maxStatement)
 
 	maxRowPtrs, err := utils.QueryGeneralRowsDataWithSQL(db, maxStatement)
@@ -115,18 +126,22 @@ func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColu
 		log.Fatalf("[FindMaxMinValueFromDB] failed to QueryGeneralRowsDataWithSQL, err: %v", errors.ErrorStack(err))
 	}
 
-	max = reflect.ValueOf(maxRowPtrs[0][0]).Elem().Interface()
+	for i := range scanColumns {
+		retMax[i] = reflect.ValueOf(maxRowPtrs[0][i]).Elem().Interface()
+	}
 
-	minStatement := fmt.Sprintf("SELECT MIN(`%s`) FROM `%s`.`%s`", scanColumn, dbName, tableName)
+	minStatement := fmt.Sprintf("SELECT %s FROM `%s`.`%s` ORDER BY %s LIMIT 1", columnsString, dbName, tableName, ascOrderString)
 	log.Infof("[FindMaxMinValueFromDB] statement: %s", minStatement)
 	minRowPtrs, err := utils.QueryGeneralRowsDataWithSQL(db, minStatement)
 	if err != nil {
 		log.Fatalf("[FindMaxMinValueFromDB] failed to QueryGeneralRowsDataWithSQL, err: %v", errors.ErrorStack(err))
 	}
 
-	min = reflect.ValueOf(minRowPtrs[0][0]).Elem().Interface()
+	for i := range scanColumns {
+		retMin[i] = reflect.ValueOf(minRowPtrs[0][i]).Elem().Interface()
+	}
 
-	return max, min
+	return retMax, retMin
 }
 
 // LoopInBatch will iterate the table by sql like this:

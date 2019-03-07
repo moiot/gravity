@@ -397,10 +397,10 @@ func InitTablePosition(
 			}
 			log.Infof("[InitTablePosition] scan dump PutMaxMin table: %v, maxPos: %+v, minPos: %+v", fullTableName, maxPositions, minPositions)
 		} else {
+			retMax, retMin := FindMaxMinValueFromDB(db, tableDef.Schema, tableDef.Name, scanColumns)
 			for i, column := range scanColumns {
-				max, min := FindMaxMinValueFromDB(db, tableDef.Schema, tableDef.Name, column)
-				maxPositions[i] = TablePosition{Value: max, Column: column}
-				minPositions[i] = TablePosition{Value: min, Column: column}
+				maxPositions[i] = TablePosition{Value: retMax[i], Column: column}
+				minPositions[i] = TablePosition{Value: retMin[i], Column: column}
 			}
 
 			if err := PutMaxMin(positionCache, fullTableName, maxPositions, minPositions); err != nil {
