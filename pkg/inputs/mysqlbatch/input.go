@@ -448,6 +448,7 @@ func DetectScanColumns(sourceDB *sql.DB, dbName string, tableName string, estima
 	}
 
 	// We don't support composite unique index right now.
+	// When composite unique key exists, the column can still be NULL.
 	if len(uniqueIndexes) == 1 {
 		return uniqueIndexes, nil
 	}
