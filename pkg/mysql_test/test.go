@@ -21,16 +21,20 @@ import (
 	"github.com/moiot/gravity/pkg/utils"
 )
 
-const TestTableName = "test_table"
-const TestTableWithoutTs = "test_table_without_ts"
-const DummyTableName = "dummy_table"
-const TxnRouteTableName = "drc_routes"
-const TestScanColumnTableIdPrimary = "test_scan_column_id_primary"
-const TestScanColumnTableMultiPrimary = "test_scan_column_multiple_primary"
-const TestScanColumnTableUniqueIndexEmailString = "test_scan_column_unique_index_email_string"
-const TestScanColumnTableUniqueIndexTime = "test_scan_column_unique_index_time"
-const TestScanColumnTableNoKey = "test_scan_column_no_key"
-const deadSignalTable = "dead_signals"
+const (
+	TestTableName                                 = "test_table"
+	TestTableWithoutTs                            = "test_table_without_ts"
+	DummyTableName                                = "dummy_table"
+	TxnRouteTableName                             = "drc_routes"
+	TestScanColumnTableIdPrimary                  = "test_scan_column_id_primary"
+	TestScanColumnTableCompositePrimary           = "test_scan_column_multiple_primary"
+	TestScanColumnTableCompositePrimaryOutOfOrder = "test_scan_column_multiple_pk_unordered"
+	TestScanColumnTableUniqueIndexEmailString     = "test_scan_column_unique_index_email_string"
+	TestScanColumnTableUniqueIndexTime            = "test_scan_column_unique_index_time"
+	TestScanColumnTableCompositeUniqueKey         = "test_scan_column_multi_uk"
+	TestScanColumnTableNoKey                      = "test_scan_column_no_key"
+	deadSignalTable                               = "dead_signals"
+)
 
 var setupSqls = []string{
 	fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
@@ -74,7 +78,15 @@ var setupSqls = []string{
   email varchar(30) COLLATE utf8mb4_bin NOT NULL DEFAULT 'default_email',
   ts TIMESTAMP,
   PRIMARY KEY (id, name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8`, TestScanColumnTableMultiPrimary),
+) ENGINE=InnoDB DEFAULT CHARSET=utf8`, TestScanColumnTableCompositePrimary),
+
+	fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s(
+  id int(11) unsigned NOT NULL,
+  name varchar(256),
+  email varchar(30) COLLATE utf8mb4_bin,
+  ts TIMESTAMP,
+  PRIMARY KEY (email, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8`, TestScanColumnTableCompositePrimaryOutOfOrder),
 
 	fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s(
   id int(11) unsigned NOT NULL,
@@ -89,6 +101,12 @@ var setupSqls = []string{
   ts TIMESTAMP,
   UNIQUE INDEX time_idx (ts)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8`, TestScanColumnTableUniqueIndexTime),
+
+	fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s(
+  id int(11) unsigned,
+  ts TIMESTAMP,
+  UNIQUE INDEX uniq_ts_id (ts, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8`, TestScanColumnTableCompositeUniqueKey),
 
 	fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s(
   id int(11) unsigned NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8`, TestScanColumnTableNoKey),

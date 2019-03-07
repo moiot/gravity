@@ -216,6 +216,188 @@ func TestMySQLBatch(t *testing.T) {
 	r.NoError(generator.TestChecksum())
 }
 
+func TestMySQLBatchWithCompositePk(t *testing.T) {
+	r := require.New(t)
+
+	sourceDBName := strings.ToLower(t.Name()) + "_source"
+	targetDBName := strings.ToLower(t.Name()) + "_target"
+	testTableName := mysql_test.TestScanColumnTableCompositePrimaryOutOfOrder
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	// seed source table
+	for i := 0; i < 200; i++ {
+		args := map[string]interface{}{
+			"id":    i,
+			"name":  fmt.Sprintf("name_%d", i),
+			"email": fmt.Sprintf("email_%d", i),
+		}
+		err := mysql_test.InsertIntoTestTable(sourceDB, sourceDBName, testTableName, args)
+		r.NoError(err)
+	}
+
+	tableConfigs := []map[string]interface{}{
+		{
+			"schema": sourceDBName,
+			"table":  []string{testTableName},
+		},
+	}
+
+	pipelineConfig := config.PipelineConfigV2{
+		PipelineName: t.Name(),
+		InputPlugins: map[string]interface{}{
+			"mysql": map[string]interface{}{
+				"source": map[string]interface{}{
+					"host":     sourceDBConfig.Host,
+					"username": sourceDBConfig.Username,
+					"password": sourceDBConfig.Password,
+					"port":     sourceDBConfig.Port,
+				},
+				"table-configs": tableConfigs,
+				"mode":          "batch",
+			},
+		},
+		OutputPlugins: map[string]interface{}{
+			"mysql": map[string]interface{}{
+				"target": map[string]interface{}{
+					"host":     targetDBConfig.Host,
+					"username": targetDBConfig.Username,
+					"password": targetDBConfig.Password,
+					"port":     targetDBConfig.Port,
+				},
+
+				"routes": []map[string]interface{}{
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "*",
+						"target-schema": targetDBName,
+					},
+				},
+				"enable-ddl": true,
+			},
+		},
+	}
+
+	server, err := app.NewServer(pipelineConfig.ToV3())
+	r.NoError(err)
+
+	r.NoError(server.Start())
+
+	<-server.Input.Done()
+
+	// wait for some time to see if server is healthy
+	sliding_window.DefaultHealthyThreshold = 4
+	time.Sleep(6)
+
+	r.True(server.Scheduler.Healthy())
+
+	server.Close()
+
+	c1 := mysql_test.TableChecksum(sourceDB, sourceDBName, testTableName)
+	c2 := mysql_test.TableChecksum(targetDB, targetDBName, testTableName)
+	r.True(c1 == c2)
+}
+
+// func TestMySQLBatchWithCompositeUk(t *testing.T) {
+// 	r := require.New(t)
+//
+// 	sourceDBName := strings.ToLower(t.Name()) + "_source"
+// 	targetDBName := strings.ToLower(t.Name()) + "_target"
+// 	testTableName := mysql_test.TestScanColumnTableCompositeUniqueKey
+//
+// 	sourceDBConfig := mysql_test.SourceDBConfig()
+// 	targetDBConfig := mysql_test.TargetDBConfig()
+//
+// 	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+// 	defer sourceDB.Close()
+// 	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+// 	defer targetDB.Close()
+//
+// 	// seed source table
+// 	for i := 0; i < 1000; i++ {
+// 		args := map[string]interface{}{
+// 			"id": i,
+// 			"ts": time.Now(),
+// 		}
+//
+// 		// set ts to nil for some rows
+// 		if rand.Float32() < 0.5 {
+// 			args["id"] = nil
+// 		}
+//
+// 		err := mysql_test.InsertIntoTestTable(sourceDB, sourceDBName, testTableName, args)
+// 		r.NoError(err)
+// 	}
+//
+// 	tableConfigs := []map[string]interface{}{
+// 		{
+// 			"schema": sourceDBName,
+// 			"table": []string{testTableName},
+// 		},
+// 	}
+//
+// 	pipelineConfig := config.PipelineConfigV2{
+// 		PipelineName: t.Name(),
+// 		InputPlugins: map[string]interface{}{
+// 			"mysql": map[string]interface{}{
+// 				"source": map[string]interface{}{
+// 					"host":     sourceDBConfig.Host,
+// 					"username": sourceDBConfig.Username,
+// 					"password": sourceDBConfig.Password,
+// 					"port":     sourceDBConfig.Port,
+// 				},
+// 				"table-configs": tableConfigs,
+// 				"mode":          "batch",
+// 			},
+// 		},
+// 		OutputPlugins: map[string]interface{}{
+// 			"mysql": map[string]interface{}{
+// 				"target": map[string]interface{}{
+// 					"host":     targetDBConfig.Host,
+// 					"username": targetDBConfig.Username,
+// 					"password": targetDBConfig.Password,
+// 					"port":     targetDBConfig.Port,
+// 				},
+//
+// 				"routes": []map[string]interface{}{
+// 					{
+// 						"match-schema":  sourceDBName,
+// 						"match-table":   "*",
+// 						"target-schema": targetDBName,
+// 					},
+// 				},
+// 				"enable-ddl": true,
+// 			},
+// 		},
+// 	}
+//
+//
+// 	server, err := app.NewServer(pipelineConfig.ToV3())
+// 	r.NoError(err)
+//
+// 	r.NoError(server.Start())
+//
+// 	<-server.Input.Done()
+//
+// 	// wait for some time to see if server is healthy
+// 	sliding_window.DefaultHealthyThreshold = 4
+// 	time.Sleep(6)
+//
+// 	r.True(server.Scheduler.Healthy())
+//
+// 	server.Close()
+//
+// 	c1 := mysql_test.TableChecksum(sourceDB, sourceDBName, testTableName)
+// 	c2 := mysql_test.TableChecksum(targetDB, targetDBName, testTableName)
+// 	r.True(c1 == c2)
+// }
+
 func TestMySQLBatchNoTableConfig(t *testing.T) {
 	r := require.New(t)
 

@@ -110,44 +110,6 @@ func TestFindMaxMinValueTime(t *testing.T) {
 	assert.EqualValues(t, startTime.Minute(), minT.Time.Minute())
 }
 
-func TestDetectScanColumn(t *testing.T) {
-	r := require.New(t)
-	t.Run("returns the primary", func(tt *testing.T) {
-		testDBName := "mysql_table_scanner_test_4"
-
-		db := mysql_test.MustSetupSourceDB(testDBName)
-		col, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableIdPrimary, 1000, 10000)
-		r.Nil(err)
-		r.Equal("id", col)
-	})
-
-	t.Run("returns * if only have multiple primary key", func(tt *testing.T) {
-		testDBName := "mysql_table_scanner_test_5"
-
-		db := mysql_test.MustSetupSourceDB(testDBName)
-		c, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 1000, 10000)
-		r.Nil(err)
-		r.Equal("*", c)
-	})
-
-	t.Run("returns error if only have multiple primary key", func(tt *testing.T) {
-		testDBName := "mysql_table_scanner_test_6"
-
-		db := mysql_test.MustSetupSourceDB(testDBName)
-		_, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableMultiPrimary, 10001, 10000)
-		r.NotNil(err)
-	})
-
-	t.Run("returns the uniq index", func(tt *testing.T) {
-		testDBName := "mysql_table_scanner_test_7"
-
-		db := mysql_test.MustSetupSourceDB(testDBName)
-		col, err := DetectScanColumn(db, testDBName, mysql_test.TestScanColumnTableUniqueIndexEmailString, 1000, 10000)
-		r.Nil(err)
-		r.Equal("email", col)
-	})
-}
-
 type fakeMsgSubmitter struct {
 	msgs []*core.Msg
 }
@@ -176,10 +138,10 @@ func TestTableScanner_Start(t *testing.T) {
 		r.NoError(err)
 
 		testCases := []struct {
-			name       string
-			seedFunc   func(db *sql.DB)
-			cfg        PluginConfig
-			scanColumn string
+			name        string
+			seedFunc    func(db *sql.DB)
+			cfg         PluginConfig
+			scanColumns []string
 		}{
 			{
 				"no record in table",
@@ -196,7 +158,7 @@ func TestTableScanner_Start(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
-				"id",
+				[]string{"id"},
 			},
 			{
 				"sends one msg when source table have only one record",
@@ -219,7 +181,7 @@ func TestTableScanner_Start(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
-				"id",
+				[]string{"id"},
 			},
 			{
 				"terminates when scan column is int",
@@ -243,7 +205,7 @@ func TestTableScanner_Start(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
-				"id",
+				[]string{"id"},
 			},
 			{
 				"terminates when scan column is string",
@@ -273,7 +235,7 @@ func TestTableScanner_Start(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
-				"email",
+				[]string{"email"},
 			},
 			{
 				"terminates when scan column is time",
@@ -300,7 +262,7 @@ func TestTableScanner_Start(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
-				"ts",
+				[]string{"ts"},
 			},
 			{
 				"terminates when do a full scan",
@@ -326,8 +288,64 @@ func TestTableScanner_Start(t *testing.T) {
 					TableScanBatch:      1,
 					BatchPerSecondLimit: 10000,
 				},
-				"*",
+				[]string{ScanColumnForDump},
 			},
+			{
+				"terminates when table has composite primary key",
+				func(db *sql.DB) {
+					for i := 1; i < 10; i++ {
+						args := map[string]interface{}{
+							"id":    i,
+							"name":  fmt.Sprintf("name_%d", i),
+							"email": fmt.Sprintf("email_%d", i),
+						}
+						err := mysql_test.InsertIntoTestTable(db, testDBName, mysql_test.TestScanColumnTableCompositePrimaryOutOfOrder, args)
+						r.NoError(err)
+					}
+
+				},
+				PluginConfig{
+					Source: dbCfg,
+					TableConfigs: []TableConfig{
+						{
+							Schema: testDBName,
+							Table:  []string{mysql_test.TestScanColumnTableCompositePrimaryOutOfOrder},
+						},
+					},
+					NrScanner:           1,
+					TableScanBatch:      1,
+					BatchPerSecondLimit: 10000,
+				},
+				[]string{ScanColumnForDump},
+			},
+			// {
+			// 	"terminates when table has composite unique key",
+			// 	func(db *sql.DB) {
+			// 		for i := 1; i < 10; i++ {
+			// 			args := map[string]interface{}{
+			// 				"id": i,
+			// 				"ts": time.Now(),
+			// 			}
+			// 			err := mysql_test.InsertIntoTestTable(db, testDBName, mysql_test.TestScanColumnTableCompositeUniqueKey, args)
+			// 			r.NoError(err)
+			// 		}
+			//
+			// 	},
+			// 	PluginConfig{
+			// 		Source: dbCfg,
+			// 		TableConfigs: []TableConfig{
+			// 			{
+			// 				Schema: testDBName,
+			// 				Table:  []string{mysql_test.TestScanColumnTableCompositeUniqueKey},
+			// 			},
+			// 		},
+			// 		NrScanner:           1,
+			// 		TableScanBatch:      1,
+			// 		BatchPerSecondLimit: 10000,
+			// 	},
+			// 	[]string{ScanColumnForDump},
+			//
+			// },
 		}
 
 		for _, c := range testCases {
@@ -366,7 +384,7 @@ func TestTableScanner_Start(t *testing.T) {
 					tableDefs, tableConfigs = DeleteEmptyTables(db, tableDefs, tableConfigs)
 					r.Equal(0, len(tableDefs))
 				} else {
-					_, err := InitTablePosition(db, positionCache, tableDefs[i], c.scanColumn, 100)
+					_, err := InitTablePosition(db, positionCache, tableDefs[i], c.scanColumns, 100)
 					r.NoError(err)
 				}
 			}
@@ -380,7 +398,7 @@ func TestTableScanner_Start(t *testing.T) {
 			r.NoError(err)
 
 			q := make(chan *TableWork, 1)
-			q <- &TableWork{TableDef: tableDefs[0], TableConfig: &tableConfigs[0], ScanColumn: c.scanColumn}
+			q <- &TableWork{TableDef: tableDefs[0], TableConfig: &tableConfigs[0], ScanColumns: c.scanColumns}
 			close(q)
 
 			// randomly and delete the max value
@@ -418,7 +436,7 @@ func TestTableScanner_Start(t *testing.T) {
 			r.NoError(err)
 
 			q = make(chan *TableWork, 1)
-			q <- &TableWork{TableDef: tableDefs[0], TableConfig: &tableConfigs[0], ScanColumn: c.scanColumn}
+			q <- &TableWork{TableDef: tableDefs[0], TableConfig: &tableConfigs[0], ScanColumns: c.scanColumns}
 			close(q)
 
 			tableScanner = NewTableScanner(
@@ -439,6 +457,26 @@ func TestTableScanner_Start(t *testing.T) {
 	})
 }
 
+func TestGenerateScanQueryAndArgs(t *testing.T) {
+	r := require.New(t)
+
+	sql, args := GenerateScanQueryAndArgs(
+		false,
+		"a.b",
+		[]string{"v1", "v2", "v3"},
+		[]interface{}{"1", 1, 10},
+		[]interface{}{"9999", 9999, 10000},
+		100)
+	r.Equal("SELECT * FROM a.b WHERE v1 > ? AND v1 <= ? AND v2 > ? AND v2 <= ? AND v3 > ? AND v3 <= ? ORDER BY v1, v2, v3 LIMIT ?", sql)
+	r.EqualValues("1", args[0])
+	r.EqualValues("9999", args[1])
+	r.EqualValues(1, args[2])
+	r.EqualValues(9999, args[3])
+	r.EqualValues(10, args[4])
+	r.EqualValues(10000, args[5])
+	r.EqualValues(100, args[6])
+}
+
 func deleteMaxValueRandomly(db *sql.DB, fullTableName string, positionCache position_store.PositionCacheInterface) {
 	p, exists, err := positionCache.Get()
 	if err != nil {
@@ -451,11 +489,12 @@ func deleteMaxValueRandomly(db *sql.DB, fullTableName string, positionCache posi
 
 	batchPositionValue := p.Value.(BatchPositionValue)
 	stats := batchPositionValue.TableStates[fullTableName]
-	if stats.Max.Column == "*" {
+	// Skip multiple scan key and full dump
+	if len(stats.Max) != 1 || stats.Max[0].Column == "*" {
 		return
 	}
 	if rand.Float32() < 0.5 {
-		_, err := db.Exec(fmt.Sprintf("DELETE FROM %s WHERE %s = ?", fullTableName, stats.Max.Column), stats.Max.Value)
+		_, err := db.Exec(fmt.Sprintf("DELETE FROM %s WHERE %s = ?", fullTableName, stats.Max[0].Column), stats.Max[0].Value)
 		if err != nil {
 			panic(err.Error())
 		}
