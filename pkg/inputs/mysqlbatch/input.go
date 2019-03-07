@@ -428,11 +428,11 @@ func InitTablePosition(
 	}
 }
 
-// DetectScanColumns find a column that we used to scan the table
-// SHOW INDEX FROM ..
-// Pick primary key, if there is only one primary key
-// If pk not found try using unique index
-// fail
+//
+// DetectScanColumns find columns that we used to scan the table
+// First, we try primary keys, then we try unique key; we try dump the table at last.
+// Note that composite unique key is not supported.
+//
 func DetectScanColumns(sourceDB *sql.DB, dbName string, tableName string, estimatedRowsCount int64, maxFullDumpRowsCountLimit int64) ([]string, error) {
 	pks, err := utils.GetPrimaryKeys(sourceDB, dbName, tableName)
 	if err != nil {
