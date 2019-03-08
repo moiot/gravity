@@ -50,7 +50,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			Start: utils.MySQLBinlogPosition{BinlogGTID: "abc:123"},
 		}
 
-		s, err := EncodeBatchPositionValue(&batchPositionValue)
+		s, err := EncodeBatchPositionValue(batchPositionValue)
 		r.NoError(err)
 		r.NoError(repo.Put(pipelineName, position_store.PositionMeta{Name: pipelineName, Stage: config.Batch}, s))
 
