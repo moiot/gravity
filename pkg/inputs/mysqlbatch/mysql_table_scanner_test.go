@@ -494,21 +494,283 @@ func TestTableScanner_Start(t *testing.T) {
 func TestGenerateScanQueryAndArgs(t *testing.T) {
 	r := require.New(t)
 
-	sql, args := GenerateScanQueryAndArgs(
-		false,
-		"a.b",
-		[]string{"v1", "v2", "v3"},
-		[]interface{}{"1", 1, 10},
-		[]interface{}{"9999", 9999, 10000},
-		100)
-	r.Equal("SELECT * FROM a.b WHERE v1 > ? AND v1 <= ? AND v2 > ? AND v2 <= ? AND v3 > ? AND v3 <= ? ORDER BY v1, v2, v3 LIMIT ?", sql)
-	r.EqualValues("1", args[0])
-	r.EqualValues("9999", args[1])
-	r.EqualValues(1, args[2])
-	r.EqualValues(9999, args[3])
-	r.EqualValues(10, args[4])
-	r.EqualValues(10000, args[5])
-	r.EqualValues(100, args[6])
+	cases := []struct {
+		includeLeftElement bool
+		scanColumns        []string
+		minArgs            []interface{}
+		retSQL             string
+	}{
+		{
+			false,
+			[]string{"v1"},
+			[]interface{}{1},
+			"SELECT * FROM a.b WHERE v1 > ? ORDER BY v1 LIMIT ?",
+		},
+		{
+			true,
+			[]string{"v1"},
+			[]interface{}{1},
+			"SELECT * FROM a.b WHERE v1 >= ? ORDER BY v1 LIMIT ?",
+		},
+		{
+			false,
+			[]string{"v1", "v2"},
+			[]interface{}{1, 2},
+			"SELECT * FROM a.b WHERE v1 >= ? AND v2 > ? ORDER BY v1, v2 LIMIT ?",
+		},
+		{
+			true,
+			[]string{"v1", "v2"},
+			[]interface{}{1, 2},
+			"SELECT * FROM a.b WHERE v1 >= ? AND v2 >= ? ORDER BY v1, v2 LIMIT ?",
+		},
+		{
+			false,
+			[]string{"v1", "v2", "v3"},
+			[]interface{}{"1", 1, 10},
+			"SELECT * FROM a.b WHERE v1 >= ? AND v2 >= ? AND v3 > ? ORDER BY v1, v2, v3 LIMIT ?",
+		},
+		{
+			true,
+			[]string{"v1", "v2", "v3"},
+			[]interface{}{"1", 1, 10},
+			"SELECT * FROM a.b WHERE v1 >= ? AND v2 >= ? AND v3 >= ? ORDER BY v1, v2, v3 LIMIT ?",
+		},
+	}
+
+	for _, c := range cases {
+		sql, args := GenerateScanQueryAndArgs(
+			c.includeLeftElement,
+			"a.b",
+			c.scanColumns,
+			c.minArgs,
+			100)
+		r.Equal(c.retSQL, sql)
+		for i := range c.minArgs {
+			r.EqualValues(c.minArgs[i], args[i])
+		}
+	}
+}
+
+func TestScanValuesFromRowValues(t *testing.T) {
+	r := require.New(t)
+
+	rowValues := []interface{}{1, 2, 3, 4, 5}
+	scanIndexes := []int{1, 4}
+
+	scanValues := ScanValuesFromRowValues(rowValues, scanIndexes)
+	r.EqualValues([]interface{}{2, 5}, scanValues)
+
+}
+
+func TestGreaterThanMax(t *testing.T) {
+	r := require.New(t)
+
+	dbName := utils.TestCaseMd5Name(t)
+	db := mysql_test.MustSetupSourceDB(dbName)
+
+	tcs := []struct {
+		scanValues []interface{}
+		maxValues  []interface{}
+		expected   bool
+	}{
+		{
+			[]interface{}{1, 2, 3},
+			[]interface{}{1, 2, 4},
+			false,
+		},
+		{
+			[]interface{}{1, 2, 3},
+			[]interface{}{1, 3, 1},
+			false,
+		},
+		{
+			[]interface{}{1, 2, 3},
+			[]interface{}{2, 1, 1},
+			false,
+		},
+		{
+			[]interface{}{1, 2, 3},
+			[]interface{}{1, 2, 3},
+			false,
+		},
+		{
+			[]interface{}{1, 2, 4},
+			[]interface{}{1, 2, 3},
+			true,
+		},
+		{
+			[]interface{}{1, 3, 1},
+			[]interface{}{1, 2, 3},
+			true,
+		},
+		{
+			[]interface{}{2, 1, 1},
+			[]interface{}{1, 2, 3},
+			true,
+		},
+	}
+
+	for _, c := range tcs {
+		b, err := GreaterThanMax(db, c.scanValues, c.maxValues)
+		r.NoError(err)
+		r.Equalf(c.expected, b, fmt.Sprintf("scanValue: %+v, maxValue: %+v", c.scanValues, c.maxValues))
+	}
+}
+
+func TestNextScanElementForChunk(t *testing.T) {
+	r := require.New(t)
+
+	dbName := utils.TestCaseMd5Name(t)
+	db := mysql_test.MustSetupSourceDB(dbName)
+
+	mysql_test.SeedCompositePrimaryKeyInt(db, dbName)
+
+	fullTableName := utils.TableIdentity(
+		dbName,
+		mysql_test.TestScanColumnTableCompositePrimaryInt)
+
+	columnTypes, err := GetTableColumnTypes(db, dbName, mysql_test.TestScanColumnTableCompositePrimaryInt)
+	r.NoError(err)
+
+	tcs := []struct {
+		currentScanValues []interface{}
+		nextRowValues     []interface{}
+		exists            bool
+	}{
+		{
+			[]interface{}{1, 6, 1},
+			[]interface{}{1, 6, 2, 2},
+			true,
+		},
+		{
+			[]interface{}{1, 6, 3},
+			[]interface{}{1, 6, 4, 4},
+			true,
+		},
+		{
+			[]interface{}{1, 6, 4},
+			nil,
+			false,
+		},
+		{
+			[]interface{}{1, 7, 4},
+			nil,
+			false,
+		},
+		{
+			[]interface{}{1, 8, 4},
+			nil,
+			false,
+		},
+		{
+			[]interface{}{2, 3, 4},
+			nil,
+			false,
+		},
+	}
+
+	for _, c := range tcs {
+		nextRows, exists, err := NextScanElementForChunk(db, fullTableName, columnTypes, []string{"a", "b", "c"}, c.currentScanValues)
+		r.NoError(err)
+		r.Equalf(c.exists, exists, "scanValues: %+v, nextRowValues:%+v", c.currentScanValues, c.nextRowValues)
+		if exists {
+			for i := range nextRows {
+				r.EqualValues(c.nextRowValues[i], nextRows[i])
+			}
+		}
+	}
+}
+
+func TestNextBatchStartPoint(t *testing.T) {
+	r := require.New(t)
+	dbName := utils.TestCaseMd5Name(t)
+	db := mysql_test.MustSetupSourceDB(dbName)
+	mysql_test.SeedCompositePrimaryKeyInt(db, dbName)
+
+	fullTableName := utils.TableIdentity(
+		dbName,
+		mysql_test.TestScanColumnTableCompositePrimaryInt)
+
+	columnTypes, err := GetTableColumnTypes(db, dbName, mysql_test.TestScanColumnTableCompositePrimaryInt)
+	r.NoError(err)
+
+	tcs := []struct {
+		currentMinValues []interface{}
+		maxValues        []interface{}
+		retNextMinValues []interface{}
+		retContinue      bool
+	}{
+		{
+			[]interface{}{1, 6, 1},
+			[]interface{}{2, 3, 4},
+			[]interface{}{1, 6, 2},
+			true,
+		},
+		{
+			[]interface{}{1, 6, 1},
+			[]interface{}{1, 6, 0},
+			nil,
+			false,
+		},
+		{
+			[]interface{}{1, 6, 1},
+			[]interface{}{1, 6, 1},
+			nil,
+			false,
+		},
+		{
+			[]interface{}{1, 6, 1},
+			[]interface{}{1, 6, 2},
+			[]interface{}{1, 6, 2},
+			true,
+		},
+		{
+			[]interface{}{1, 6, 4},
+			[]interface{}{1, 7, 1},
+			[]interface{}{1, 7, 1},
+			true,
+		},
+		{
+			[]interface{}{1, 6, 4},
+			[]interface{}{1, 7, 2},
+			[]interface{}{1, 7, 1},
+			true,
+		},
+		{
+			[]interface{}{1, 6, 4},
+			[]interface{}{2, 1, 1},
+			[]interface{}{1, 7, 1},
+			true,
+		},
+		{
+			[]interface{}{2, 2, 1},
+			[]interface{}{2, 2, 4},
+			[]interface{}{2, 2, 2},
+			true,
+		},
+	}
+
+	for _, c := range tcs {
+		nextMinValues, continueNext, err := NextBatchStartPoint(
+			db,
+			fullTableName,
+			[]string{"a", "b", "c"},
+			columnTypes,
+			[]int{0, 1, 2},
+			c.currentMinValues,
+			c.maxValues,
+		)
+		r.NoError(err)
+		r.Equalf(c.retContinue, continueNext, "currentMinValues: %+v, maxValues: %+v", c.currentMinValues, c.maxValues)
+		if c.retContinue {
+			r.Equal(len(c.currentMinValues), len(nextMinValues))
+			for i := range nextMinValues {
+				r.EqualValuesf(c.retNextMinValues[i], nextMinValues[i], "currentMinValues: %+v, maxValues: %+v", c.currentMinValues, c.maxValues)
+			}
+		}
+	}
+
 }
 
 func deleteMaxValueRandomly(db *sql.DB, fullTableName string, positionCache position_store.PositionCacheInterface) {

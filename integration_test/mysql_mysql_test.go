@@ -216,7 +216,7 @@ func TestMySQLBatch(t *testing.T) {
 	r.NoError(generator.TestChecksum())
 }
 
-func TestMySQLBatchWithCompositePk(t *testing.T) {
+func TestMySQLBatchWithCompositePkBasic(t *testing.T) {
 	r := require.New(t)
 
 	sourceDBName := strings.ToLower(t.Name()) + "_source"
@@ -261,6 +261,86 @@ func TestMySQLBatchWithCompositePk(t *testing.T) {
 				},
 				"table-configs": tableConfigs,
 				"mode":          "batch",
+			},
+		},
+		OutputPlugins: map[string]interface{}{
+			"mysql": map[string]interface{}{
+				"target": map[string]interface{}{
+					"host":     targetDBConfig.Host,
+					"username": targetDBConfig.Username,
+					"password": targetDBConfig.Password,
+					"port":     targetDBConfig.Port,
+				},
+
+				"routes": []map[string]interface{}{
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "*",
+						"target-schema": targetDBName,
+					},
+				},
+				"enable-ddl": true,
+			},
+		},
+	}
+
+	server, err := app.NewServer(pipelineConfig.ToV3())
+	r.NoError(err)
+
+	r.NoError(server.Start())
+
+	<-server.Input.Done()
+
+	// wait for some time to see if server is healthy
+	sliding_window.DefaultHealthyThreshold = 4
+	time.Sleep(6)
+
+	r.True(server.Scheduler.Healthy())
+
+	server.Close()
+
+	c1 := mysql_test.TableChecksum(sourceDB, sourceDBName, testTableName)
+	c2 := mysql_test.TableChecksum(targetDB, targetDBName, testTableName)
+	r.True(c1 == c2)
+}
+
+func TestMySQLBatchWithCompositePkIntOrder(t *testing.T) {
+	r := require.New(t)
+
+	sourceDBName := utils.TestCaseMd5Name(t) + "_source"
+	targetDBName := utils.TestCaseMd5Name(t) + "_target"
+	testTableName := mysql_test.TestScanColumnTableCompositePrimaryInt
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	mysql_test.SeedCompositePrimaryKeyInt(sourceDB, sourceDBName)
+
+	tableConfigs := []map[string]interface{}{
+		{
+			"schema": sourceDBName,
+			"table":  []string{testTableName},
+		},
+	}
+
+	pipelineConfig := config.PipelineConfigV2{
+		PipelineName: t.Name(),
+		InputPlugins: map[string]interface{}{
+			"mysql": map[string]interface{}{
+				"source": map[string]interface{}{
+					"host":     sourceDBConfig.Host,
+					"username": sourceDBConfig.Username,
+					"password": sourceDBConfig.Password,
+					"port":     sourceDBConfig.Port,
+				},
+				"table-configs":    tableConfigs,
+				"mode":             "batch",
+				"table-scan-batch": 1,
 			},
 		},
 		OutputPlugins: map[string]interface{}{

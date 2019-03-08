@@ -182,6 +182,25 @@ func ScanGeneralRowsWithDataPtrs(rows *sql.Rows, columnTypes []*sql.ColumnType, 
 	return vPtrs, nil
 }
 
+// func ScanGeneraRowWithDataPtrs(row *sql.Row, columnTypes []*sql.ColumnType, vPtrs []interface{}) ([]interface{}, bool, error) {
+// 	if err := row.Scan(vPtrs...); err != nil {
+// 		if err == sql.ErrNoRows {
+// 			return nil, false, nil
+// 		}
+// 		return nil, false, errors.Trace(err)
+// 	}
+//
+// 	// copy sql.RawBytes from db to here
+// 	for i, _ := range columnTypes {
+// 		p, err := GetScanPtrSafe(i, columnTypes, vPtrs)
+// 		if err != nil {
+// 			return nil, true, errors.Trace(err)
+// 		}
+// 		vPtrs[i] = p
+// 	}
+// 	return vPtrs, true, nil
+// }
+
 func ScanGeneralRows(rows *sql.Rows, columnTypes []*sql.ColumnType) ([]interface{}, error) {
 	vPtrs := make([]interface{}, len(columnTypes))
 

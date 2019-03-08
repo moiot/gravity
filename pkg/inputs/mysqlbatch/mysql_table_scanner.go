@@ -110,13 +110,16 @@ func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColu
 	columnsString := strings.Join(scanColumns, ", ")
 	var descOrderString string
 	var ascOrderString string
-	if len(scanColumns) > 1 {
-		descOrderString = strings.Join(scanColumns, " DESC, ")
-		ascOrderString = strings.Join(scanColumns, " ASC, ")
-	} else {
-		descOrderString = fmt.Sprintf("%s DESC", scanColumns[0])
-		ascOrderString = fmt.Sprintf("%s ASC", scanColumns[0])
+
+	ascOderStrings := make([]string, len(scanColumns))
+	descOrderStrings := make([]string, len(scanColumns))
+	for i := range scanColumns {
+		ascOderStrings[i] = fmt.Sprintf("%s ASC", scanColumns[i])
+		descOrderStrings[i] = fmt.Sprintf("%s DESC", scanColumns[i])
 	}
+
+	descOrderString = strings.Join(descOrderStrings, ",")
+	ascOrderString = strings.Join(ascOderStrings, ",")
 
 	maxStatement := fmt.Sprintf("SELECT %s FROM `%s`.`%s` ORDER BY %s LIMIT 1", columnsString, dbName, tableName, descOrderString)
 	log.Infof("[FindMaxMinValueFromDB] statement: %s", maxStatement)
@@ -162,7 +165,6 @@ func (tableScanner *TableScanner) LoopInBatch(
 	}
 
 	batchIdx := 0
-	firstLoop := true
 
 	fullTableName := utils.TableIdentity(tableDef.Schema, tableDef.Name)
 
@@ -207,12 +209,12 @@ func (tableScanner *TableScanner) LoopInBatch(
 
 	for {
 
-		statement, args := GenerateScanQueryAndArgs(firstLoop, fullTableName, scanColumns, currentMinValues, maxValues, batch)
-		firstLoop = false
+		statement, args := GenerateScanQueryAndArgs(true, fullTableName, scanColumns, currentMinValues, batch)
 
 		<-tableScanner.throttle.C
 
 		queryStartTime := time.Now()
+		log.Infof("[LoopInBatch] query: %v, args: %+v", statement, args)
 		rows, err := db.Query(statement, args...)
 		if err != nil {
 			log.Fatalf("[LoopInBatch] table %s.%s, err: %v", tableDef.Schema, tableDef.Name, err)
@@ -243,15 +245,6 @@ func (tableScanner *TableScanner) LoopInBatch(
 
 		rows.Close()
 
-		// no result found for this query
-		if rowIdx == 0 {
-			log.Infof("[TableScanner] query result is 0, return")
-			if err := tableScanner.finishBatchScan(tableDef); err != nil {
-				log.Fatalf("[LoopInBatch] failed finish batch scan: %v", errors.ErrorStack(err))
-			}
-			return
-		}
-
 		BatchQueryDuration.WithLabelValues(pipelineName).Observe(time.Now().Sub(queryStartTime).Seconds())
 
 		batchIdx++
@@ -276,6 +269,21 @@ func (tableScanner *TableScanner) LoopInBatch(
 
 		log.Infof("[LoopInBatch] sourceDB: %s, table: %s, currentMinValues: %+v, maxValues: %+v, resultCount: %v",
 			tableDef.Schema, tableDef.Name, currentMinValues, maxValues, resultCount)
+
+		// Get the next batch's start point
+		nextMinValues, continueNex, err := NextBatchStartPoint(db, fullTableName, scanColumns, columnTypes, scanIndexes, currentMinValues, maxValues)
+		if err != nil {
+			log.Fatalf("[LoopInBatch] failed to find next start point: %v", errors.ErrorStack(err))
+		}
+
+		if !continueNex {
+			log.Infof("[LoopInBatch] no next batch start found, finish")
+			if err := tableScanner.finishBatchScan(tableDef); err != nil {
+				log.Fatalf("[LoopInBatch] failed finish batch scan: %v", errors.ErrorStack(err))
+			}
+			return
+		}
+		currentMinValues = nextMinValues
 
 		select {
 		case <-tableScanner.ctx.Done():
@@ -500,24 +508,37 @@ func waitAndCloseStream(tableDef *schema_store.Table, em core.Emitter) error {
 }
 
 func GenerateScanQueryAndArgs(
-	firstLoop bool,
+	includeLeftElement bool,
 	fullTableName string,
 	scanColumns []string,
 	currentMinValues []interface{},
-	maxValues []interface{},
 	batch int) (string, []interface{}) {
+
 	prefix := fmt.Sprintf("SELECT * FROM %s WHERE ", fullTableName)
 
 	var where []string
 	var args []interface{}
 
-	for i, column := range scanColumns {
-		if firstLoop {
-			where = append(where, fmt.Sprintf("%s >= ? AND %s <= ?", column, column))
+	if len(scanColumns) == 1 {
+		if includeLeftElement {
+			where = append(where, fmt.Sprintf("%s >= ?", scanColumns[0]))
 		} else {
-			where = append(where, fmt.Sprintf("%s > ? AND %s <= ?", column, column))
+			where = append(where, fmt.Sprintf("%s > ?", scanColumns[0]))
 		}
-		args = append(args, currentMinValues[i], maxValues[i])
+	} else {
+		for i := 0; i < len(scanColumns)-1; i++ {
+			where = append(where, fmt.Sprintf("%s >= ?", scanColumns[i]))
+		}
+		if includeLeftElement {
+			where = append(where, fmt.Sprintf("%s >= ?", scanColumns[len(scanColumns)-1]))
+		} else {
+			where = append(where, fmt.Sprintf("%s > ?", scanColumns[len(scanColumns)-1]))
+		}
+
+	}
+
+	for i := range scanColumns {
+		args = append(args, currentMinValues[i])
 	}
 
 	whereString := strings.Join(where, " AND ")
@@ -526,4 +547,133 @@ func GenerateScanQueryAndArgs(
 	query := fmt.Sprintf("%s%s ORDER BY %s LIMIT ?", prefix, whereString, orderByString)
 	args = append(args, batch)
 	return query, args
+}
+
+func NextBatchStartPoint(
+	db *sql.DB,
+	fullTableName string,
+	scanColumns []string,
+	columnTypes []*sql.ColumnType,
+	scanIndexes []int,
+	currentMinValues []interface{},
+	maxValues []interface{}) (nextMinValues []interface{}, continueNext bool, err error) {
+
+	nextRowValues, exists, err := NextScanElementForChunk(db, fullTableName, columnTypes, scanColumns, currentMinValues)
+	if err != nil {
+		return nil, false, errors.Trace(err)
+	}
+
+	if exists {
+		maxReached, err := GreaterThanMax(db, ScanValuesFromRowValues(nextRowValues, scanIndexes), maxValues)
+		if err != nil {
+			return nil, false, errors.Trace(err)
+		}
+		if maxReached {
+			return nil, false, nil
+		}
+
+		return ScanValuesFromRowValues(nextRowValues, scanIndexes), true, nil
+	}
+
+	// Assume the primary key is (a, b, c), we need to iterate on next
+	for i := range scanColumns {
+		newScanColumns := scanColumns[0 : len(scanColumns)-i]
+		newScanIndexes := scanIndexes[0 : len(scanColumns)-i]
+		newCurrentScanValues := currentMinValues[0 : len(scanColumns)-i]
+		newMaxValues := maxValues[0 : len(scanColumns)-i]
+
+		nextRowValues, exists, err := NextScanElementForChunk(db, fullTableName, columnTypes, newScanColumns, newCurrentScanValues)
+		if err != nil {
+			return nil, false, errors.Trace(err)
+		}
+
+		if exists {
+			maxReached, err := GreaterThanMax(db, ScanValuesFromRowValues(nextRowValues, newScanIndexes), newMaxValues)
+			if err != nil {
+				return nil, false, errors.Trace(err)
+			}
+
+			if !maxReached {
+				return ScanValuesFromRowValues(nextRowValues, scanIndexes), true, nil
+			}
+		}
+	}
+	return nil, false, nil
+
+}
+
+func NextScanElementForChunk(
+	db *sql.DB,
+	fullTableName string,
+	columnTypes []*sql.ColumnType,
+	scanColumns []string,
+	currentScanValues []interface{}) (nextRowValues []interface{}, exists bool, err error) {
+
+	retNextValues := make([]interface{}, len(columnTypes))
+	rowsPositionDataPtrs := newBatchDataPtrs(columnTypes, 1)
+
+	sql, args := GenerateScanQueryAndArgs(false, fullTableName, scanColumns, currentScanValues, 1)
+	log.Infof("NextScanElementForChunk sql: %v, args: %+v", sql, args)
+
+	rows, err := db.Query(sql, args...)
+	if err != nil {
+		return nil, false, errors.Trace(err)
+	}
+
+	retExists := false
+	for rows.Next() {
+		retExists = true
+		_, err := utils.ScanGeneralRowsWithDataPtrs(rows, columnTypes, rowsPositionDataPtrs[0])
+		if err != nil {
+			return nil, false, errors.Trace(err)
+		}
+	}
+
+	// _, exists, err = utils.ScanGeneraRowWithDataPtrs(row, columnTypes, rowsPositionDataPtrs[0])
+	// if err != nil {
+	// 	return nil,exists, errors.Trace(err)
+	// }
+
+	if retExists {
+		for i := range columnTypes {
+			retNextValues[i] = reflect.ValueOf(rowsPositionDataPtrs[0][i]).Elem().Interface()
+		}
+		return retNextValues, true, nil
+
+	} else {
+		return nil, false, nil
+	}
+}
+
+func GreaterThanMax(db *sql.DB, scanValues []interface{}, maxValues []interface{}) (bool, error) {
+	for i := range scanValues {
+		var greaterThan bool
+		row := db.QueryRow("SELECT ? > ?", scanValues[i], maxValues[i])
+		if err := row.Scan(&greaterThan); err != nil {
+			return false, errors.Trace(err)
+		}
+
+		if greaterThan {
+			return true, nil
+		}
+
+		var lessThan bool
+		row = db.QueryRow("SELECT ? < ?", scanValues[i], maxValues[i])
+		if err := row.Scan(&lessThan); err != nil {
+			return false, errors.Trace(err)
+		}
+
+		if lessThan {
+			return false, nil
+		}
+	}
+	return false, nil
+}
+
+func ScanValuesFromRowValues(rowValues []interface{}, scanIndexes []int) []interface{} {
+	ret := make([]interface{}, len(scanIndexes))
+	for i, j := range scanIndexes {
+		ret[i] = rowValues[j]
+	}
+	return ret
 }
