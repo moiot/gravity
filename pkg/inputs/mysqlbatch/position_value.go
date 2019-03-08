@@ -372,6 +372,7 @@ func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName st
 		stats.ScannedCount++
 	}
 	batchPositionValue.TableStates[fullTableName] = stats
+	batchPositionValue.SchemaVersion = SchemaVersionV1
 
 	position.Value = batchPositionValue
 	return errors.Trace(cache.Put(position))
@@ -402,6 +403,8 @@ func PutDone(cache position_store.PositionCacheInterface, fullTableName string) 
 
 	stats.Done = true
 	batchPositionValue.TableStates[fullTableName] = stats
+	batchPositionValue.SchemaVersion = SchemaVersionV1
+
 	position.Value = batchPositionValue
 	return errors.Trace(cache.Put(position))
 }
@@ -432,6 +435,7 @@ func PutEstimatedCount(cache position_store.PositionCacheInterface, fullTableNam
 
 	stats.EstimatedRowCount = estimatedCount
 	batchPositionValue.TableStates[fullTableName] = stats
+	batchPositionValue.SchemaVersion = SchemaVersionV1
 
 	position.Value = batchPositionValue
 	return errors.Trace(cache.Put(position))
@@ -494,6 +498,7 @@ func PutMaxMin(cache position_store.PositionCacheInterface, fullTableName string
 	stats.Max = append([]TablePosition(nil), max...)
 	stats.Min = append([]TablePosition(nil), min...)
 	batchPositionValue.TableStates[fullTableName] = stats
+	batchPositionValue.SchemaVersion = SchemaVersionV1
 
 	position.Value = batchPositionValue
 	return errors.Trace(cache.Put(position))
