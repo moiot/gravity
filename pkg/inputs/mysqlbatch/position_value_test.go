@@ -76,3 +76,29 @@ func TestSetupInitialPosition(t *testing.T) {
 	})
 
 }
+
+func TestDecodeBatchPositionValueMigration(t *testing.T) {
+	r := require.New(t)
+
+	// encode v1beta1 and decode it, we should get v1
+	beta := BatchPositionValueV1Beta1{
+		Start: utils.MySQLBinlogPosition{
+			BinLogFileName: "test",
+			BinlogGTID:     "test_gtid",
+		},
+		TableStates: map[string]TableStats{
+			"test": {
+				Max: &TablePosition{Value: 1, Column: "a"},
+			},
+		},
+	}
+	s, err := myJson.MarshalToString(beta)
+	r.NoError(err)
+
+	v, err := DecodeBatchPositionValue(s)
+	r.NoError(err)
+	v1, ok := v.(BatchPositionValueV1)
+	r.True(ok)
+	r.Equal(SchemaVersionV1, v1.SchemaVersion)
+	r.Equal("a", v1.TableStates["test"].Max[0].Column)
+}

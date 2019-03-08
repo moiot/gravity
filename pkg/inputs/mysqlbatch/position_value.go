@@ -202,6 +202,10 @@ type BatchPositionValueV1 struct {
 	TableStates   map[string]TableStatsV1   `toml:"table-stats" json:"table-stats"`
 }
 
+type BatchPositionVersionMigrationWrapper struct {
+	SchemaVersion string `toml:"schema-version" json:"schema-version"`
+}
+
 func EncodeBatchPositionValue(v interface{}) (string, error) {
 	v1, ok := v.(BatchPositionValueV1)
 	if !ok {
@@ -212,13 +216,13 @@ func EncodeBatchPositionValue(v interface{}) (string, error) {
 }
 
 func DecodeBatchPositionValue(s string) (interface{}, error) {
-	v := BatchPositionValueV1{}
-	if err := myJson.UnmarshalFromString(s, &v); err != nil {
+	wrapper := BatchPositionVersionMigrationWrapper{}
+	if err := myJson.UnmarshalFromString(s, &wrapper); err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	// migrate old version to SchemaVersionV1
-	if v.SchemaVersion == "" {
+	if wrapper.SchemaVersion == "" {
 		v1beta1 := BatchPositionValueV1Beta1{}
 		if err := myJson.UnmarshalFromString(s, &v1beta1); err != nil {
 			return nil, errors.Trace(err)
@@ -226,9 +230,10 @@ func DecodeBatchPositionValue(s string) (interface{}, error) {
 
 		v1 := BatchPositionValueV1{}
 		v1.SchemaVersion = SchemaVersionV1
-		v1.Start = v.Start
+		v1.Start = v1beta1.Start
+		v1.TableStates = make(map[string]TableStatsV1)
 
-		for t := range v1.TableStates {
+		for t := range v1beta1.TableStates {
 			tableStats := TableStatsV1{}
 			if v1beta1.TableStates[t].Max != nil {
 				tableStats.Max = []TablePosition{*v1beta1.TableStates[t].Max}
@@ -247,9 +252,17 @@ func DecodeBatchPositionValue(s string) (interface{}, error) {
 			tableStats.Done = v1beta1.TableStates[t].Done
 			v1.TableStates[t] = tableStats
 		}
+		return v1, nil
 
+	} else if wrapper.SchemaVersion == SchemaVersionV1 {
+		v1 := BatchPositionValueV1{}
+		if err := myJson.UnmarshalFromString(s, &v1); err != nil {
+			return nil, errors.Trace(err)
+		}
+		return v1, nil
 	}
-	return v, nil
+
+	return nil, errors.Errorf("no valid version")
 }
 
 func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB *sql.DB) error {
