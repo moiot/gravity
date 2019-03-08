@@ -491,47 +491,65 @@ func TestTableScanner_Start(t *testing.T) {
 	})
 }
 
-func TestGenerateScanQueryAndArgs(t *testing.T) {
+func TestGenerateNextScanQueryAndArgs(t *testing.T) {
 	r := require.New(t)
 
 	cases := []struct {
-		includeLeftElement bool
-		scanColumns        []string
-		minArgs            []interface{}
-		retSQL             string
+		scanColumns []string
+		minArgs     []interface{}
+		retSQL      string
 	}{
 		{
-			false,
 			[]string{"v1"},
 			[]interface{}{1},
 			"SELECT * FROM a.b WHERE v1 > ? ORDER BY v1 LIMIT ?",
 		},
+
 		{
-			true,
+			[]string{"v1", "v2"},
+			[]interface{}{1, 2},
+			"SELECT * FROM a.b WHERE v1 = ? AND v2 > ? ORDER BY v1, v2 LIMIT ?",
+		},
+		{
+			[]string{"v1", "v2", "v3"},
+			[]interface{}{"1", 1, 10},
+			"SELECT * FROM a.b WHERE v1 = ? AND v2 = ? AND v3 > ? ORDER BY v1, v2, v3 LIMIT ?",
+		},
+	}
+
+	for _, c := range cases {
+		sql, args := GenerateNextScanQueryAndArgs(
+			"a.b",
+			c.scanColumns,
+			c.minArgs,
+			100)
+		r.Equal(c.retSQL, sql)
+		for i := range c.minArgs {
+			r.EqualValues(c.minArgs[i], args[i])
+		}
+	}
+}
+
+func TestGenerateScanQueryAndArgs(t *testing.T) {
+	r := require.New(t)
+
+	cases := []struct {
+		scanColumns []string
+		minArgs     []interface{}
+		retSQL      string
+	}{
+		{
 			[]string{"v1"},
 			[]interface{}{1},
 			"SELECT * FROM a.b WHERE v1 >= ? ORDER BY v1 LIMIT ?",
 		},
+
 		{
-			false,
-			[]string{"v1", "v2"},
-			[]interface{}{1, 2},
-			"SELECT * FROM a.b WHERE v1 >= ? AND v2 > ? ORDER BY v1, v2 LIMIT ?",
-		},
-		{
-			true,
 			[]string{"v1", "v2"},
 			[]interface{}{1, 2},
 			"SELECT * FROM a.b WHERE v1 >= ? AND v2 >= ? ORDER BY v1, v2 LIMIT ?",
 		},
 		{
-			false,
-			[]string{"v1", "v2", "v3"},
-			[]interface{}{"1", 1, 10},
-			"SELECT * FROM a.b WHERE v1 >= ? AND v2 >= ? AND v3 > ? ORDER BY v1, v2, v3 LIMIT ?",
-		},
-		{
-			true,
 			[]string{"v1", "v2", "v3"},
 			[]interface{}{"1", 1, 10},
 			"SELECT * FROM a.b WHERE v1 >= ? AND v2 >= ? AND v3 >= ? ORDER BY v1, v2, v3 LIMIT ?",
@@ -540,7 +558,6 @@ func TestGenerateScanQueryAndArgs(t *testing.T) {
 
 	for _, c := range cases {
 		sql, args := GenerateScanQueryAndArgs(
-			c.includeLeftElement,
 			"a.b",
 			c.scanColumns,
 			c.minArgs,
@@ -747,6 +764,12 @@ func TestNextBatchStartPoint(t *testing.T) {
 			[]interface{}{2, 2, 1},
 			[]interface{}{2, 2, 4},
 			[]interface{}{2, 2, 2},
+			true,
+		},
+		{
+			[]interface{}{1, 8, 4},
+			[]interface{}{2, 3, 1},
+			[]interface{}{2, 1, 1},
 			true,
 		},
 	}

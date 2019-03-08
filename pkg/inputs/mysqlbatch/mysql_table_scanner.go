@@ -209,12 +209,12 @@ func (tableScanner *TableScanner) LoopInBatch(
 
 	for {
 
-		statement, args := GenerateScanQueryAndArgs(true, fullTableName, scanColumns, currentMinValues, batch)
+		statement, args := GenerateScanQueryAndArgs(fullTableName, scanColumns, currentMinValues, batch)
 
 		<-tableScanner.throttle.C
 
 		queryStartTime := time.Now()
-		log.Infof("[LoopInBatch] query: %v, args: %+v", statement, args)
+		log.Infof("[LoopInBatch] query: %+v, args: %+v", statement, args)
 		rows, err := db.Query(statement, args...)
 		if err != nil {
 			log.Fatalf("[LoopInBatch] table %s.%s, err: %v", tableDef.Schema, tableDef.Name, err)
@@ -507,8 +507,7 @@ func waitAndCloseStream(tableDef *schema_store.Table, em core.Emitter) error {
 	return nil
 }
 
-func GenerateScanQueryAndArgs(
-	includeLeftElement bool,
+func GenerateNextScanQueryAndArgs(
 	fullTableName string,
 	scanColumns []string,
 	currentMinValues []interface{},
@@ -520,21 +519,39 @@ func GenerateScanQueryAndArgs(
 	var args []interface{}
 
 	if len(scanColumns) == 1 {
-		if includeLeftElement {
-			where = append(where, fmt.Sprintf("%s >= ?", scanColumns[0]))
-		} else {
-			where = append(where, fmt.Sprintf("%s > ?", scanColumns[0]))
-		}
+		where = append(where, fmt.Sprintf("%s > ?", scanColumns[0]))
 	} else {
 		for i := 0; i < len(scanColumns)-1; i++ {
-			where = append(where, fmt.Sprintf("%s >= ?", scanColumns[i]))
+			where = append(where, fmt.Sprintf("%s = ?", scanColumns[i]))
 		}
-		if includeLeftElement {
-			where = append(where, fmt.Sprintf("%s >= ?", scanColumns[len(scanColumns)-1]))
-		} else {
-			where = append(where, fmt.Sprintf("%s > ?", scanColumns[len(scanColumns)-1]))
-		}
+		where = append(where, fmt.Sprintf("%s > ?", scanColumns[len(scanColumns)-1]))
+	}
 
+	for i := range scanColumns {
+		args = append(args, currentMinValues[i])
+	}
+
+	whereString := strings.Join(where, " AND ")
+	orderByString := strings.Join(scanColumns, ", ")
+
+	query := fmt.Sprintf("%s%s ORDER BY %s LIMIT ?", prefix, whereString, orderByString)
+	args = append(args, batch)
+	return query, args
+}
+
+func GenerateScanQueryAndArgs(
+	fullTableName string,
+	scanColumns []string,
+	currentMinValues []interface{},
+	batch int) (string, []interface{}) {
+
+	prefix := fmt.Sprintf("SELECT * FROM %s WHERE ", fullTableName)
+
+	var where []string
+	var args []interface{}
+
+	for i := 0; i < len(scanColumns); i++ {
+		where = append(where, fmt.Sprintf("%s >= ?", scanColumns[i]))
 	}
 
 	for i := range scanColumns {
@@ -612,7 +629,7 @@ func NextScanElementForChunk(
 	retNextValues := make([]interface{}, len(columnTypes))
 	rowsPositionDataPtrs := newBatchDataPtrs(columnTypes, 1)
 
-	sql, args := GenerateScanQueryAndArgs(false, fullTableName, scanColumns, currentScanValues, 1)
+	sql, args := GenerateNextScanQueryAndArgs(fullTableName, scanColumns, currentScanValues, 1)
 	log.Infof("NextScanElementForChunk sql: %v, args: %+v", sql, args)
 
 	rows, err := db.Query(sql, args...)

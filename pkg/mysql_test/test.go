@@ -419,6 +419,7 @@ func SeedCompositePrimaryKeyInt(db *sql.DB, dbName string) {
 		{"a": 2, "b": 3, "c": 2, "d": 22},
 		{"a": 2, "b": 3, "c": 3, "d": 23},
 		{"a": 2, "b": 3, "c": 4, "d": 24},
+		{"a": 2, "b": 9, "c": 5, "d": 25},
 	}
 
 	for i := range data {
