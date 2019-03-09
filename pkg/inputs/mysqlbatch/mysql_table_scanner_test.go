@@ -497,23 +497,44 @@ func TestGenerateNextScanQueryAndArgs(t *testing.T) {
 	cases := []struct {
 		scanColumns []string
 		minArgs     []interface{}
+		pivotIndex  int
 		retSQL      string
 	}{
 		{
 			[]string{"v1"},
 			[]interface{}{1},
+			0,
 			"SELECT * FROM a.b WHERE v1 > ? ORDER BY v1 LIMIT ?",
 		},
-
 		{
 			[]string{"v1", "v2"},
 			[]interface{}{1, 2},
+			1,
 			"SELECT * FROM a.b WHERE v1 = ? AND v2 > ? ORDER BY v1, v2 LIMIT ?",
+		},
+		{
+			[]string{"v1", "v2"},
+			[]interface{}{1, 2},
+			0,
+			"SELECT * FROM a.b WHERE v1 > ? ORDER BY v1, v2 LIMIT ?",
 		},
 		{
 			[]string{"v1", "v2", "v3"},
 			[]interface{}{"1", 1, 10},
+			2,
 			"SELECT * FROM a.b WHERE v1 = ? AND v2 = ? AND v3 > ? ORDER BY v1, v2, v3 LIMIT ?",
+		},
+		{
+			[]string{"v1", "v2", "v3"},
+			[]interface{}{"1", 1, 10},
+			1,
+			"SELECT * FROM a.b WHERE v1 = ? AND v2 > ? ORDER BY v1, v2, v3 LIMIT ?",
+		},
+		{
+			[]string{"v1", "v2", "v3"},
+			[]interface{}{"1", 1, 10},
+			0,
+			"SELECT * FROM a.b WHERE v1 > ? ORDER BY v1, v2, v3 LIMIT ?",
 		},
 	}
 
@@ -522,9 +543,10 @@ func TestGenerateNextScanQueryAndArgs(t *testing.T) {
 			"a.b",
 			c.scanColumns,
 			c.minArgs,
+			c.pivotIndex,
 			100)
 		r.Equal(c.retSQL, sql)
-		for i := range c.minArgs {
+		for i := 0; i <= c.pivotIndex; i++ {
 			r.EqualValues(c.minArgs[i], args[i])
 		}
 	}
@@ -536,23 +558,44 @@ func TestGenerateScanQueryAndArgs(t *testing.T) {
 	cases := []struct {
 		scanColumns []string
 		minArgs     []interface{}
+		pivotIndex  int
 		retSQL      string
 	}{
 		{
 			[]string{"v1"},
 			[]interface{}{1},
+			0,
 			"SELECT * FROM a.b WHERE v1 >= ? ORDER BY v1 LIMIT ?",
 		},
-
 		{
 			[]string{"v1", "v2"},
 			[]interface{}{1, 2},
+			1,
 			"SELECT * FROM a.b WHERE v1 = ? AND v2 >= ? ORDER BY v1, v2 LIMIT ?",
+		},
+		{
+			[]string{"v1", "v2"},
+			[]interface{}{1, 2},
+			0,
+			"SELECT * FROM a.b WHERE v1 >= ? ORDER BY v1, v2 LIMIT ?",
 		},
 		{
 			[]string{"v1", "v2", "v3"},
 			[]interface{}{"1", 1, 10},
+			2,
 			"SELECT * FROM a.b WHERE v1 = ? AND v2 = ? AND v3 >= ? ORDER BY v1, v2, v3 LIMIT ?",
+		},
+		{
+			[]string{"v1", "v2", "v3"},
+			[]interface{}{"1", 1, 10},
+			1,
+			"SELECT * FROM a.b WHERE v1 = ? AND v2 >= ? ORDER BY v1, v2, v3 LIMIT ?",
+		},
+		{
+			[]string{"v1", "v2", "v3"},
+			[]interface{}{"1", 1, 10},
+			0,
+			"SELECT * FROM a.b WHERE v1 >= ? ORDER BY v1, v2, v3 LIMIT ?",
 		},
 	}
 
@@ -561,9 +604,12 @@ func TestGenerateScanQueryAndArgs(t *testing.T) {
 			"a.b",
 			c.scanColumns,
 			c.minArgs,
-			100)
+			10,
+			c.pivotIndex)
 		r.Equal(c.retSQL, sql)
-		for i := range c.minArgs {
+		// excluding batch
+		r.Equal(c.pivotIndex, len(args)-1-1)
+		for i := 0; i <= c.pivotIndex; i++ {
 			r.EqualValues(c.minArgs[i], args[i])
 		}
 	}
@@ -652,43 +698,80 @@ func TestNextScanElementForChunk(t *testing.T) {
 
 	tcs := []struct {
 		currentScanValues []interface{}
+		pivotIndex        int
 		nextRowValues     []interface{}
 		exists            bool
 	}{
 		{
 			[]interface{}{1, 6, 1},
+			2,
 			[]interface{}{1, 6, 2, 2},
 			true,
 		},
 		{
 			[]interface{}{1, 6, 3},
+			2,
 			[]interface{}{1, 6, 4, 4},
 			true,
 		},
 		{
 			[]interface{}{1, 6, 4},
+			2,
+			nil,
+			false,
+		},
+		{
+			[]interface{}{1, 6, 4},
+			1,
+			[]interface{}{1, 7, 1, 5},
+			true,
+		},
+		{
+			[]interface{}{1, 7, 4},
+			2,
 			nil,
 			false,
 		},
 		{
 			[]interface{}{1, 7, 4},
+			1,
+			[]interface{}{1, 8, 1, 9},
+			true,
+		},
+		{
+			[]interface{}{1, 8, 4},
+			1,
 			nil,
 			false,
 		},
 		{
 			[]interface{}{1, 8, 4},
-			nil,
-			false,
+			0,
+			[]interface{}{2, 1, 1, 13},
+			true,
+		},
+		{
+			[]interface{}{2, 1, 1},
+			2,
+			[]interface{}{2, 1, 2, 14},
+			true,
 		},
 		{
 			[]interface{}{2, 3, 4},
+			2,
 			nil,
 			false,
 		},
 	}
 
 	for _, c := range tcs {
-		nextRows, exists, err := NextScanElementForChunk(db, fullTableName, columnTypes, []string{"a", "b", "c"}, c.currentScanValues)
+		nextRows, exists, err := NextScanElementForChunk(
+			db,
+			fullTableName,
+			columnTypes,
+			[]string{"a", "b", "c"},
+			c.currentScanValues,
+			c.pivotIndex)
 		r.NoError(err)
 		r.Equalf(c.exists, exists, "scanValues: %+v, nextRowValues:%+v", c.currentScanValues, c.nextRowValues)
 		if exists {
@@ -716,66 +799,71 @@ func TestNextBatchStartPoint(t *testing.T) {
 		currentMinValues []interface{}
 		maxValues        []interface{}
 		retNextMinValues []interface{}
+		nextPivotIndex   int
 		retContinue      bool
 	}{
+		// test with maxValues
 		{
 			[]interface{}{1, 6, 1},
 			[]interface{}{2, 3, 4},
 			[]interface{}{1, 6, 2},
+			2,
 			true,
 		},
 		{
 			[]interface{}{1, 6, 1},
 			[]interface{}{1, 6, 0},
 			nil,
+			0,
 			false,
 		},
 		{
 			[]interface{}{1, 6, 1},
 			[]interface{}{1, 6, 1},
 			nil,
+			0,
 			false,
 		},
+
 		{
 			[]interface{}{1, 6, 1},
 			[]interface{}{1, 6, 2},
 			[]interface{}{1, 6, 2},
+			2,
 			true,
 		},
 		{
 			[]interface{}{1, 6, 4},
 			[]interface{}{1, 7, 1},
 			[]interface{}{1, 7, 1},
+			1,
 			true,
 		},
 		{
-			[]interface{}{1, 6, 4},
-			[]interface{}{1, 7, 2},
-			[]interface{}{1, 7, 1},
-			true,
-		},
-		{
-			[]interface{}{1, 6, 4},
-			[]interface{}{2, 1, 1},
-			[]interface{}{1, 7, 1},
-			true,
-		},
-		{
-			[]interface{}{2, 2, 1},
-			[]interface{}{2, 2, 4},
-			[]interface{}{2, 2, 2},
+			[]interface{}{1, 7, 4},
+			[]interface{}{2, 7, 1},
+			[]interface{}{1, 8, 1},
+			1,
 			true,
 		},
 		{
 			[]interface{}{1, 8, 4},
 			[]interface{}{2, 3, 1},
 			[]interface{}{2, 1, 1},
+			0,
+			true,
+		},
+		{
+			[]interface{}{2, 2, 1},
+			[]interface{}{2, 3, 1},
+			[]interface{}{2, 2, 2},
+			2,
 			true,
 		},
 	}
 
 	for _, c := range tcs {
-		nextMinValues, continueNext, err := NextBatchStartPoint(
+		nextMinValues, continueNext, nextPivotIndex, err := NextBatchStartPoint(
 			db,
 			fullTableName,
 			[]string{"a", "b", "c"},
@@ -791,6 +879,7 @@ func TestNextBatchStartPoint(t *testing.T) {
 			for i := range nextMinValues {
 				r.EqualValuesf(c.retNextMinValues[i], nextMinValues[i], "currentMinValues: %+v, maxValues: %+v", c.currentMinValues, c.maxValues)
 			}
+			r.Equal(c.nextPivotIndex, nextPivotIndex)
 		}
 	}
 

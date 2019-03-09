@@ -207,9 +207,18 @@ func (tableScanner *TableScanner) LoopInBatch(
 
 	rowsBatchDataPtrs := newBatchDataPtrs(columnTypes, batch)
 
+	// pivotIndex starts with the right most index column.
+	// NextBatchStartPoint will adjust the pivotIndex
+	pivotIndex := len(scanColumns) - 1
+
 	for {
 
-		statement, args := GenerateScanQueryAndArgs(fullTableName, scanColumns, currentMinValues, batch)
+		statement, args := GenerateScanQueryAndArgs(
+			fullTableName,
+			scanColumns,
+			currentMinValues,
+			batch,
+			pivotIndex)
 
 		<-tableScanner.throttle.C
 
@@ -270,8 +279,15 @@ func (tableScanner *TableScanner) LoopInBatch(
 		log.Infof("[LoopInBatch] sourceDB: %s, table: %s, currentMinValues: %+v, maxValues: %+v, resultCount: %v",
 			tableDef.Schema, tableDef.Name, currentMinValues, maxValues, resultCount)
 
-		// Get the next batch's start point
-		nextMinValues, continueNex, err := NextBatchStartPoint(db, fullTableName, scanColumns, columnTypes, scanIndexes, currentMinValues, maxValues)
+		// Get the next batch's start point.
+		nextMinValues, continueNex, nextPivotIndex, err := NextBatchStartPoint(
+			db,
+			fullTableName,
+			scanColumns,
+			columnTypes,
+			scanIndexes,
+			currentMinValues,
+			maxValues)
 		if err != nil {
 			log.Fatalf("[LoopInBatch] failed to find next start point: %v", errors.ErrorStack(err))
 		}
@@ -284,6 +300,7 @@ func (tableScanner *TableScanner) LoopInBatch(
 			return
 		}
 		currentMinValues = nextMinValues
+		pivotIndex = nextPivotIndex
 
 		select {
 		case <-tableScanner.ctx.Done():
@@ -511,6 +528,7 @@ func GenerateNextScanQueryAndArgs(
 	fullTableName string,
 	scanColumns []string,
 	currentMinValues []interface{},
+	pivotIndex int,
 	batch int) (string, []interface{}) {
 
 	prefix := fmt.Sprintf("SELECT * FROM %s WHERE ", fullTableName)
@@ -518,18 +536,12 @@ func GenerateNextScanQueryAndArgs(
 	var where []string
 	var args []interface{}
 
-	if len(scanColumns) == 1 {
-		where = append(where, fmt.Sprintf("%s > ?", scanColumns[0]))
-	} else {
-		for i := 0; i < len(scanColumns)-1; i++ {
-			where = append(where, fmt.Sprintf("%s = ?", scanColumns[i]))
-		}
-		where = append(where, fmt.Sprintf("%s > ?", scanColumns[len(scanColumns)-1]))
-	}
-
-	for i := range scanColumns {
+	for i := 0; i <= pivotIndex-1; i++ {
+		where = append(where, fmt.Sprintf("%s = ?", scanColumns[i]))
 		args = append(args, currentMinValues[i])
 	}
+	where = append(where, fmt.Sprintf("%s > ?", scanColumns[pivotIndex]))
+	args = append(args, currentMinValues[pivotIndex])
 
 	whereString := strings.Join(where, " AND ")
 	orderByString := strings.Join(scanColumns, ", ")
@@ -539,26 +551,26 @@ func GenerateNextScanQueryAndArgs(
 	return query, args
 }
 
+// pivotIndex is the index in scanColumns
 func GenerateScanQueryAndArgs(
 	fullTableName string,
 	scanColumns []string,
 	currentMinValues []interface{},
-	batch int) (string, []interface{}) {
+	batch int,
+	pivotIndex int) (string, []interface{}) {
 
 	prefix := fmt.Sprintf("SELECT * FROM %s WHERE ", fullTableName)
 
 	var where []string
 	var args []interface{}
 
-	for i := 0; i < len(scanColumns)-1; i++ {
+	for i := 0; i <= pivotIndex-1; i++ {
 		where = append(where, fmt.Sprintf("%s = ?", scanColumns[i]))
-	}
-
-	where = append(where, fmt.Sprintf("%s >= ?", scanColumns[len(scanColumns)-1]))
-
-	for i := range scanColumns {
 		args = append(args, currentMinValues[i])
 	}
+
+	where = append(where, fmt.Sprintf("%s >= ?", scanColumns[pivotIndex]))
+	args = append(args, currentMinValues[pivotIndex])
 
 	whereString := strings.Join(where, " AND ")
 	orderByString := strings.Join(scanColumns, ", ")
@@ -575,50 +587,32 @@ func NextBatchStartPoint(
 	columnTypes []*sql.ColumnType,
 	scanIndexes []int,
 	currentMinValues []interface{},
-	maxValues []interface{}) (nextMinValues []interface{}, continueNext bool, err error) {
+	maxValues []interface{}) (nextMinValues []interface{}, continueNext bool, pivotIndex int, err error) {
 
-	nextRowValues, exists, err := NextScanElementForChunk(db, fullTableName, columnTypes, scanColumns, currentMinValues)
-	if err != nil {
-		return nil, false, errors.Trace(err)
-	}
-
-	if exists {
-		maxReached, err := GreaterThanMax(db, ScanValuesFromRowValues(nextRowValues, scanIndexes), maxValues)
+	// 	Detect the pivotIndex
+	for i := len(scanColumns) - 1; i >= 0; i-- {
+		nextRowValues, exists, err := NextScanElementForChunk(
+			db,
+			fullTableName,
+			columnTypes,
+			scanColumns,
+			currentMinValues,
+			i)
 		if err != nil {
-			return nil, false, errors.Trace(err)
+			return nil, false, 0, errors.Trace(err)
 		}
-		if maxReached {
-			return nil, false, nil
-		}
-
-		return ScanValuesFromRowValues(nextRowValues, scanIndexes), true, nil
-	}
-
-	// Assume the primary key is (a, b, c), we need to iterate on next
-	for i := range scanColumns {
-		newScanColumns := scanColumns[0 : len(scanColumns)-i]
-		newScanIndexes := scanIndexes[0 : len(scanColumns)-i]
-		newCurrentScanValues := currentMinValues[0 : len(scanColumns)-i]
-		newMaxValues := maxValues[0 : len(scanColumns)-i]
-
-		nextRowValues, exists, err := NextScanElementForChunk(db, fullTableName, columnTypes, newScanColumns, newCurrentScanValues)
-		if err != nil {
-			return nil, false, errors.Trace(err)
-		}
-
 		if exists {
-			maxReached, err := GreaterThanMax(db, ScanValuesFromRowValues(nextRowValues, newScanIndexes), newMaxValues)
+			maxReached, err := GreaterThanMax(db, ScanValuesFromRowValues(nextRowValues, scanIndexes), maxValues)
 			if err != nil {
-				return nil, false, errors.Trace(err)
+				return nil, false, 0, errors.Trace(err)
 			}
-
-			if !maxReached {
-				return ScanValuesFromRowValues(nextRowValues, scanIndexes), true, nil
+			if maxReached {
+				return nil, false, i, nil
 			}
+			return ScanValuesFromRowValues(nextRowValues, scanIndexes), true, i, nil
 		}
 	}
-	return nil, false, nil
-
+	return nil, false, 0, nil
 }
 
 func NextScanElementForChunk(
@@ -626,12 +620,14 @@ func NextScanElementForChunk(
 	fullTableName string,
 	columnTypes []*sql.ColumnType,
 	scanColumns []string,
-	currentScanValues []interface{}) (nextRowValues []interface{}, exists bool, err error) {
+	currentScanValues []interface{},
+	pivotIndex int) (nextRowValues []interface{}, exists bool, err error) {
 
 	retNextValues := make([]interface{}, len(columnTypes))
 	rowsPositionDataPtrs := newBatchDataPtrs(columnTypes, 1)
 
-	sql, args := GenerateNextScanQueryAndArgs(fullTableName, scanColumns, currentScanValues, 1)
+	sql, args := GenerateNextScanQueryAndArgs(fullTableName, scanColumns, currentScanValues, pivotIndex, 1)
+
 	log.Infof("NextScanElementForChunk sql: %v, args: %+v", sql, args)
 
 	rows, err := db.Query(sql, args...)
@@ -647,11 +643,6 @@ func NextScanElementForChunk(
 			return nil, false, errors.Trace(err)
 		}
 	}
-
-	// _, exists, err = utils.ScanGeneraRowWithDataPtrs(row, columnTypes, rowsPositionDataPtrs[0])
-	// if err != nil {
-	// 	return nil,exists, errors.Trace(err)
-	// }
 
 	if retExists {
 		for i := range columnTypes {
