@@ -550,9 +550,11 @@ func GenerateScanQueryAndArgs(
 	var where []string
 	var args []interface{}
 
-	for i := 0; i < len(scanColumns); i++ {
-		where = append(where, fmt.Sprintf("%s >= ?", scanColumns[i]))
+	for i := 0; i < len(scanColumns)-1; i++ {
+		where = append(where, fmt.Sprintf("%s = ?", scanColumns[i]))
 	}
+
+	where = append(where, fmt.Sprintf("%s >= ?", scanColumns[len(scanColumns)-1]))
 
 	for i := range scanColumns {
 		args = append(args, currentMinValues[i])

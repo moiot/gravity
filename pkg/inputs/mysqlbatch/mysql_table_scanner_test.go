@@ -547,12 +547,12 @@ func TestGenerateScanQueryAndArgs(t *testing.T) {
 		{
 			[]string{"v1", "v2"},
 			[]interface{}{1, 2},
-			"SELECT * FROM a.b WHERE v1 >= ? AND v2 >= ? ORDER BY v1, v2 LIMIT ?",
+			"SELECT * FROM a.b WHERE v1 = ? AND v2 >= ? ORDER BY v1, v2 LIMIT ?",
 		},
 		{
 			[]string{"v1", "v2", "v3"},
 			[]interface{}{"1", 1, 10},
-			"SELECT * FROM a.b WHERE v1 >= ? AND v2 >= ? AND v3 >= ? ORDER BY v1, v2, v3 LIMIT ?",
+			"SELECT * FROM a.b WHERE v1 = ? AND v2 = ? AND v3 >= ? ORDER BY v1, v2, v3 LIMIT ?",
 		},
 	}
 

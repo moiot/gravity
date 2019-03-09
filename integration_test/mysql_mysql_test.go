@@ -340,7 +340,7 @@ func TestMySQLBatchWithCompositePkIntOrder(t *testing.T) {
 				},
 				"table-configs":    tableConfigs,
 				"mode":             "batch",
-				"table-scan-batch": 1,
+				"table-scan-batch": 5,
 			},
 		},
 		OutputPlugins: map[string]interface{}{
