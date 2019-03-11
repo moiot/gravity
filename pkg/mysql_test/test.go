@@ -21,16 +21,21 @@ import (
 	"github.com/moiot/gravity/pkg/utils"
 )
 
-const TestTableName = "test_table"
-const TestTableWithoutTs = "test_table_without_ts"
-const DummyTableName = "dummy_table"
-const TxnRouteTableName = "drc_routes"
-const TestScanColumnTableIdPrimary = "test_scan_column_id_primary"
-const TestScanColumnTableMultiPrimary = "test_scan_column_multiple_primary"
-const TestScanColumnTableUniqueIndexEmailString = "test_scan_column_unique_index_email_string"
-const TestScanColumnTableUniqueIndexTime = "test_scan_column_unique_index_time"
-const TestScanColumnTableNoKey = "test_scan_column_no_key"
-const deadSignalTable = "dead_signals"
+const (
+	TestTableName                                 = "test_table"
+	TestTableWithoutTs                            = "test_table_without_ts"
+	DummyTableName                                = "dummy_table"
+	TxnRouteTableName                             = "drc_routes"
+	TestScanColumnTableIdPrimary                  = "test_scan_column_id_primary"
+	TestScanColumnTableCompositePrimary           = "test_scan_column_multiple_primary"
+	TestScanColumnTableCompositePrimaryInt        = "test_scan_column_composite_pk_int"
+	TestScanColumnTableCompositePrimaryOutOfOrder = "test_scan_column_multiple_pk_unordered"
+	TestScanColumnTableUniqueIndexEmailString     = "test_scan_column_unique_index_email_string"
+	TestScanColumnTableUniqueIndexTime            = "test_scan_column_unique_index_time"
+	TestScanColumnTableCompositeUniqueKey         = "test_scan_column_multi_uk"
+	TestScanColumnTableNoKey                      = "test_scan_column_no_key"
+	deadSignalTable                               = "dead_signals"
+)
 
 var setupSqls = []string{
 	fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
@@ -74,7 +79,23 @@ var setupSqls = []string{
   email varchar(30) COLLATE utf8mb4_bin NOT NULL DEFAULT 'default_email',
   ts TIMESTAMP,
   PRIMARY KEY (id, name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8`, TestScanColumnTableMultiPrimary),
+) ENGINE=InnoDB DEFAULT CHARSET=utf8`, TestScanColumnTableCompositePrimary),
+
+	fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s(
+  a int(11) unsigned NOT NULL,
+  b int(11) unsigned NOT NULL,
+  c int(11) unsigned NOT NULL,
+  d int(11) unsigned NOT NULL,
+  PRIMARY KEY (a, b, c)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8`, TestScanColumnTableCompositePrimaryInt),
+
+	fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s(
+  id int(11) unsigned NOT NULL,
+  name varchar(256),
+  email varchar(30) COLLATE utf8mb4_bin,
+  ts TIMESTAMP,
+  PRIMARY KEY (email, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8`, TestScanColumnTableCompositePrimaryOutOfOrder),
 
 	fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s(
   id int(11) unsigned NOT NULL,
@@ -89,6 +110,12 @@ var setupSqls = []string{
   ts TIMESTAMP,
   UNIQUE INDEX time_idx (ts)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8`, TestScanColumnTableUniqueIndexTime),
+
+	fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s(
+  id int(11) unsigned,
+  ts TIMESTAMP,
+  UNIQUE INDEX uniq_ts_id (ts, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8`, TestScanColumnTableCompositeUniqueKey),
 
 	fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s(
   id int(11) unsigned NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8`, TestScanColumnTableNoKey),
@@ -359,6 +386,48 @@ func QueryTestTable(db *sql.DB, testDBName string, testTableName string, id int)
 	statement := fmt.Sprintf("SELECT id, name from %s.%s WHERE id = %v", testDBName, testTableName, id)
 	err := db.QueryRow(statement).Scan(&resultId, &resultName)
 	return resultName, err
+}
+
+func SeedCompositePrimaryKeyInt(db *sql.DB, dbName string) {
+	data := []map[string]interface{}{
+		{"a": 1, "b": 6, "c": 1, "d": 1},
+		{"a": 1, "b": 6, "c": 2, "d": 2},
+		{"a": 1, "b": 6, "c": 3, "d": 3},
+		{"a": 1, "b": 6, "c": 4, "d": 4},
+
+		{"a": 1, "b": 7, "c": 1, "d": 5},
+		{"a": 1, "b": 7, "c": 2, "d": 6},
+		{"a": 1, "b": 7, "c": 3, "d": 7},
+		{"a": 1, "b": 7, "c": 4, "d": 8},
+
+		{"a": 1, "b": 8, "c": 1, "d": 9},
+		{"a": 1, "b": 8, "c": 2, "d": 10},
+		{"a": 1, "b": 8, "c": 3, "d": 11},
+		{"a": 1, "b": 8, "c": 4, "d": 12},
+
+		{"a": 2, "b": 1, "c": 1, "d": 13},
+		{"a": 2, "b": 1, "c": 2, "d": 14},
+		{"a": 2, "b": 1, "c": 3, "d": 15},
+		{"a": 2, "b": 1, "c": 4, "d": 16},
+
+		{"a": 2, "b": 2, "c": 1, "d": 17},
+		{"a": 2, "b": 2, "c": 2, "d": 18},
+		{"a": 2, "b": 2, "c": 3, "d": 19},
+		{"a": 2, "b": 2, "c": 4, "d": 20},
+
+		{"a": 2, "b": 3, "c": 1, "d": 21},
+		{"a": 2, "b": 3, "c": 2, "d": 22},
+		{"a": 2, "b": 3, "c": 3, "d": 23},
+		{"a": 2, "b": 3, "c": 4, "d": 24},
+		{"a": 2, "b": 9, "c": 5, "d": 25},
+	}
+
+	for i := range data {
+		if err := InsertIntoTestTable(db, dbName, TestScanColumnTableCompositePrimaryInt, data[i]); err != nil {
+			panic(err.Error())
+		}
+	}
+
 }
 
 func setupTestDB(db *sql.DB, dbName string) error {

@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/moiot/gravity/pkg/mysql"
-
 	"github.com/moiot/gravity/pkg/inputs/helper"
 
 	"github.com/juju/errors"
@@ -28,8 +26,8 @@ type TableConfig struct {
 	// that describes the table name
 	Table []string `mapstructure:"table" toml:"table" json:"table"`
 
-	// ScanColumn enforces these table's scan column
-	ScanColumn string `mapstructure:"scan-column" toml:"scan-column" json:"scan-column"`
+	// ScanColumn is an array of string, that enforces these table's scan columns
+	ScanColumn []string `mapstructure:"scan-column" toml:"scan-column" json:"scan-column"`
 }
 
 type PluginConfig struct {
@@ -101,7 +99,7 @@ type mysqlBatchInputPlugin struct {
 type TableWork struct {
 	TableDef          *schema_store.Table
 	TableConfig       *TableConfig
-	ScanColumn        string
+	ScanColumns       []string
 	EstimatedRowCount int64
 }
 
@@ -203,7 +201,7 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 	tableDefs, tableConfigs = DeleteEmptyTables(scanDB, tableDefs, tableConfigs)
 
 	// Detect any potential error before any work is done, so that we can check the error early.
-	scanColumns := make([]string, len(tableDefs))
+	scanColumnsArray := make([][]string, len(tableDefs))
 	estimatedRowCount := make([]int64, len(tableDefs))
 	var allErrors []error
 	for i, t := range tableDefs {
@@ -212,15 +210,15 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 			return errors.Trace(err)
 		}
 
-		if tableConfigs[i].ScanColumn == "" {
-			column, err := DetectScanColumn(plugin.scanDB, t.Schema, t.Name, rowCount, plugin.cfg.MaxFullDumpCount)
+		if len(tableConfigs[i].ScanColumn) == 0 {
+			columns, err := DetectScanColumns(plugin.scanDB, t.Schema, t.Name, rowCount, plugin.cfg.MaxFullDumpCount)
 			if err != nil {
-				log.Errorf("failed to detect scan column, schema: %v, table: %v", t.Schema, t.Name)
+				log.Errorf("failed to detect scan columns, schema: %v, table: %v", t.Schema, t.Name)
 				allErrors = append(allErrors, err)
 			}
-			scanColumns[i] = column
+			scanColumnsArray[i] = columns
 		} else {
-			scanColumns[i] = tableConfigs[i].ScanColumn
+			scanColumnsArray[i] = tableConfigs[i].ScanColumn
 		}
 
 		estimatedRowCount[i] = rowCount
@@ -229,14 +227,24 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 		return errors.Errorf("failed detect %d tables scan column", len(allErrors))
 	}
 
-	tableDefs, tableConfigs, scanColumns, estimatedRowCount, err = InitializePositionAndDeleteScannedTable(scanDB, positionCache, scanColumns, estimatedRowCount, tableDefs, tableConfigs)
+	tableDefs, tableConfigs, scanColumnsArray, estimatedRowCount, err = InitializePositionAndDeleteScannedTable(
+		scanDB,
+		positionCache,
+		scanColumnsArray,
+		estimatedRowCount,
+		tableDefs,
+		tableConfigs)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	tableQueue := make(chan *TableWork, len(tableDefs))
 	for i := 0; i < len(tableDefs); i++ {
-		work := TableWork{TableDef: tableDefs[i], TableConfig: &tableConfigs[i], ScanColumn: scanColumns[i], EstimatedRowCount: estimatedRowCount[i]}
+		work := TableWork{
+			TableDef:          tableDefs[i],
+			TableConfig:       &tableConfigs[i],
+			ScanColumns:       scanColumnsArray[i],
+			EstimatedRowCount: estimatedRowCount[i]}
 		tableQueue <- &work
 	}
 	close(tableQueue)
@@ -365,41 +373,50 @@ func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.Pos
 	}
 }
 
-func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInterface, tableDef *schema_store.Table, scanColumn string, estimatedRowCount int64) (bool, error) {
+func InitTablePosition(
+	db *sql.DB,
+	positionCache position_store.PositionCacheInterface,
+	tableDef *schema_store.Table,
+	scanColumns []string,
+	estimatedRowCount int64) (bool, error) {
+
 	fullTableName := utils.TableIdentity(tableDef.Schema, tableDef.Name)
-	max, _, exists, err := GetMaxMin(positionCache, fullTableName)
+	_, _, exists, err := GetMaxMin(positionCache, fullTableName)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 
 	if !exists {
-		log.Infof("[InitTablePosition] init table position")
-
-		var scanType string
-		if scanColumn == "*" {
-			maxPos := TablePosition{Column: scanColumn, Type: PlainInt, Value: 1}
-			minPos := TablePosition{Column: scanColumn, Type: PlainInt, Value: 0}
-			if err := PutMaxMin(positionCache, fullTableName, maxPos, minPos); err != nil {
+		maxPositions := make([]TablePosition, len(scanColumns))
+		minPositions := make([]TablePosition, len(scanColumns))
+		if IsScanColumnsForDump(scanColumns) {
+			maxPositions[0] = TablePosition{Column: ScanColumnForDump, Type: PlainInt, Value: 1}
+			minPositions[0] = TablePosition{Column: ScanColumnForDump, Type: PlainInt, Value: 0}
+			if err := PutMaxMin(positionCache, fullTableName, maxPositions, minPositions); err != nil {
 				return false, errors.Trace(err)
 			}
+			log.Infof("[InitTablePosition] scan dump PutMaxMin table: %v, maxPos: %+v, minPos: %+v", fullTableName, maxPositions, minPositions)
 		} else {
-			max, min := FindMaxMinValueFromDB(db, tableDef.Schema, tableDef.Name, scanColumn)
-			maxPos := TablePosition{Value: max, Type: scanType, Column: scanColumn}
-			minPos := TablePosition{Value: min, Type: scanType, Column: scanColumn}
-			if err := PutMaxMin(positionCache, fullTableName, maxPos, minPos); err != nil {
+			retMax, retMin := FindMaxMinValueFromDB(db, tableDef.Schema, tableDef.Name, scanColumns)
+			for i, column := range scanColumns {
+				maxPositions[i] = TablePosition{Value: retMax[i], Column: column}
+				minPositions[i] = TablePosition{Value: retMin[i], Column: column}
+			}
+
+			if err := PutMaxMin(positionCache, fullTableName, maxPositions, minPositions); err != nil {
 				return false, errors.Trace(err)
 			}
-			log.Infof("[InitTablePosition] table: %v, PutMaxMin: maxPos: %+v, minPos: %+v", fullTableName, maxPos, minPos)
+			log.Infof("[InitTablePosition] scan key PutMaxMin table: %v, maxPos: %+v, minPos: %+v", fullTableName, maxPositions, minPositions)
 		}
 
 		if err := PutEstimatedCount(positionCache, fullTableName, estimatedRowCount); err != nil {
 			return false, errors.Trace(err)
 		}
 
-		log.Infof("[InitTablePosition] schema: %v, table: %v, scanColumn: %v", tableDef.Schema, tableDef.Name, scanColumn)
+		log.Infof("[InitTablePosition] table: %v, scanColumns: %+v", fullTableName, scanColumns)
 		return false, nil
 	} else {
-		current, exists, err := GetCurrentPos(positionCache, fullTableName)
+		_, done, exists, err := GetCurrentPos(positionCache, fullTableName)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -407,44 +424,44 @@ func InitTablePosition(db *sql.DB, positionCache position_store.PositionCacheInt
 		if !exists {
 			return false, nil
 		}
-
-		if mysql.MySQLDataEquals(current.Value, max.Value) {
-			return true, nil
-		} else {
-			return false, nil
-		}
+		return done, nil
 	}
 }
 
-// DetectScanColumn find a column that we used to scan the table
-// SHOW INDEX FROM ..
-// Pick primary key, if there is only one primary key
-// If pk not found try using unique index
-// fail
-func DetectScanColumn(sourceDB *sql.DB, dbName string, tableName string, estimatedRowsCount int64, maxFullDumpRowsCountLimit int64) (string, error) {
+//
+// DetectScanColumns find columns that we used to scan the table
+// First, we try primary keys, then we try unique key; we try dump the table at last.
+// Note that composite unique key is not supported.
+//
+func DetectScanColumns(sourceDB *sql.DB, dbName string, tableName string, estimatedRowsCount int64, maxFullDumpRowsCountLimit int64) ([]string, error) {
 	pks, err := utils.GetPrimaryKeys(sourceDB, dbName, tableName)
 	if err != nil {
-		return "", errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
-
-	if len(pks) == 1 {
-		return pks[0], nil
+	if len(pks) > 0 {
+		return pks, nil
 	}
 
 	uniqueIndexes, err := utils.GetUniqueIndexesWithoutPks(sourceDB, dbName, tableName)
 	if err != nil {
-		return "", errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
-	if len(uniqueIndexes) > 0 {
-		return uniqueIndexes[0], nil
+	// We don't support composite unique index right now.
+	// When composite unique key exists, the column can still be NULL.
+	if len(uniqueIndexes) == 1 {
+		return uniqueIndexes, nil
 	}
 
 	// Now there is no unique key detected, we end up trying a full dump.
 	// So we do a validation here to ensure we are not doing a dump on a really big table.
 	if estimatedRowsCount < maxFullDumpRowsCountLimit {
-		return "*", nil
+		return []string{ScanColumnForDump}, nil
 	}
 
-	return "", errors.Errorf("no scan column can be found automatically for %s.%s", dbName, tableName)
+	return nil, errors.Errorf("no scan column can be found automatically for %s.%s", dbName, tableName)
+}
+
+func IsScanColumnsForDump(scanColumns []string) bool {
+	return len(scanColumns) > 0 && scanColumns[0] == ScanColumnForDump
 }

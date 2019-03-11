@@ -35,7 +35,7 @@ func TestSetupInitialPosition(t *testing.T) {
 		r.NoError(err)
 		r.True(exists)
 
-		batchPositionValue, ok := p.Value.(BatchPositionValue)
+		batchPositionValue, ok := p.Value.(BatchPositionValueV1)
 		r.True(ok)
 
 		r.NotNil(batchPositionValue.Start)
@@ -46,11 +46,11 @@ func TestSetupInitialPosition(t *testing.T) {
 		// it does nothing
 		pipelineName := utils.TestCaseMd5Name(tt)
 
-		batchPositionValue := BatchPositionValue{
+		batchPositionValue := BatchPositionValueV1{
 			Start: utils.MySQLBinlogPosition{BinlogGTID: "abc:123"},
 		}
 
-		s, err := EncodeBatchPositionValue(&batchPositionValue)
+		s, err := EncodeBatchPositionValue(batchPositionValue)
 		r.NoError(err)
 		r.NoError(repo.Put(pipelineName, position_store.PositionMeta{Name: pipelineName, Stage: config.Batch}, s))
 
@@ -70,9 +70,35 @@ func TestSetupInitialPosition(t *testing.T) {
 		r.NoError(err)
 		r.True(exists)
 
-		newPositionValue, ok := p.Value.(BatchPositionValue)
+		newPositionValue, ok := p.Value.(BatchPositionValueV1)
 		r.True(ok)
 		r.Equal("abc:123", newPositionValue.Start.BinlogGTID)
 	})
 
+}
+
+func TestDecodeBatchPositionValueMigration(t *testing.T) {
+	r := require.New(t)
+
+	// encode v1beta1 and decode it, we should get v1
+	beta := BatchPositionValueV1Beta1{
+		Start: utils.MySQLBinlogPosition{
+			BinLogFileName: "test",
+			BinlogGTID:     "test_gtid",
+		},
+		TableStates: map[string]TableStats{
+			"test": {
+				Max: &TablePosition{Value: 1, Column: "a"},
+			},
+		},
+	}
+	s, err := myJson.MarshalToString(beta)
+	r.NoError(err)
+
+	v, err := DecodeBatchPositionValue(s)
+	r.NoError(err)
+	v1, ok := v.(BatchPositionValueV1)
+	r.True(ok)
+	r.Equal(SchemaVersionV1, v1.SchemaVersion)
+	r.Equal("a", v1.TableStates["test"].Max[0].Column)
 }
