@@ -47,8 +47,6 @@ func (m *GRPCClient) Configure(data map[string]interface{}) error {
 }
 
 func (m *GRPCClient) Filter(msg *core.Msg) (bool, error) {
-	// TODO optimize performance
-
 	pbmsg, err := encoding.EncodeMsgToPB(msg)
 	if err != nil {
 		return false, errors.Trace(err)
@@ -69,7 +67,9 @@ func (m *GRPCClient) Filter(msg *core.Msg) (bool, error) {
 		return false, errors.Trace(err)
 	}
 
-	*msg = *newMsg
+	// We only change the DmlMsg here.
+	// Meta data inside the message header keep untouched.
+	msg.DmlMsg = newMsg.DmlMsg
 	return rsp.GetContinueNext(), nil
 }
 
