@@ -64,6 +64,7 @@ to = ["c", "d"]
 
 `grpc-sidecar` Filter 会下载一个你指定的二进制文件并启动一个进程。你的这个程序需要实现一个 GRPC 的服务。一个 Golang 的例子在[这里](https://github.com/moiot/gravity-grpc-sidecar-filter-example)
 
+目前 `grpc-sidecar` 只支持修改 `core.Msg.DmlMsg` 里的内容。
 
 GRPC 协议的定义在[这里](https://github.com/moiot/gravity/blob/master/protocol/msgpb/message.proto)
 ```toml
