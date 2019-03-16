@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 
@@ -43,7 +44,11 @@ func TestFindMaxMinValueCompositePks(t *testing.T) {
 	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestScanColumnTableCompositePrimaryOutOfOrder, []string{"email", "name"})
 
 	maxEmail, ok := max[0].(sql.NullString)
+
+	fmt.Printf("maxEmail type: %v\n", reflect.TypeOf(max[0]))
+
 	r.True(ok)
+
 	r.Equal("email_99", maxEmail.String)
 
 	maxName, ok := max[1].(sql.NullString)
@@ -74,13 +79,16 @@ func TestFindMaxMinValueInt(t *testing.T) {
 		r.NoError(err)
 	}
 
+	r.NoError(mysql_test.InsertIntoTestTable(db, testDBName, mysql_test.TestTableName, map[string]interface{}{"id": 5000}))
+	r.NoError(mysql_test.InsertIntoTestTable(db, testDBName, mysql_test.TestTableName, map[string]interface{}{"id": 1410812506}))
+
 	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestTableName, []string{"id"})
 
-	maxVal, ok := max[0].(uint32)
+	maxVal, ok := max[0].(int64)
+	r.True(ok)
+	r.EqualValues(1410812506, maxVal)
 
-	r.EqualValues(99, maxVal)
-
-	minVal, ok := min[0].(uint32)
+	minVal, ok := min[0].(int64)
 	r.True(ok)
 
 	r.EqualValues(1, minVal)
