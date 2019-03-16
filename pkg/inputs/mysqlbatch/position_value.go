@@ -142,7 +142,7 @@ func (p *TablePosition) UnmarshalJSON(value []byte) error {
 	case PlainString:
 		p.Value = pMapString["value"]
 	case PlainInt:
-		v, err := strconv.Atoi(pMapString["value"])
+		v, err := strconv.ParseInt(pMapString["value"], 10, 64)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -159,7 +159,7 @@ func (p *TablePosition) UnmarshalJSON(value []byte) error {
 		// s := []byte(pMapString["value"])
 		p.Value = pMapString["value"]
 	case SQLNullInt64:
-		v, err := strconv.Atoi(pMapString["value"])
+		v, err := strconv.ParseInt(pMapString["value"], 10, 64)
 		if err != nil {
 			return errors.Trace(err)
 		}
