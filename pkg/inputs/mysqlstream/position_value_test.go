@@ -69,10 +69,6 @@ func TestSetupInitialPosition(t *testing.T) {
 			// it should use the start spec as the start position and current position.
 			//
 			pipelineName := utils.TestCaseMd5Name(ttt)
-			startGTID := "abc:123"
-			currentGTID := "abc:789"
-			err := initRepo(repo, pipelineName, startGTID, currentGTID)
-			r.NoError(err)
 
 			cache, err := position_store.NewPositionCache(
 				pipelineName,
@@ -83,9 +79,9 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.NoError(err)
 
 			db := mysql_test.MustSetupSourceDB(pipelineName)
-			newGTID := "abc:999"
+			gtid := "abc:999"
 			specStart := utils.MySQLBinlogPosition{
-				BinlogGTID: newGTID,
+				BinlogGTID: gtid,
 			}
 
 			err = SetupInitialPosition(db, cache, &specStart)
@@ -97,8 +93,8 @@ func TestSetupInitialPosition(t *testing.T) {
 			newPositionValue, ok := p.Value.(helper.BinlogPositionsValue)
 			r.True(ok)
 
-			r.Equal(newGTID, newPositionValue.StartPosition.BinlogGTID)
-			r.Equal(newGTID, newPositionValue.CurrentPosition.BinlogGTID)
+			r.Equal(gtid, newPositionValue.StartPosition.BinlogGTID)
+			r.Equal(gtid, newPositionValue.CurrentPosition.BinlogGTID)
 		})
 	})
 
