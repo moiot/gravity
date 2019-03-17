@@ -39,7 +39,7 @@ const (
 
 var setupSqls = []string{
 	fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
-  id int(11) unsigned NOT NULL,
+  id bigint(20) NOT NULL,
   name varchar(256) DEFAULT NULL,
   email varchar(30) COLLATE utf8mb4_bin NOT NULL DEFAULT 'default_email',
   ts TIMESTAMP,

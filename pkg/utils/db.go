@@ -139,10 +139,6 @@ var nullString = reflect.TypeOf(sql.NullString{})
 func GetScanType(columnType *sql.ColumnType) reflect.Type {
 	if IsColumnString(columnType) {
 		return reflect.TypeOf(sql.NullString{})
-	} else if columnType.DatabaseTypeName() == "DECIMAL" {
-		return nullString
-	} else if columnType.DatabaseTypeName() == "BIGINT" { // go-mysql can't handle unsigned nullable bigint
-		return nullString
 	} else {
 		return columnType.ScanType()
 	}
@@ -204,7 +200,7 @@ func ScanGeneralRowsWithDataPtrs(rows *sql.Rows, columnTypes []*sql.ColumnType, 
 func ScanGeneralRows(rows *sql.Rows, columnTypes []*sql.ColumnType) ([]interface{}, error) {
 	vPtrs := make([]interface{}, len(columnTypes))
 
-	for i, _ := range columnTypes {
+	for i := range columnTypes {
 		scanType := GetScanType(columnTypes[i])
 		vptr := reflect.New(scanType)
 		vPtrs[i] = vptr.Interface()
@@ -214,7 +210,7 @@ func ScanGeneralRows(rows *sql.Rows, columnTypes []*sql.ColumnType) ([]interface
 	}
 
 	// copy sql.RawBytes from db to here
-	for i, _ := range columnTypes {
+	for i := range columnTypes {
 		p, err := GetScanPtrSafe(i, columnTypes, vPtrs)
 		if err != nil {
 			return nil, errors.Trace(err)
