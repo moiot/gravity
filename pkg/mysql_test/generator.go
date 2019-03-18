@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS ` + "`%s`.`%s`" + `(
 id BIGINT unsigned NOT NULL,
 i INT DEFAULT 0,
 ui INT unsigned,
+ti  tinyint(4) DEFAULT NULL,
 de decimal(11, 3),
 fl float(11,3) NOT NULL,
 do double(25, 3),
