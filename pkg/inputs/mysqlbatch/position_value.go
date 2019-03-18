@@ -53,6 +53,12 @@ func (p TablePosition) MapString() (map[string]string, error) {
 	case string:
 		pMapString["value"] = v
 		pMapString["type"] = PlainString
+	case uint:
+		pMapString["value"] = strconv.FormatUint(uint64(v), 10)
+		pMapString["type"] = PlainUInt
+	case uint8:
+		pMapString["value"] = strconv.FormatUint(uint64(v), 10)
+		pMapString["type"] = PlainUInt
 	case uint16:
 		pMapString["value"] = strconv.FormatUint(uint64(v), 10)
 		pMapString["type"] = PlainUInt
@@ -63,6 +69,9 @@ func (p TablePosition) MapString() (map[string]string, error) {
 		pMapString["value"] = strconv.FormatUint(v, 10)
 		pMapString["type"] = PlainUInt
 	case int:
+		pMapString["value"] = strconv.FormatInt(int64(v), 10)
+		pMapString["type"] = PlainInt
+	case int8:
 		pMapString["value"] = strconv.FormatInt(int64(v), 10)
 		pMapString["type"] = PlainInt
 	case int16:
