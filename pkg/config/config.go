@@ -194,37 +194,19 @@ func (c *Config) ParseCmd(arguments []string) error {
 
 // ConfigFromFile loads config from file.
 func (c *Config) ConfigFromFile(path string) error {
-	old := PipelineConfigV2{}
 	if strings.HasSuffix(path, ".toml") {
-		_, err := toml.DecodeFile(path, &old)
+		_, err := toml.DecodeFile(path, &c.PipelineConfig)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		if old.IsV3() {
-			_, err := toml.DecodeFile(path, &c.PipelineConfig)
-			if err != nil {
-				return errors.Trace(err)
-			}
-		} else {
-			c.PipelineConfig = old.ToV3()
-		}
-
 	} else if strings.HasSuffix(path, ".json") {
 		content, err := ioutil.ReadFile(path)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		err = json.Unmarshal(content, &old)
+		err = json.Unmarshal(content, &c.PipelineConfig)
 		if err != nil {
 			return errors.Trace(err)
-		}
-		if old.IsV3() {
-			err = json.Unmarshal(content, &c.PipelineConfig)
-			if err != nil {
-				return errors.Trace(err)
-			}
-		} else {
-			c.PipelineConfig = old.ToV3()
 		}
 	} else {
 		return errors.Errorf("unrecognized path %s", path)
