@@ -12,7 +12,7 @@ Currently, Gravity supports the following Input plugins:
 It requirements for the source MySQL database:
 
 - The binlog in the GTID mode is enabled.
-- The DRC account is created and the replication related privilege and all the DRC privileges are granted.
+- The `_gravity` account is created and the replication related privilege are granted.
 - The corresponding tables in the source and target MySQL clusters are created.
 
 MySQL configuration items are as follows:
@@ -21,6 +21,7 @@ MySQL configuration items are as follows:
 [mysqld]
 server_id=4
 log_bin=mysql-bin
+enforce-gtid-consistency=ON 
 gtid-mode=ON
 binlog_format=ROW
 ```
