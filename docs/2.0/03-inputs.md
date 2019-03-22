@@ -19,6 +19,7 @@ MySQL 配置项如下所示
 [mysqld]
 server_id=4
 log_bin=mysql-bin
+enforce-gtid-consistency=ON
 gtid-mode=ON
 binlog_format=ROW
 ```
