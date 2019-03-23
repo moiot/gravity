@@ -98,7 +98,7 @@ func (engine *mysqlReplaceEngine) Execute(msgBatch []*core.Msg, targetTableDef *
 	if !engine.cfg.TagInternalTxn {
 		result, err := engine.db.Exec(query, args...)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.Annotatef(err, "query: %v, args: %v", query, args)
 		}
 
 		logOperation(msgBatch, query, args, result)

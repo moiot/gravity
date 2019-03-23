@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/mgo.v2/bson"
+
 	"github.com/juju/errors"
 	"github.com/sirupsen/logrus"
 
@@ -166,6 +168,9 @@ func adjustArgs(arg interface{}, column *schema_store.Column) interface{} {
 		if ok && !t.IsZero() {
 			return t.Format("2006-01-02 15:04:05.999999999")
 		}
+	}
+	if bid, ok := arg.(bson.ObjectId); ok {
+		return bid.Hex()
 	}
 	return arg
 }
