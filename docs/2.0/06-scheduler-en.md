@@ -20,8 +20,8 @@ Currently, DRC supports only one Scheduler plugin:
 type = "batch-table-scheduler"
 
 [scheduler.config]
-# "1" by default
-nr-worker = 1
+# "100" by default
+nr-worker = 100
 
 # "1" by default
 batch-size = 1

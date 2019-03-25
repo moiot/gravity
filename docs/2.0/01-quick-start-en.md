@@ -49,7 +49,7 @@ You can choose to synchronize data between two MySQL clusters or from MySQL to K
         ```toml
         # name (required)
         name = "mysql2mysqlDemo"
-
+        version = "1.0"
         #
         # The definition of Input. `mysqlbinlog` is used for this definition.
         #

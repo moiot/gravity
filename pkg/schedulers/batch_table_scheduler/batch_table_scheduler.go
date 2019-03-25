@@ -26,7 +26,7 @@ const (
 )
 
 var DefaultConfig = map[string]interface{}{
-	"nr-worker":           1,
+	"nr-worker":           100,
 	"batch-size":          1,
 	"queue-size":          1024,
 	"sliding-window-size": 1024 * 10,
