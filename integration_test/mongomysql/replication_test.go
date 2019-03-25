@@ -62,7 +62,7 @@ func TestMongo2MysqlReplication(t *testing.T) {
 	operations := 100
 	collection := db.C(collectionName)
 	for i := 0; i < operations; i++ {
-		r.NoError(collection.Insert(&bson.M{"name": fmt.Sprint(i)}))
+		r.NoError(collection.Insert(bson.M{"name": fmt.Sprint(i)}))
 	}
 
 	server, err := app.NewServer(pipelineConfig)
@@ -77,9 +77,11 @@ func TestMongo2MysqlReplication(t *testing.T) {
 		}
 	}
 
-	operations2 := 100
-	for i := 0; i < operations2; i++ {
-		r.NoError(collection.Insert(&bson.M{"name": fmt.Sprint(i)}))
+	operations2 := 10
+	for i := operations; i < operations+operations2; i++ {
+		doc := bson.M{"name": fmt.Sprint(i)}
+		r.NoError(collection.Insert(doc))
+		r.NoError(collection.Remove(doc))
 	}
 
 	r.NoError(server.Input.SendDeadSignal())
@@ -89,5 +91,5 @@ func TestMongo2MysqlReplication(t *testing.T) {
 	row := targetDB.QueryRow(fmt.Sprintf("select count(1) from `%s`.`%s`", db.Name, collectionName))
 	var cnt int
 	r.NoError(row.Scan(&cnt))
-	r.Equal(operations+operations2, cnt)
+	r.Equal(operations, cnt)
 }

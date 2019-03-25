@@ -195,6 +195,7 @@ func (tailer *OplogTailer) Run() {
 					data = op.Row
 				} else if op.IsDelete() {
 					o = core.Delete
+					data = make(map[string]interface{})
 				}
 				msg.Type = core.MsgDML
 				msg.DmlMsg = &core.DMLMsg{
