@@ -169,6 +169,7 @@ func adjustArgs(arg interface{}, column *schema_store.Column) interface{} {
 			return t.Format("2006-01-02 15:04:05.999999999")
 		}
 	}
+	// mysql driver don't know how to handle object id
 	if bid, ok := arg.(bson.ObjectId); ok {
 		return bid.Hex()
 	}
