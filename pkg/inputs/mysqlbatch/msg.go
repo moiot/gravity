@@ -25,7 +25,7 @@ func NewMsg(
 	columnTypes []*sql.ColumnType,
 	sourceTableDef *schema_store.Table,
 	callbackFunc core.AfterMsgCommitFunc,
-	position TablePosition,
+	positions []TablePosition,
 	scanTime time.Time) *core.Msg {
 
 	columnDataMap := mysql.SQLDataPtrs2Val(rowPtrs, columnTypes)
@@ -60,7 +60,7 @@ func NewMsg(
 	msg.OutputStreamKey = core.NoDependencyOutput
 	msg.Done = make(chan struct{})
 	msg.AfterCommitCallback = callbackFunc
-	msg.InputContext = position
+	msg.InputContext = positions
 	msg.Phase = core.Phase{
 		EnterInput: scanTime,
 	}

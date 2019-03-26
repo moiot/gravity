@@ -31,7 +31,7 @@ func TestSchemaStoreUtils(t *testing.T) {
 		assert.Equal("id", table.Columns[0].Name)
 		assert.Equal(0, table.Columns[0].Idx)
 		assert.False(table.Columns[0].IsNullable)
-		assert.True(table.Columns[0].IsUnsigned)
+		assert.False(table.Columns[0].IsUnsigned)
 		assert.True(table.Columns[0].IsPrimaryKey)
 		assert.Equal("id", table.PrimaryKeyColumns[0].Name)
 		assert.Equal("id", table.UniqueKeyColumnMap["PRIMARY"][0])

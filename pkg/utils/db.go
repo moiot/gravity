@@ -27,7 +27,7 @@ func getIndexRowsName(db *sql.DB, statement string) ([]string, error) {
 
 	var result []string
 	for _, r := range resultRows {
-		result = append(result, r[4].String)
+		result = append(result, r[6].String)
 	}
 	return result, nil
 }
@@ -59,11 +59,19 @@ func GetIndexRows(db *sql.DB, statement string) ([][]sql.NullString, error) {
 	}
 
 	/*
-			+-------------+------------+----------+--------------+---------+
-		| Table       | Non_unique | Key_name | Seq_in_index | Column_name |...
-		+-------------+------------+----------+--------------+-------------+
-		| luoxia_0003 |          0 | PRIMARY  |            1 | uid         |...
-		+-------------+------------+----------+--------------+-------------+
+		*************************** 1. row ***************************
+		           CONSTRAINT_CATALOG: def
+		            CONSTRAINT_SCHEMA: _gravity
+		              CONSTRAINT_NAME: PRIMARY
+		                TABLE_CATALOG: def
+		                 TABLE_SCHEMA: _gravity
+		                   TABLE_NAME: _gravity_txn_tags
+		                  COLUMN_NAME: id
+		             ORDINAL_POSITION: 1
+		POSITION_IN_UNIQUE_CONSTRAINT: NULL
+		      REFERENCED_TABLE_SCHEMA: NULL
+		        REFERENCED_TABLE_NAME: NULL
+		       REFERENCED_COLUMN_NAME: NULL
 	*/
 	var resultRows [][]sql.NullString
 
@@ -84,12 +92,13 @@ func GetIndexRows(db *sql.DB, statement string) ([][]sql.NullString, error) {
 }
 
 func GetPrimaryKeys(db *sql.DB, schemaName string, tableName string) ([]string, error) {
-	statement := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s` WHERE Key_name = 'PRIMARY'", schemaName, tableName)
+
+	statement := fmt.Sprintf("SELECT * FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND CONSTRAINT_NAME = 'PRIMARY' ORDER BY ORDINAL_POSITION", schemaName, tableName)
 	return getIndexRowsName(db, statement)
 }
 
 func GetUniqueIndexesWithoutPks(db *sql.DB, schemaName string, tableName string) ([]string, error) {
-	statement := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s` WHERE Key_name != 'PRIMARY' AND Non_unique = 0", schemaName, tableName)
+	statement := fmt.Sprintf("SELECT * FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s' AND CONSTRAINT_NAME != 'PRIMARY' AND POSITION_IN_UNIQUE_CONSTRAINT IS NULL ORDER BY ORDINAL_POSITION", schemaName, tableName)
 	return getIndexRowsName(db, statement)
 }
 
@@ -130,10 +139,6 @@ var nullString = reflect.TypeOf(sql.NullString{})
 func GetScanType(columnType *sql.ColumnType) reflect.Type {
 	if IsColumnString(columnType) {
 		return reflect.TypeOf(sql.NullString{})
-	} else if columnType.DatabaseTypeName() == "DECIMAL" {
-		return nullString
-	} else if columnType.DatabaseTypeName() == "BIGINT" { // go-mysql can't handle unsigned nullable bigint
-		return nullString
 	} else {
 		return columnType.ScanType()
 	}
@@ -173,10 +178,29 @@ func ScanGeneralRowsWithDataPtrs(rows *sql.Rows, columnTypes []*sql.ColumnType, 
 	return vPtrs, nil
 }
 
+// func ScanGeneraRowWithDataPtrs(row *sql.Row, columnTypes []*sql.ColumnType, vPtrs []interface{}) ([]interface{}, bool, error) {
+// 	if err := row.Scan(vPtrs...); err != nil {
+// 		if err == sql.ErrNoRows {
+// 			return nil, false, nil
+// 		}
+// 		return nil, false, errors.Trace(err)
+// 	}
+//
+// 	// copy sql.RawBytes from db to here
+// 	for i, _ := range columnTypes {
+// 		p, err := GetScanPtrSafe(i, columnTypes, vPtrs)
+// 		if err != nil {
+// 			return nil, true, errors.Trace(err)
+// 		}
+// 		vPtrs[i] = p
+// 	}
+// 	return vPtrs, true, nil
+// }
+
 func ScanGeneralRows(rows *sql.Rows, columnTypes []*sql.ColumnType) ([]interface{}, error) {
 	vPtrs := make([]interface{}, len(columnTypes))
 
-	for i, _ := range columnTypes {
+	for i := range columnTypes {
 		scanType := GetScanType(columnTypes[i])
 		vptr := reflect.New(scanType)
 		vPtrs[i] = vptr.Interface()
@@ -186,7 +210,7 @@ func ScanGeneralRows(rows *sql.Rows, columnTypes []*sql.ColumnType) ([]interface
 	}
 
 	// copy sql.RawBytes from db to here
-	for i, _ := range columnTypes {
+	for i := range columnTypes {
 		p, err := GetScanPtrSafe(i, columnTypes, vPtrs)
 		if err != nil {
 			return nil, errors.Trace(err)

@@ -135,19 +135,19 @@ func DeleteEmptyTables(db *sql.DB, tables []*schema_store.Table, tableConfigs []
 func InitializePositionAndDeleteScannedTable(
 	db *sql.DB,
 	positionCache position_store.PositionCacheInterface,
-	scanColumns []string,
+	scanColumnsArray [][]string,
 	estimatedRowCount []int64,
 	tables []*schema_store.Table,
-	tableConfigs []TableConfig) ([]*schema_store.Table, []TableConfig, []string, []int64, error) {
+	tableConfigs []TableConfig) ([]*schema_store.Table, []TableConfig, [][]string, []int64, error) {
 
 	var retTables []*schema_store.Table
 	var retTableConfigs []TableConfig
-	var retScanColumns []string
+	var retScanColumnsArray [][]string
 	var retEstimatedRowCount []int64
 
 	for i, t := range tables {
 		// Initialize table position and delete table that finished scan.
-		finished, err := InitTablePosition(db, positionCache, t, scanColumns[i], estimatedRowCount[i])
+		finished, err := InitTablePosition(db, positionCache, t, scanColumnsArray[i], estimatedRowCount[i])
 		if err != nil {
 			return nil, nil, nil, nil, errors.Trace(err)
 		}
@@ -155,9 +155,9 @@ func InitializePositionAndDeleteScannedTable(
 		if !finished {
 			retTables = append(retTables, tables[i])
 			retTableConfigs = append(retTableConfigs, tableConfigs[i])
-			retScanColumns = append(retScanColumns, scanColumns[i])
+			retScanColumnsArray = append(retScanColumnsArray, scanColumnsArray[i])
 			retEstimatedRowCount = append(retEstimatedRowCount, estimatedRowCount[i])
 		}
 	}
-	return retTables, retTableConfigs, retScanColumns, retEstimatedRowCount, nil
+	return retTables, retTableConfigs, retScanColumnsArray, retEstimatedRowCount, nil
 }

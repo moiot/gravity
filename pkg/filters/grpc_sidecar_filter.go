@@ -27,6 +27,10 @@ import (
 	"github.com/moiot/gravity/pkg/utils"
 )
 
+//
+// grpc-sidecar filter use grpc service to manipulate the core.Msg.
+// Only DmlMsg modificaiton is supported right now.
+//
 // [[filters]]
 // type = "grpc-sidecar"
 // [filters.config]

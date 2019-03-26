@@ -19,21 +19,28 @@ func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCache
 	}
 
 	if !exist {
-		dbUtil := utils.NewMySQLDB(db)
-		binlogFilePos, gtid, err := dbUtil.GetMasterStatus()
-		if err != nil {
-			return errors.Trace(err)
-		}
+		binlogPositionValue := helper.BinlogPositionsValue{}
 
-		p := utils.MySQLBinlogPosition{
-			BinLogFileName: binlogFilePos.Name,
-			BinLogFilePos:  binlogFilePos.Pos,
-			BinlogGTID:     gtid.String(),
-		}
-		// Do not initialize start position.
-		// StartPosition is a user configured parameter.
-		binlogPositionValue := helper.BinlogPositionsValue{
-			CurrentPosition: &p,
+		if startPositionSpec != nil {
+			start := *startPositionSpec
+			current := *startPositionSpec
+			binlogPositionValue.StartPosition = &start
+			binlogPositionValue.CurrentPosition = &current
+		} else {
+			dbUtil := utils.NewMySQLDB(db)
+			binlogFilePos, gtid, err := dbUtil.GetMasterStatus()
+			if err != nil {
+				return errors.Trace(err)
+			}
+
+			p := utils.MySQLBinlogPosition{
+				BinLogFileName: binlogFilePos.Name,
+				BinLogFilePos:  binlogFilePos.Pos,
+				BinlogGTID:     gtid.String(),
+			}
+			// Do not initialize start position.
+			// StartPosition is a user configured parameter.
+			binlogPositionValue.CurrentPosition = &p
 		}
 
 		position := position_store.Position{

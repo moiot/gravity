@@ -11,24 +11,33 @@ import (
 const TableMatcherName = "match-table"
 
 type TableMatcher struct {
-	TableGlob string
+	TableGlob []string
 }
 
 func (m *TableMatcher) Configure(data interface{}) error {
-	if arg, ok := data.(string); !ok {
-		return errors.Errorf("match-table only receives a string, you provided: %v", data)
-	} else {
-		m.TableGlob = arg
-		return nil
+	switch d := data.(type) {
+	case string:
+		m.TableGlob = append(m.TableGlob, d)
+	case []interface{}:
+		for _, o := range d {
+			s := o.(string)
+			m.TableGlob = append(m.TableGlob, s)
+		}
+	case []string:
+		m.TableGlob = append(m.TableGlob, d...)
+	default:
+		return errors.Errorf("match-table only accept string or string slice, actual: %v", data)
 	}
+	return nil
 }
 
 func (m *TableMatcher) Match(msg *core.Msg) bool {
-	if utils.Glob(m.TableGlob, msg.Table) {
-		return true
-	} else {
-		return false
+	for _, g := range m.TableGlob {
+		if utils.Glob(g, msg.Table) {
+			return true
+		}
 	}
+	return false
 }
 
 type tableMatcherFactoryType struct {

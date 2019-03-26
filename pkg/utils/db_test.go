@@ -78,18 +78,36 @@ func TestDBUtils(t *testing.T) {
 		dbName := fmt.Sprintf("%s_%d", testDBNameBase, 2)
 		db := mysql_test.MustSetupSourceDB(dbName)
 
-		pks, err := GetPrimaryKeys(db, dbName, mysql_test.TestScanColumnTableMultiPrimary)
+		pks, err := GetPrimaryKeys(db, dbName, mysql_test.TestScanColumnTableCompositePrimary)
 		assert.Nil(err)
-		assert.Equal(pks, []string{"id", "name"})
+		assert.Equal([]string{"id", "name"}, pks)
+	})
+
+	t.Run("GetPrimaryKeys with unordered pk", func(tt *testing.T) {
+		dbName := fmt.Sprintf("%s_%d", testDBNameBase, 2)
+		db := mysql_test.MustSetupSourceDB(dbName)
+
+		pks, err := GetPrimaryKeys(db, dbName, mysql_test.TestScanColumnTableCompositePrimaryOutOfOrder)
+		assert.Nil(err)
+		assert.Equal([]string{"email", "name"}, pks)
 	})
 
 	t.Run("GetUniqueIndexesWithoutPks", func(tt *testing.T) {
-		dbName := fmt.Sprintf("%s_%d", testDBNameBase, 3)
+		dbName := TestCaseMd5Name(tt)
 		db := mysql_test.MustSetupSourceDB(dbName)
 
 		keys, err := GetUniqueIndexesWithoutPks(db, dbName, mysql_test.TestScanColumnTableUniqueIndexEmailString)
 		assert.Nil(err)
-		assert.Equal(keys, []string{"email"})
+		assert.Equal([]string{"email"}, keys)
+	})
+
+	t.Run("GetUniqueIndexesWithoutPks with multi key", func(tt *testing.T) {
+		dbName := fmt.Sprintf("%s_%d", testDBNameBase, 3)
+		db := mysql_test.MustSetupSourceDB(dbName)
+
+		keys, err := GetUniqueIndexesWithoutPks(db, dbName, mysql_test.TestScanColumnTableCompositeUniqueKey)
+		assert.Nil(err)
+		assert.Equal([]string{"ts", "id"}, keys)
 	})
 
 	t.Run("EstimateRowsCount", func(tt *testing.T) {

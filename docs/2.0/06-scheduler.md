@@ -13,8 +13,8 @@
 type = "batch-table-scheduler"
 
 [scheduler.config]
-# 默认值 1
-nr-worker = 1
+# 默认值 100
+nr-worker = 100
 
 # 默认值 1
 batch-size = 1

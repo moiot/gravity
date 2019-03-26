@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS ` + "`%s`.`%s`" + `(
 id BIGINT unsigned NOT NULL,
 i INT DEFAULT 0,
 ui INT unsigned,
+ti  tinyint(4) DEFAULT NULL,
 de decimal(11, 3),
 fl float(11,3) NOT NULL,
 do double(25, 3),
@@ -149,8 +150,8 @@ func (g *Generator) TestChecksum() error {
 	var c1, c2, tableName string
 	for _, tableName = range g.tableNames {
 		for i := 0; i < 5; i++ {
-			c1 = tableChecksum(g.SourceDB, g.SourceSchema, tableName)
-			c2 = tableChecksum(g.TargetDB, g.TargetSchema, tableName)
+			c1 = TableChecksum(g.SourceDB, g.SourceSchema, tableName)
+			c2 = TableChecksum(g.TargetDB, g.TargetSchema, tableName)
 			if c1 != c2 {
 				time.Sleep(time.Second)
 			} else {
@@ -247,7 +248,7 @@ func (g *Generator) execArbitraryTxn(ctx context.Context, idx int, r *rand.Rand)
 	}
 }
 
-func tableChecksum(db *sql.DB, dbName string, tableName string) string {
+func TableChecksum(db *sql.DB, dbName string, tableName string) string {
 	var t string
 	var checksum string
 
@@ -264,8 +265,8 @@ func TestChecksum(t *testing.T, tableNames []string, sourceDB *sql.DB, sourceDBN
 	assertions := assert.New(t)
 
 	for _, tableName := range tableNames {
-		c1 := tableChecksum(sourceDB, sourceDBName, tableName)
-		c2 := tableChecksum(targetDB, targetDBName, tableName)
+		c1 := TableChecksum(sourceDB, sourceDBName, tableName)
+		c2 := TableChecksum(targetDB, targetDBName, tableName)
 		if c1 != c2 {
 			assertions.FailNowf("checksum not equal", "sourceDBName: %v, targetDBName: %v, tableName: %v, source checksum: %v, target checksum: %v",
 				sourceDBName, targetDBName, tableName, c1, c2)

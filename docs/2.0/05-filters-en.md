@@ -88,6 +88,7 @@ The `grpc-sidecar` Filter will download the binary you specified and run the bin
 should start a GRPC server that talks with filter plugin's protocol. An example of the filter
 implemented in Golang can be found [here](https://github.com/moiot/gravity-grpc-sidecar-filter-example)
 
+`grpc-sidecar` only supports the manipulation of `core.Msg.DmlMsg` right now.
 
 The protocol of the GRPC plugin can be found [here](https://github.com/moiot/gravity/blob/master/protocol/msgpb/message.proto)
 ```toml

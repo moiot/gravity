@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,41 +50,42 @@ func (tableScanner *TableScanner) Start() error {
 				if !exists {
 					return
 				}
+				fullTableName := utils.TableIdentity(work.TableDef.Schema, work.TableDef.Name)
 
 				err := tableScanner.initTableDDL(work.TableDef)
 				if err != nil {
 					log.Fatalf("[TableScanner] initTableDDL for %s.%s, err: %s", work.TableDef.Schema, work.TableDef.Name, errors.ErrorStack(err))
 				}
 
-				max, min, exists, err := GetMaxMin(tableScanner.positionCache, utils.TableIdentity(work.TableDef.Schema, work.TableDef.Name))
+				max, min, exists, err := GetMaxMin(tableScanner.positionCache, fullTableName)
 				if err != nil {
-					log.Fatalf("[TableScanner] InitTablePosition failed: %v", errors.ErrorStack(err))
+					log.Fatalf("[TableScanner] GetMaxMin failed: %v", errors.ErrorStack(err))
 				}
+
 				if !exists {
-					log.Fatalf("[table_scanner] failed to find max min, table: %v", utils.TableIdentity(work.TableDef.Schema, work.TableDef.Name))
+					log.Fatalf("[table_scanner] GetMaxMin not exists table: %v", fullTableName)
 				}
 
-				log.Infof("positionCache.GetMaxMin: max value type: %v, max %v; min value type: %v, min %v", reflect.TypeOf(max.Value), max, reflect.TypeOf(min.Value), min)
-				scanColumn := max.Column
+				scanColumns := work.ScanColumns
 
-				// If the scan column is *, then we do a full dump of the table
-				if scanColumn == "*" {
+				// If no scan column defined, we do a full dump of the table
+				if IsScanColumnsForDump(scanColumns) {
 					tableScanner.FindAll(tableScanner.db, work.TableDef, work.TableConfig)
 				} else {
 					tableScanner.LoopInBatch(
 						tableScanner.db, work.TableDef,
-						work.TableConfig, scanColumn,
+						work.TableConfig, scanColumns,
 						max,
 						min,
 						tableScanner.cfg.TableScanBatch)
 
 					if tableScanner.ctx.Err() == nil {
-						log.Infof("[table_worker] LoopInBatch done with table %s", utils.TableIdentity(work.TableDef.Schema, work.TableDef.Name))
+						log.Infof("[table_worker] LoopInBatch done with table %s", fullTableName)
 					} else if tableScanner.ctx.Err() == context.Canceled {
 						log.Infof("[TableScanner] LoopInBatch canceled")
 						return
 					} else {
-						log.Fatalf("[TableScanner] LoopInBatch unknow case,err: %v", tableScanner.ctx.Err())
+						log.Fatalf("[TableScanner] LoopInBatch unknown case,err: %v", tableScanner.ctx.Err())
 					}
 				}
 
@@ -101,11 +103,25 @@ func (tableScanner *TableScanner) Wait() {
 	tableScanner.wg.Wait()
 }
 
-func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColumn string) (interface{}, interface{}) {
-	var max interface{}
-	var min interface{}
+func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColumns []string) ([]interface{}, []interface{}) {
+	retMax := make([]interface{}, len(scanColumns))
+	retMin := make([]interface{}, len(scanColumns))
 
-	maxStatement := fmt.Sprintf("SELECT MAX(`%s`) FROM `%s`.`%s`", scanColumn, dbName, tableName)
+	columnsString := strings.Join(scanColumns, ", ")
+	var descOrderString string
+	var ascOrderString string
+
+	ascOderStrings := make([]string, len(scanColumns))
+	descOrderStrings := make([]string, len(scanColumns))
+	for i := range scanColumns {
+		ascOderStrings[i] = fmt.Sprintf("%s ASC", scanColumns[i])
+		descOrderStrings[i] = fmt.Sprintf("%s DESC", scanColumns[i])
+	}
+
+	descOrderString = strings.Join(descOrderStrings, ",")
+	ascOrderString = strings.Join(ascOderStrings, ",")
+
+	maxStatement := fmt.Sprintf("SELECT %s FROM `%s`.`%s` ORDER BY %s LIMIT 1", columnsString, dbName, tableName, descOrderString)
 	log.Infof("[FindMaxMinValueFromDB] statement: %s", maxStatement)
 
 	maxRowPtrs, err := utils.QueryGeneralRowsDataWithSQL(db, maxStatement)
@@ -113,56 +129,67 @@ func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColu
 		log.Fatalf("[FindMaxMinValueFromDB] failed to QueryGeneralRowsDataWithSQL, err: %v", errors.ErrorStack(err))
 	}
 
-	max = reflect.ValueOf(maxRowPtrs[0][0]).Elem().Interface()
+	for i := range scanColumns {
+		retMax[i] = reflect.ValueOf(maxRowPtrs[0][i]).Elem().Interface()
+	}
 
-	minStatement := fmt.Sprintf("SELECT MIN(`%s`) FROM `%s`.`%s`", scanColumn, dbName, tableName)
+	minStatement := fmt.Sprintf("SELECT %s FROM `%s`.`%s` ORDER BY %s LIMIT 1", columnsString, dbName, tableName, ascOrderString)
 	log.Infof("[FindMaxMinValueFromDB] statement: %s", minStatement)
 	minRowPtrs, err := utils.QueryGeneralRowsDataWithSQL(db, minStatement)
 	if err != nil {
 		log.Fatalf("[FindMaxMinValueFromDB] failed to QueryGeneralRowsDataWithSQL, err: %v", errors.ErrorStack(err))
 	}
 
-	min = reflect.ValueOf(minRowPtrs[0][0]).Elem().Interface()
+	for i := range scanColumns {
+		retMin[i] = reflect.ValueOf(minRowPtrs[0][i]).Elem().Interface()
+	}
 
-	return max, min
+	return retMax, retMin
 }
 
 // LoopInBatch will iterate the table by sql like this:
 // SELECT * FROM a WHERE some_key > some_value LIMIT 10000
 // It will get the min, max value of the column and iterate batch by batch
-func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store.Table, tableConfig *TableConfig, scanColumn string, max TablePosition, min TablePosition, batch int) {
+func (tableScanner *TableScanner) LoopInBatch(
+	db *sql.DB,
+	tableDef *schema_store.Table,
+	tableConfig *TableConfig,
+	scanColumns []string,
+	max []TablePosition,
+	min []TablePosition,
+	batch int) {
 	pipelineName := tableScanner.pipelineName
 
 	if batch <= 0 {
 		log.Fatalf("[LoopInBatch] batch size is 0")
 	}
 
-	maxMapString, err := max.MapString()
-	if err != nil {
-		log.Fatalf("[LoopInBatch] failed to get maxString, max: %v, err: %v", max, errors.ErrorStack(err))
-	}
 	batchIdx := 0
-	firstLoop := true
-	maxReached := false
-	var statement string
 
-	currentPosition, exists, err := GetCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name))
+	fullTableName := utils.TableIdentity(tableDef.Schema, tableDef.Name)
+
+	currentPositions, done, exists, err := GetCurrentPos(tableScanner.positionCache, fullTableName)
 	if err != nil {
 		log.Fatalf("[LoopInBatch] failed to get current pos: %v", errors.ErrorStack(err))
 	}
 
 	if !exists {
-		currentPosition = min
+		currentPositions = min
 	} else {
-		if mysql.MySQLDataEquals(currentPosition.Value, max.Value) {
-			log.Infof("[LoopInBatch] already scanned: %v", utils.TableIdentity(tableDef.Schema, tableDef.Name))
+		if done {
+			log.Infof("[LoopInBatch] already scanned: %v", fullTableName)
 			return
 		}
 	}
 
-	log.Infof("[LoopInBatch] prepare current: %v", currentPosition)
+	log.Infof("[LoopInBatch] prepare current: %+v", currentPositions)
 
-	currentMinValue := currentPosition.Value
+	currentMinValues := make([]interface{}, len(currentPositions))
+	maxValues := make([]interface{}, len(currentPositions))
+	for i, p := range currentPositions {
+		currentMinValues[i] = p.Value
+		maxValues[i] = max[i].Value
+	}
 	resultCount := 0
 
 	columnTypes, err := GetTableColumnTypes(db, tableDef.Schema, tableDef.Name)
@@ -170,26 +197,34 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 		log.Fatalf("[LoopInBatch] failed to get columnType, err: %v", errors.ErrorStack(err))
 	}
 
-	scanIdx, err := GetScanIdx(columnTypes, scanColumn)
-	if err != nil {
-		log.Fatalf("[LoopInBatch] failed to get scanIdx, err: %v", errors.ErrorStack(err))
+	scanIndexes := make([]int, len(scanColumns))
+	for i, c := range scanColumns {
+		scanIndexes[i], err = GetScanIdx(columnTypes, c)
+		if err != nil {
+			log.Fatalf("[LoopInBatch] failed to get scanIdx, err: %v", errors.ErrorStack(err))
+		}
 	}
 
 	rowsBatchDataPtrs := newBatchDataPtrs(columnTypes, batch)
 
+	// pivotIndex starts with the right most index column.
+	// NextBatchStartPoint will adjust the pivotIndex
+	pivotIndex := len(scanColumns) - 1
+
 	for {
 
-		if firstLoop {
-			statement = fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE %s >= ? ORDER BY %s LIMIT ?", tableDef.Schema, tableDef.Name, scanColumn, scanColumn)
-			firstLoop = false
-		} else {
-			statement = fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE %s > ? ORDER BY %s LIMIT ?", tableDef.Schema, tableDef.Name, scanColumn, scanColumn)
-		}
+		statement, args := GenerateScanQueryAndArgs(
+			fullTableName,
+			scanColumns,
+			currentMinValues,
+			batch,
+			pivotIndex)
 
 		<-tableScanner.throttle.C
 
 		queryStartTime := time.Now()
-		rows, err := db.Query(statement, currentMinValue, batch)
+		log.Infof("[LoopInBatch] query: %+v, args: %+v", statement, args)
+		rows, err := db.Query(statement, args...)
 		if err != nil {
 			log.Fatalf("[LoopInBatch] table %s.%s, err: %v", tableDef.Schema, tableDef.Name, err)
 		}
@@ -206,13 +241,10 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 				log.Fatalf("[LoopInBatch] table %s.%s, scan error: %v", tableDef.Schema, tableDef.Name, errors.ErrorStack(err))
 			}
 
-			currentMinValue = reflect.ValueOf(rowsBatchDataPtrs[rowIdx][scanIdx]).Elem().Interface()
-			rowIdx++
-
-			if mysql.MySQLDataEquals(max.Value, currentMinValue) {
-				maxReached = true
-				break
+			for i := range currentMinValues {
+				currentMinValues[i] = reflect.ValueOf(rowsBatchDataPtrs[rowIdx][scanIndexes[i]]).Elem().Interface()
 			}
+			rowIdx++
 		}
 
 		err = rows.Err()
@@ -222,12 +254,6 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 
 		rows.Close()
 
-		// no result found for this query
-		if rowIdx == 0 {
-			log.Infof("[TableScanner] query result is 0, return")
-			return
-		}
-
 		BatchQueryDuration.WithLabelValues(pipelineName).Observe(time.Now().Sub(queryStartTime).Seconds())
 
 		batchIdx++
@@ -235,33 +261,46 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 		// process this batch's data
 		for i := 0; i < rowIdx; i++ {
 			rowPtrs := rowsBatchDataPtrs[i]
-			posV := mysql.NormalizeSQLType(reflect.ValueOf(rowPtrs[scanIdx]).Elem().Interface())
-			position := TablePosition{Value: posV, Column: scanColumn}
 
-			msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, position, queryStartTime)
+			positions := make([]TablePosition, len(scanColumns))
+			for columnScanIdx := range scanColumns {
+				positions[columnScanIdx] = TablePosition{
+					Value:  mysql.NormalizeSQLType(reflect.ValueOf(rowPtrs[scanIndexes[columnScanIdx]]).Elem().Interface()),
+					Column: scanColumns[columnScanIdx]}
+			}
+
+			msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, positions, queryStartTime)
 
 			if err := tableScanner.emitter.Emit(msg); err != nil {
 				log.Fatalf("[LoopInBatch] failed to emit job: %v", errors.ErrorStack(err))
 			}
 		}
 
-		log.Infof("[LoopInBatch] sourceDB: %s, table: %s, currentPosition: %v, maxMapString.column: %v, maxMapString.value: %v, maxMapString.type: %v, resultCount: %v",
-			tableDef.Schema, tableDef.Name, currentMinValue, maxMapString["column"], maxMapString["value"], maxMapString["type"], resultCount)
+		log.Infof("[LoopInBatch] sourceDB: %s, table: %s, currentMinValues: %+v, maxValues: %+v, resultCount: %v",
+			tableDef.Schema, tableDef.Name, currentMinValues, maxValues, resultCount)
 
-		// we break the loop here in case the currentPosition comes larger than the max we have in the beginning.
-		if maxReached {
+		// Get the next batch's start point.
+		nextMinValues, continueNex, nextPivotIndex, err := NextBatchStartPoint(
+			db,
+			fullTableName,
+			scanColumns,
+			columnTypes,
+			scanIndexes,
+			currentMinValues,
+			maxValues)
+		if err != nil {
+			log.Fatalf("[LoopInBatch] failed to find next start point: %v", errors.ErrorStack(err))
+		}
 
-			log.Infof("[LoopInBatch] finish table: %v", utils.TableIdentity(tableDef.Schema, tableDef.Name))
-
-			if err := waitAndCloseStream(tableDef, tableScanner.emitter); err != nil {
-				log.Fatalf("[LoopInBatch] failed to emit close stream closeMsg: %v", errors.ErrorStack(err))
-			}
-
-			if err := tableScanner.positionCache.Flush(); err != nil {
-				log.Fatalf("[LoopInBatch] failed to flush position cache: %v", errors.ErrorStack(err))
+		if !continueNex {
+			log.Infof("[LoopInBatch] no next batch start found, finish")
+			if err := tableScanner.finishBatchScan(tableDef); err != nil {
+				log.Fatalf("[LoopInBatch] failed finish batch scan: %v", errors.ErrorStack(err))
 			}
 			return
 		}
+		currentMinValues = nextMinValues
+		pivotIndex = nextPivotIndex
 
 		select {
 		case <-tableScanner.ctx.Done():
@@ -273,24 +312,32 @@ func (tableScanner *TableScanner) LoopInBatch(db *sql.DB, tableDef *schema_store
 	}
 }
 
+func (tableScanner *TableScanner) finishBatchScan(tableDef *schema_store.Table) error {
+	if err := waitAndCloseStream(tableDef, tableScanner.emitter); err != nil {
+		return errors.Trace(err)
+	}
+
+	if err := PutDone(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name)); err != nil {
+		return errors.Trace(err)
+	}
+
+	if err := tableScanner.positionCache.Flush(); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
 func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Table, tableConfig *TableConfig) {
 	streamKey := utils.TableIdentity(tableDef.Schema, tableDef.Name)
 
 	// do not re-scan table that has already dumped
-	current, currentExists, err := GetCurrentPos(tableScanner.positionCache, streamKey)
+	_, done, _, err := GetCurrentPos(tableScanner.positionCache, streamKey)
 	if err != nil {
 		log.Fatalf("[FindAll] failed to get current pos: %v", errors.ErrorStack(err))
 	}
-
-	max, _, maxExists, err := GetMaxMin(tableScanner.positionCache, streamKey)
-	if err != nil {
-		log.Fatalf("[FindAll] failed to get max min: %v", errors.ErrorStack(err))
-	}
-	if currentExists && maxExists {
-		if reflect.DeepEqual(max.Value, current.Value) {
-			log.Infof("[FindAll] table: %v already dumped", streamKey)
-			return
-		}
+	if done {
+		log.Infof("[FindAll] table: %v already dumped", streamKey)
+		return
 	}
 
 	log.Infof("[tableScanner] dump table: %s", streamKey)
@@ -310,25 +357,29 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 
 	for i := range allData {
 		rowPtrs := allData[i]
-		msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, TablePosition{Column: "*", Type: PlainInt, Value: i + 1}, queryStartTime)
+		msg := NewMsg(rowPtrs, columnTypes, tableDef, tableScanner.AfterMsgCommit, []TablePosition{{Column: ScanColumnForDump, Type: PlainInt, Value: i + 1}}, queryStartTime)
 		if err := tableScanner.emitter.Emit(msg); err != nil {
 			log.Fatalf("[FindAll] failed to emit: %v", errors.ErrorStack(err))
 		}
 	}
 
 	// set the current and max position to be the same
-	p := TablePosition{Column: "*", Type: PlainInt, Value: len(allData)}
+	p := TablePosition{Column: ScanColumnForDump, Type: PlainInt, Value: len(allData)}
 
-	if err := PutCurrentPos(tableScanner.positionCache, utils.TableIdentity(tableDef.Schema, tableDef.Name), p, false); err != nil {
+	if err := PutCurrentPos(tableScanner.positionCache, streamKey, []TablePosition{p}, false); err != nil {
 		log.Fatalf("[FindAll] failed to put current pos: %v", errors.ErrorStack(err))
 	}
 
 	if err := PutMaxMin(
 		tableScanner.positionCache,
 		utils.TableIdentity(tableDef.Schema, tableDef.Name),
-		p,
-		TablePosition{Column: "*", Type: PlainInt, Value: 0}); err != nil {
+		[]TablePosition{p},
+		[]TablePosition{{Column: ScanColumnForDump, Type: PlainInt, Value: 0}}); err != nil {
 		log.Fatalf("[FindAll] failed to put max min: %v", errors.ErrorStack(err))
+	}
+
+	if err := PutDone(tableScanner.positionCache, streamKey); err != nil {
+		log.Fatalf("[FindAll] failed to put done: %v", errors.ErrorStack(err))
 	}
 
 	log.Infof("[FindAll] finished dump table: %v", streamKey)
@@ -345,12 +396,12 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 }
 
 func (tableScanner *TableScanner) AfterMsgCommit(msg *core.Msg) error {
-	p, ok := msg.InputContext.(TablePosition)
+	positions, ok := msg.InputContext.([]TablePosition)
 	if !ok {
 		return errors.Errorf("type invalid")
 	}
 
-	if err := PutCurrentPos(tableScanner.positionCache, *msg.InputStreamKey, p, true); err != nil {
+	if err := PutCurrentPos(tableScanner.positionCache, *msg.InputStreamKey, positions, true); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -471,4 +522,168 @@ func waitAndCloseStream(tableDef *schema_store.Table, em core.Emitter) error {
 	}
 	<-closeMsg.Done
 	return nil
+}
+
+func GenerateNextScanQueryAndArgs(
+	fullTableName string,
+	scanColumns []string,
+	currentMinValues []interface{},
+	pivotIndex int,
+	batch int) (string, []interface{}) {
+
+	prefix := fmt.Sprintf("SELECT * FROM %s WHERE ", fullTableName)
+
+	var where []string
+	var args []interface{}
+
+	for i := 0; i <= pivotIndex-1; i++ {
+		where = append(where, fmt.Sprintf("%s = ?", scanColumns[i]))
+		args = append(args, currentMinValues[i])
+	}
+	where = append(where, fmt.Sprintf("%s > ?", scanColumns[pivotIndex]))
+	args = append(args, currentMinValues[pivotIndex])
+
+	whereString := strings.Join(where, " AND ")
+	orderByString := strings.Join(scanColumns, ", ")
+
+	query := fmt.Sprintf("%s%s ORDER BY %s LIMIT ?", prefix, whereString, orderByString)
+	args = append(args, batch)
+	return query, args
+}
+
+// pivotIndex is the index in scanColumns
+func GenerateScanQueryAndArgs(
+	fullTableName string,
+	scanColumns []string,
+	currentMinValues []interface{},
+	batch int,
+	pivotIndex int) (string, []interface{}) {
+
+	prefix := fmt.Sprintf("SELECT * FROM %s WHERE ", fullTableName)
+
+	var where []string
+	var args []interface{}
+
+	for i := 0; i <= pivotIndex-1; i++ {
+		where = append(where, fmt.Sprintf("%s = ?", scanColumns[i]))
+		args = append(args, currentMinValues[i])
+	}
+
+	where = append(where, fmt.Sprintf("%s >= ?", scanColumns[pivotIndex]))
+	args = append(args, currentMinValues[pivotIndex])
+
+	whereString := strings.Join(where, " AND ")
+	orderByString := strings.Join(scanColumns, ", ")
+
+	query := fmt.Sprintf("%s%s ORDER BY %s LIMIT ?", prefix, whereString, orderByString)
+	args = append(args, batch)
+	return query, args
+}
+
+func NextBatchStartPoint(
+	db *sql.DB,
+	fullTableName string,
+	scanColumns []string,
+	columnTypes []*sql.ColumnType,
+	scanIndexes []int,
+	currentMinValues []interface{},
+	maxValues []interface{}) (nextMinValues []interface{}, continueNext bool, pivotIndex int, err error) {
+
+	// 	Detect the pivotIndex
+	for i := len(scanColumns) - 1; i >= 0; i-- {
+		nextRowValues, exists, err := NextScanElementForChunk(
+			db,
+			fullTableName,
+			columnTypes,
+			scanColumns,
+			currentMinValues,
+			i)
+		if err != nil {
+			return nil, false, 0, errors.Trace(err)
+		}
+		if exists {
+			maxReached, err := GreaterThanMax(db, ScanValuesFromRowValues(nextRowValues, scanIndexes), maxValues)
+			if err != nil {
+				return nil, false, 0, errors.Trace(err)
+			}
+			if maxReached {
+				return nil, false, i, nil
+			}
+			return ScanValuesFromRowValues(nextRowValues, scanIndexes), true, i, nil
+		}
+	}
+	return nil, false, 0, nil
+}
+
+func NextScanElementForChunk(
+	db *sql.DB,
+	fullTableName string,
+	columnTypes []*sql.ColumnType,
+	scanColumns []string,
+	currentScanValues []interface{},
+	pivotIndex int) (nextRowValues []interface{}, exists bool, err error) {
+
+	retNextValues := make([]interface{}, len(columnTypes))
+	rowsPositionDataPtrs := newBatchDataPtrs(columnTypes, 1)
+
+	sql, args := GenerateNextScanQueryAndArgs(fullTableName, scanColumns, currentScanValues, pivotIndex, 1)
+
+	log.Infof("NextScanElementForChunk sql: %v, args: %+v", sql, args)
+
+	rows, err := db.Query(sql, args...)
+	if err != nil {
+		return nil, false, errors.Trace(err)
+	}
+
+	retExists := false
+	for rows.Next() {
+		retExists = true
+		_, err := utils.ScanGeneralRowsWithDataPtrs(rows, columnTypes, rowsPositionDataPtrs[0])
+		if err != nil {
+			return nil, false, errors.Trace(err)
+		}
+	}
+
+	if retExists {
+		for i := range columnTypes {
+			retNextValues[i] = reflect.ValueOf(rowsPositionDataPtrs[0][i]).Elem().Interface()
+		}
+		return retNextValues, true, nil
+
+	} else {
+		return nil, false, nil
+	}
+}
+
+func GreaterThanMax(db *sql.DB, scanValues []interface{}, maxValues []interface{}) (bool, error) {
+	for i := range scanValues {
+		var greaterThan bool
+		row := db.QueryRow("SELECT ? > ?", scanValues[i], maxValues[i])
+		if err := row.Scan(&greaterThan); err != nil {
+			return false, errors.Trace(err)
+		}
+
+		if greaterThan {
+			return true, nil
+		}
+
+		var lessThan bool
+		row = db.QueryRow("SELECT ? < ?", scanValues[i], maxValues[i])
+		if err := row.Scan(&lessThan); err != nil {
+			return false, errors.Trace(err)
+		}
+
+		if lessThan {
+			return false, nil
+		}
+	}
+	return false, nil
+}
+
+func ScanValuesFromRowValues(rowValues []interface{}, scanIndexes []int) []interface{} {
+	ret := make([]interface{}, len(scanIndexes))
+	for i, j := range scanIndexes {
+		ret[i] = rowValues[j]
+	}
+	return ret
 }
