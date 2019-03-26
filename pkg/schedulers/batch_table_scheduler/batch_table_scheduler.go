@@ -443,14 +443,14 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 					flushFunc()
 				}
 
-			case c, ok := <-latchC:
+			case h, ok := <-latchC:
 				if !ok {
 					scheduler.latchWg.Done()
 					return
 				}
-				latch[c]--
-				if latch[c] == 0 {
-					delete(latch, c)
+				latch[h]--
+				if latch[h] == 0 {
+					delete(latch, h)
 					if len(batch) > 0 && len(latchC) == 0 {
 						flushFunc()
 					}
