@@ -169,7 +169,8 @@ func adjustArgs(arg interface{}, column *schema_store.Column) interface{} {
 			return t.Format("2006-01-02 15:04:05.999999999")
 		}
 	}
-	// mysql driver handle object id correctly, it reports Error 1366: Incorrect string value: '\\x99\\x8B\\x1E\\x0B\\x16\\xA8...' for column '_id' at row 1
+	// mysql driver doesn't handle object id correctly, it reports
+	// Error 1366: Incorrect string value: '\\x99\\x8B\\x1E\\x0B\\x16\\xA8...' for column '_id' at row 1
 	if bid, ok := arg.(bson.ObjectId); ok {
 		return bid.Hex()
 	}
