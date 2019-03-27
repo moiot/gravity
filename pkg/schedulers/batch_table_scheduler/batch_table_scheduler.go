@@ -95,9 +95,9 @@ type batchScheduler struct {
 
 	tableBuffersMutex sync.Mutex
 	tableBuffers      map[string]chan *core.Msg
-	latchC            map[string]chan uint
-	bufferWg          sync.WaitGroup
-	latchWg           sync.WaitGroup
+	tableLatchC       map[string]chan uint
+	tableBufferWg     sync.WaitGroup
+	tableLatchWg      sync.WaitGroup
 
 	workerQueues []chan []*core.Msg
 	workerWg     sync.WaitGroup
@@ -228,7 +228,7 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 	}
 
 	scheduler.tableBuffers = make(map[string]chan *core.Msg)
-	scheduler.latchC = make(map[string]chan uint)
+	scheduler.tableLatchC = make(map[string]chan uint)
 	return nil
 }
 
@@ -322,7 +322,7 @@ func (scheduler *batchScheduler) Close() {
 		close(c)
 	}
 	scheduler.tableBuffersMutex.Unlock()
-	scheduler.bufferWg.Wait()
+	scheduler.tableBufferWg.Wait()
 
 	log.Infof("[batchScheduler] table buffer closed")
 
@@ -333,10 +333,10 @@ func (scheduler *batchScheduler) Close() {
 
 	log.Infof("[batchScheduler] worker closed")
 
-	for _, q := range scheduler.latchC {
+	for _, q := range scheduler.tableLatchC {
 		close(q)
 	}
-	scheduler.latchWg.Wait()
+	scheduler.tableLatchWg.Wait()
 
 	log.Infof("[batchScheduler] table latch closed")
 }
@@ -355,9 +355,9 @@ func (scheduler *batchScheduler) dispatchMsg(msg *core.Msg) error {
 		}
 
 		scheduler.tableBuffers[tableKey] = make(chan *core.Msg, scheduler.cfg.MaxBatchPerWorker*10)
-		scheduler.latchC[tableKey] = make(chan uint, scheduler.cfg.MaxBatchPerWorker*10)
-		scheduler.bufferWg.Add(1)
-		scheduler.latchWg.Add(1)
+		scheduler.tableLatchC[tableKey] = make(chan uint, scheduler.cfg.MaxBatchPerWorker*10)
+		scheduler.tableBufferWg.Add(1)
+		scheduler.tableLatchWg.Add(1)
 
 		scheduler.startTableDispatcher(tableKey)
 
@@ -371,11 +371,14 @@ func (scheduler *batchScheduler) dispatchMsg(msg *core.Msg) error {
 }
 
 func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
-	go func(c chan *core.Msg, latchC chan uint, key string) {
+	go func(c chan *core.Msg, tableLatchC chan uint, key string) {
 		var batch []*core.Msg
 		var round uint
 		var closing bool
-		latch := make(map[uint]uint)
+
+		// outputHashLatches's key is message's output hash, and its value is the number of messages
+		// having the same output hash.
+		outputHashLatches := make(map[uint]uint)
 
 		flushFunc := func() {
 			var curBatch []*core.Msg
@@ -389,17 +392,17 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 			for _, item := range curBatch {
 				hash := item.OutputHash()
 				if item.OutputStreamKey != core.NoDependencyOutput {
-					if latch[hash] > 0 {
+					if outputHashLatches[hash] > 0 {
 						return
 					}
 				}
 			}
 			for _, m := range curBatch {
 				h := m.OutputHash()
-				latch[h]++
+				outputHashLatches[h]++
 				oldCB := m.AfterAckCallback
 				m.AfterAckCallback = func() error {
-					latchC <- h
+					tableLatchC <- h
 					if oldCB != nil {
 						return oldCB()
 					}
@@ -431,7 +434,7 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 							flushFunc()
 						}
 						closing = true
-						scheduler.bufferWg.Done()
+						scheduler.tableBufferWg.Done()
 					})
 					continue
 				}
@@ -443,22 +446,22 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 					flushFunc()
 				}
 
-			case h, ok := <-latchC:
+			case h, ok := <-tableLatchC:
 				if !ok {
-					scheduler.latchWg.Done()
+					scheduler.tableLatchWg.Done()
 					return
 				}
-				latch[h]--
-				if latch[h] == 0 {
-					delete(latch, h)
-					if len(batch) > 0 && len(latchC) == 0 {
+				outputHashLatches[h]--
+				if outputHashLatches[h] == 0 {
+					delete(outputHashLatches, h)
+					if len(batch) > 0 && len(tableLatchC) == 0 {
 						flushFunc()
 					}
 				}
-				metrics.QueueLength.WithLabelValues(core.PipelineName, "table-latch", key).Set(float64(len(latchC)))
+				metrics.QueueLength.WithLabelValues(core.PipelineName, "table-outputHashLatches", key).Set(float64(len(tableLatchC)))
 			}
 		}
-	}(scheduler.tableBuffers[tableKey], scheduler.latchC[tableKey], tableKey)
+	}(scheduler.tableBuffers[tableKey], scheduler.tableLatchC[tableKey], tableKey)
 }
 
 func (scheduler *batchScheduler) needFlush(qLen int, batch int, maxBatchSize int) bool {
