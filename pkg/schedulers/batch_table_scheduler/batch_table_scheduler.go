@@ -389,14 +389,19 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 				curBatch = make([]*core.Msg, len(batch))
 				copy(curBatch, batch)
 			}
-			for _, item := range curBatch {
-				hash := item.OutputHash()
-				if item.OutputStreamKey != core.NoDependencyOutput {
-					if outputHashLatches[hash] > 0 {
+
+			// if any item in the batch has latch, just return from flushFunc
+			for _, m := range curBatch {
+				h := m.OutputHash()
+				if m.OutputStreamKey != core.NoDependencyOutput {
+					if outputHashLatches[h] > 0 {
 						return
 					}
 				}
 			}
+
+			// no conflicts for all of the item in this batch now,
+			// we add latch for each item.
 			for _, m := range curBatch {
 				h := m.OutputHash()
 				outputHashLatches[h]++
@@ -409,6 +414,7 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 					return nil
 				}
 			}
+
 			queueIdx := round % uint(scheduler.cfg.NrWorker)
 			round++
 			if !closing {
@@ -452,10 +458,18 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 					return
 				}
 				outputHashLatches[h]--
+
+				// Now one of the latch is released.
 				if outputHashLatches[h] == 0 {
 					delete(outputHashLatches, h)
-					if len(batch) > 0 && len(tableLatchC) == 0 {
-						flushFunc()
+					if len(batch) > 0 {
+						// This condition is an optimization to reduce the "conflict/failure" of flushFunc.
+						// While one of the latch is released, other items in the batch may still
+						// hold the latch.
+						if len(tableLatchC) == 0 {
+							flushFunc()
+						}
+
 					}
 				}
 				metrics.QueueLength.WithLabelValues(core.PipelineName, "table-outputHashLatches", key).Set(float64(len(tableLatchC)))
