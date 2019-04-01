@@ -58,7 +58,8 @@ tte TINYTEXT CHARACTER SET utf8mb4,
 ch  CHAR(5) CHARACTER SET utf8mb4,
 va varchar(31) CHARACTER SET utf8mb4,
 lva varchar(5000) CHARACTER SET utf8mb4,
-PRIMARY KEY (id)
+PRIMARY KEY (id),
+UNIQUE KEY (i, ui)
 )ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 `
 
