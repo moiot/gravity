@@ -95,7 +95,7 @@ type batchScheduler struct {
 
 	tableBuffersMutex sync.Mutex
 	tableBuffers      map[string]chan *core.Msg
-	tableBufferWgs    map[string]*sync.WaitGroup
+	tableBufferWg     sync.WaitGroup
 	tableLatchC       map[string]chan uint64
 
 	workerQueues []chan []*core.Msg
@@ -230,7 +230,6 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 	}
 
 	scheduler.tableBuffers = make(map[string]chan *core.Msg)
-	scheduler.tableBufferWgs = make(map[string]*sync.WaitGroup)
 	scheduler.tableLatchC = make(map[string]chan uint64)
 	return nil
 }
@@ -321,9 +320,7 @@ func (scheduler *batchScheduler) Close() {
 	}
 	scheduler.tableBuffersMutex.Unlock()
 
-	for _, wg := range scheduler.tableBufferWgs {
-		wg.Wait()
-	}
+	scheduler.tableBufferWg.Wait()
 
 	log.Infof("[batchScheduler] table buffer closed")
 
@@ -366,16 +363,16 @@ func (scheduler *batchScheduler) dispatchMsg(msg *core.Msg) error {
 
 func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 	scheduler.tableBuffers[tableKey] = make(chan *core.Msg, scheduler.cfg.MaxBatchPerWorker*10)
-	scheduler.tableBufferWgs[tableKey] = &sync.WaitGroup{}
+
 	scheduler.tableLatchC[tableKey] = make(chan uint64, scheduler.cfg.MaxBatchPerWorker*10)
-	scheduler.tableBufferWgs[tableKey].Add(1)
+	scheduler.tableBufferWg.Add(1)
 
 	go func(c chan *core.Msg, tableLatchC chan uint64, key string) {
 		var batch []*core.Msg
 		var round uint
 		var closing bool
 
-		defer scheduler.tableBufferWgs[key].Done()
+		defer scheduler.tableBufferWg.Done()
 
 		// latches's key is message's output hash, and its value is the number of messages
 		// having the same output hash.
