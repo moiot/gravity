@@ -17,6 +17,7 @@
 package mysqlstream
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -136,6 +137,12 @@ func TestGenerateDataHashes(t *testing.T) {
 		)
 
 		r.Equal(len(h1), len(h2))
+		sort.SliceStable(h1, func(i, j int) bool {
+			return h1[i].H < h1[j].H
+		})
+		sort.SliceStable(h2, func(i, j int) bool {
+			return h2[i].H < h2[j].H
+		})
 		for i := range h1 {
 			r.Equal(h1[i].Name, h2[i].Name)
 			r.Equal(h1[i].H, h2[i].H)
@@ -157,6 +164,13 @@ func TestGenerateDataHashes(t *testing.T) {
 			map[string]interface{}{"a": 1, "b": 2, "c": 3, "d": 5, "e": 6},
 			map[string]interface{}{"a": 2, "b": 2, "c": 4, "d": 5, "e": 7},
 		)
+
+		sort.SliceStable(h3, func(i, j int) bool {
+			return h3[i].H < h3[j].H
+		})
+		sort.SliceStable(h4, func(i, j int) bool {
+			return h4[i].H < h4[j].H
+		})
 
 		for i := range h4 {
 			r.Equal(h4[i].Name, h3[i].Name)
