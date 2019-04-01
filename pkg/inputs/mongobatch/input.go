@@ -284,7 +284,6 @@ func (input *mongoBatchInput) runWorker(ch chan chunk) {
 						Oplog:               &op,
 						Done:                make(chan struct{}),
 						InputStreamKey:      utils.NewStringPtr(task.key()),
-						OutputStreamKey:     core.NoDependencyOutput,
 					}
 					if err := input.emitter.Emit(&msg); err != nil {
 						log.Fatalf("failed to emit: %v", errors.ErrorStack(err))
@@ -310,10 +309,9 @@ func (input *mongoBatchInput) finishChunk(c chunk) {
 		Phase: core.Phase{
 			EnterInput: time.Now(),
 		},
-		Type:            core.MsgCtl,
-		InputStreamKey:  utils.NewStringPtr(c.key()),
-		OutputStreamKey: utils.NewStringPtr(""),
-		Done:            make(chan struct{}),
+		Type:           core.MsgCtl,
+		InputStreamKey: utils.NewStringPtr(c.key()),
+		Done:           make(chan struct{}),
 	}
 	if err := input.emitter.Emit(msg); err != nil {
 		log.Fatalf("failed to emit: %v", errors.ErrorStack(err))
@@ -323,10 +321,9 @@ func (input *mongoBatchInput) finishChunk(c chunk) {
 		Phase: core.Phase{
 			EnterInput: time.Now(),
 		},
-		Type:            core.MsgCloseInputStream,
-		InputStreamKey:  utils.NewStringPtr(c.key()),
-		OutputStreamKey: utils.NewStringPtr(""),
-		Done:            make(chan struct{}),
+		Type:           core.MsgCloseInputStream,
+		InputStreamKey: utils.NewStringPtr(c.key()),
+		Done:           make(chan struct{}),
 	}
 	metrics.InputCounter.WithLabelValues(input.pipelineName, msg.Database, msg.Table, string(msg.Type), "").Add(1)
 	if err := input.emitter.Emit(msg); err != nil {

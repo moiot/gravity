@@ -37,7 +37,7 @@ func (plugin *DumpOutput) Close() {
 
 }
 
-func (plugin *DumpOutput) Execute(msgs []*core.Msg) error {
+func (plugin *DumpOutput) Execute(_ int, msgs []*core.Msg) error {
 	return nil
 }
 

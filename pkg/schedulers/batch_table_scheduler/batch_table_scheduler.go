@@ -95,9 +95,8 @@ type batchScheduler struct {
 
 	tableBuffersMutex sync.Mutex
 	tableBuffers      map[string]chan *core.Msg
-	tableLatchC       map[string]chan uint
-	tableBufferWg     sync.WaitGroup
-	tableLatchWg      sync.WaitGroup
+	tableBufferWgs    map[string]*sync.WaitGroup
+	tableLatchC       map[string]chan uint64
 
 	workerQueues []chan []*core.Msg
 	workerWg     sync.WaitGroup
@@ -190,12 +189,15 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 	for i := 0; i < scheduler.cfg.NrWorker; i++ {
 		scheduler.workerQueues[i] = make(chan []*core.Msg, scheduler.cfg.QueueSize)
 		scheduler.workerWg.Add(1)
-		go func(q chan []*core.Msg, workerIndex string) {
+		go func(q chan []*core.Msg, workerIndex int) {
 			defer scheduler.workerWg.Done()
 
+			workerName := fmt.Sprintf("%d", workerIndex)
+
 			for msgBatch := range q {
-				metrics.QueueLength.WithLabelValues(scheduler.pipelineName, "worker", workerIndex).Set(float64(len(q)))
-				WorkerPoolJobBatchSizeGauge.WithLabelValues(scheduler.pipelineName, workerIndex).Set(float64(len(msgBatch)))
+
+				metrics.QueueLength.WithLabelValues(scheduler.pipelineName, "worker", workerName).Set(float64(len(q)))
+				WorkerPoolJobBatchSizeGauge.WithLabelValues(scheduler.pipelineName, workerName).Set(float64(len(msgBatch)))
 				metrics.Scheduler2OutputCounter.WithLabelValues(core.PipelineName).Add(float64(len(msgBatch)))
 				now := time.Now()
 				for _, m := range msgBatch {
@@ -203,7 +205,7 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 				}
 				if scheduler.syncOutput != nil {
 					err := retry.Do(func() error {
-						return scheduler.syncOutput.Execute(msgBatch)
+						return scheduler.syncOutput.Execute(workerIndex, msgBatch)
 					}, scheduler.cfg.NrRetries, scheduler.cfg.RetrySleep)
 
 					if err != nil {
@@ -218,17 +220,18 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 
 					}
 				} else if scheduler.asyncOutput != nil {
-					if err := scheduler.asyncOutput.Execute(msgBatch); err != nil {
+					if err := scheduler.asyncOutput.Execute(workerIndex, msgBatch); err != nil {
 						log.Fatalf("[batchScheduler] err: %v", errors.ErrorStack(err))
 					}
 				}
 			}
 
-		}(scheduler.workerQueues[i], fmt.Sprintf("%d", i))
+		}(scheduler.workerQueues[i], i)
 	}
 
 	scheduler.tableBuffers = make(map[string]chan *core.Msg)
-	scheduler.tableLatchC = make(map[string]chan uint)
+	scheduler.tableBufferWgs = make(map[string]*sync.WaitGroup)
+	scheduler.tableLatchC = make(map[string]chan uint64)
 	return nil
 }
 
@@ -285,7 +288,7 @@ func (scheduler *batchScheduler) AckMsg(msg *core.Msg) error {
 	}
 
 	if msg.AfterAckCallback != nil {
-		err := msg.AfterAckCallback()
+		err := msg.AfterAckCallback(msg)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -312,17 +315,15 @@ func (scheduler *batchScheduler) AckMsg(msg *core.Msg) error {
 func (scheduler *batchScheduler) Close() {
 	log.Infof("[batchScheduler] closing scheduler")
 
-	for _, w := range scheduler.slidingWindows {
-		w.Close()
-	}
-	log.Infof("[batchScheduler] sliding window closed")
-
 	scheduler.tableBuffersMutex.Lock()
 	for _, c := range scheduler.tableBuffers {
 		close(c)
 	}
 	scheduler.tableBuffersMutex.Unlock()
-	scheduler.tableBufferWg.Wait()
+
+	for _, wg := range scheduler.tableBufferWgs {
+		wg.Wait()
+	}
 
 	log.Infof("[batchScheduler] table buffer closed")
 
@@ -336,53 +337,55 @@ func (scheduler *batchScheduler) Close() {
 	for _, q := range scheduler.tableLatchC {
 		close(q)
 	}
-	scheduler.tableLatchWg.Wait()
-
 	log.Infof("[batchScheduler] table latch closed")
+
+	for _, w := range scheduler.slidingWindows {
+		w.Close()
+	}
+	log.Infof("[batchScheduler] sliding window closed")
 }
 
 func (scheduler *batchScheduler) dispatchMsg(msg *core.Msg) error {
-	if scheduler.cfg.MaxBatchPerWorker > 1 {
-		tableKey := utils.TableIdentity(msg.Database, msg.Table)
 
-		scheduler.tableBuffersMutex.Lock()
-		defer scheduler.tableBuffersMutex.Unlock()
+	tableKey := utils.TableIdentity(msg.Database, msg.Table)
 
-		_, ok := scheduler.tableBuffers[tableKey]
-		if ok {
-			scheduler.tableBuffers[tableKey] <- msg
-			return nil
-		}
+	scheduler.tableBuffersMutex.Lock()
+	defer scheduler.tableBuffersMutex.Unlock()
 
-		scheduler.tableBuffers[tableKey] = make(chan *core.Msg, scheduler.cfg.MaxBatchPerWorker*10)
-		scheduler.tableLatchC[tableKey] = make(chan uint, scheduler.cfg.MaxBatchPerWorker*10)
-		scheduler.tableBufferWg.Add(1)
-		scheduler.tableLatchWg.Add(1)
-
-		scheduler.startTableDispatcher(tableKey)
-
+	_, ok := scheduler.tableBuffers[tableKey]
+	if ok {
 		scheduler.tableBuffers[tableKey] <- msg
-	} else {
-		queueIdx := msg.OutputHash() % uint(scheduler.cfg.NrWorker)
-		scheduler.workerQueues[queueIdx] <- []*core.Msg{msg}
+		return nil
 	}
 
+	scheduler.startTableDispatcher(tableKey)
+
+	scheduler.tableBuffers[tableKey] <- msg
 	return nil
 }
 
 func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
-	go func(c chan *core.Msg, tableLatchC chan uint, key string) {
+	scheduler.tableBuffers[tableKey] = make(chan *core.Msg, scheduler.cfg.MaxBatchPerWorker*10)
+	scheduler.tableBufferWgs[tableKey] = &sync.WaitGroup{}
+	scheduler.tableLatchC[tableKey] = make(chan uint64, scheduler.cfg.MaxBatchPerWorker*10)
+	scheduler.tableBufferWgs[tableKey].Add(1)
+
+	go func(c chan *core.Msg, tableLatchC chan uint64, key string) {
 		var batch []*core.Msg
 		var round uint
 		var closing bool
 
-		// outputHashLatches's key is message's output hash, and its value is the number of messages
-		// having the same output hash.
-		outputHashLatches := make(map[uint]uint)
+		defer scheduler.tableBufferWgs[key].Done()
 
-		flushFunc := func() {
+		// latches's key is message's output hash, and its value is the number of messages
+		// having the same output hash.
+		latches := make(map[uint64]int)
+
+		flushFunc := func() bool {
+
 			var curBatch []*core.Msg
-			if len(batch) > scheduler.cfg.MaxBatchPerWorker {
+			batchLen := len(batch)
+			if batchLen > scheduler.cfg.MaxBatchPerWorker {
 				curBatch = make([]*core.Msg, scheduler.cfg.MaxBatchPerWorker)
 				copy(curBatch, batch[:scheduler.cfg.MaxBatchPerWorker])
 			} else {
@@ -392,24 +395,27 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 
 			// if any item in the batch has latch, just return from flushFunc
 			for _, m := range curBatch {
-				h := m.OutputHash()
-				if m.OutputStreamKey != core.NoDependencyOutput {
-					if outputHashLatches[h] > 0 {
-						return
+				for _, h := range m.OutputDepHashes {
+					if latches[h.H] > 0 {
+						curBatch = nil
+						return true
 					}
 				}
 			}
 
-			// no conflicts for all of the item in this batch now,
-			// we add latch for each item.
 			for _, m := range curBatch {
-				h := m.OutputHash()
-				outputHashLatches[h]++
+				for _, h := range m.OutputDepHashes {
+					latches[h.H] += 1
+				}
+
 				oldCB := m.AfterAckCallback
-				m.AfterAckCallback = func() error {
-					tableLatchC <- h
+				m.AfterAckCallback = func(message *core.Msg) error {
+					for _, h := range message.OutputDepHashes {
+						tableLatchC <- h.H
+					}
+
 					if oldCB != nil {
-						return oldCB()
+						return oldCB(message)
 					}
 					return nil
 				}
@@ -417,33 +423,28 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 
 			queueIdx := round % uint(scheduler.cfg.NrWorker)
 			round++
-			if !closing {
-				scheduler.workerQueues[queueIdx] <- curBatch
-				if len(batch) > scheduler.cfg.MaxBatchPerWorker {
-					batch = batch[scheduler.cfg.MaxBatchPerWorker:]
-				} else if cap(batch) <= scheduler.cfg.MaxBatchPerWorker*2 {
-					batch = batch[:0]
-				} else {
-					batch = nil
-				}
-			}
-		}
+			scheduler.workerQueues[queueIdx] <- curBatch
 
-		var once sync.Once
+			// delete the delivered messages
+			for i := 0; i < len(curBatch); i++ {
+				batch[i] = nil
+			}
+			batch = batch[len(curBatch):]
+			curBatch = nil
+			return false
+		}
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
 
 		for {
 			select {
 			case msg, ok := <-c:
 				if !ok {
-					once.Do(func() {
-						if len(batch) > 0 {
-							flushFunc()
-						}
-						closing = true
-						scheduler.tableBufferWg.Done()
-					})
+					// no more incoming message now
+					closing = true
 					continue
 				}
+
 				batch = append(batch, msg)
 				batchLen := len(batch)
 				qlen := len(c)
@@ -452,27 +453,29 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 					flushFunc()
 				}
 
-			case h, ok := <-tableLatchC:
-				if !ok {
-					scheduler.tableLatchWg.Done()
-					return
+			case h := <-tableLatchC:
+				latches[h]--
+				if latches[h] < 0 {
+					log.Fatalf("latch operation bug: h = %v", h)
 				}
-				outputHashLatches[h]--
 
-				// Now one of the latch is released.
-				if outputHashLatches[h] == 0 {
-					delete(outputHashLatches, h)
+				if latches[h] == 0 {
+					delete(latches, h)
 					if len(batch) > 0 {
-						// This condition is an optimization to reduce the "conflict/failure" of flushFunc.
-						// While one of the latch is released, other items in the batch may still
-						// hold the latch.
+						// len(tableLatchC) == 0 is an optimization to
+						// reduce the "conflict/failure" of flushFunc.
 						if len(tableLatchC) == 0 {
 							flushFunc()
 						}
-
 					}
 				}
-				metrics.QueueLength.WithLabelValues(core.PipelineName, "table-outputHashLatches", key).Set(float64(len(tableLatchC)))
+				metrics.QueueLength.
+					WithLabelValues(core.PipelineName, "table-latch", key).
+					Set(float64(len(tableLatchC)))
+			case <-ticker.C:
+				if closing && len(batch) == 0 && len(latches) == 0 {
+					return
+				}
 			}
 		}
 	}(scheduler.tableBuffers[tableKey], scheduler.tableLatchC[tableKey], tableKey)

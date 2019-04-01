@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/juju/errors"
@@ -12,7 +11,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/mongo/gtm"
-	"github.com/moiot/gravity/pkg/utils"
 )
 
 var PipelineName string
@@ -39,15 +37,14 @@ const (
 	Delete DMLOp = "delete"
 )
 
-var noDependencyOutput = "__no_dependency_output"
-var noDependencyOutputHash = uint64(0)
-var NoDependencyOutput = &noDependencyOutput
+type MsgCallbackFunc func(m *Msg) error
 
-var serializeDependencyOutput = ""
-var SerializeDependencyOutput = &serializeDependencyOutput
-
-type AfterMsgCommitFunc func(m *Msg) error
-
+// OutputHash defines the hash value of the message's output.
+// Name is used just for better debug/test purpose.
+type OutputHash struct {
+	Name string
+	H    uint64
+}
 type Msg struct {
 	Phase
 
@@ -66,16 +63,17 @@ type Msg struct {
 	TimeZone  *time.Location
 	Oplog     *gtm.Op
 
-	InputStreamKey  *string
-	OutputStreamKey *string
-	outputHash      *uint
+	InputStreamKey *string
+
+	// OutputDepHashed defines the dependency of this msg.
+	OutputDepHashes []OutputHash
 	Done            chan struct{}
 
 	InputSequence *int64
 
 	InputContext        interface{}
-	AfterCommitCallback AfterMsgCommitFunc
-	AfterAckCallback    func() error
+	AfterCommitCallback MsgCallbackFunc
+	AfterAckCallback    MsgCallbackFunc
 }
 
 func (msg *Msg) SequenceNumber() int64 {
@@ -107,17 +105,17 @@ type MsgAcker interface {
 	AckMsg(msg *Msg) error
 }
 
-func (msg *Msg) OutputHash() uint {
-	if msg.outputHash == nil {
-		msg.outputHash = new(uint)
-		if msg.OutputStreamKey == NoDependencyOutput {
-			*msg.outputHash = uint(atomic.AddUint64(&noDependencyOutputHash, 1))
-		} else {
-			*msg.outputHash = uint(utils.GenHashKey(*msg.OutputStreamKey))
-		}
-	}
-	return *msg.outputHash
-}
+// func (msg *Msg) OutputHash() uint {
+// 	if msg.outputHash == nil {
+// 		msg.outputHash = new(uint)
+// 		if msg.OutputStreamKey == NoDependencyOutput {
+// 			*msg.outputHash = uint(atomic.AddUint64(&noDependencyOutputHash, 1))
+// 		} else {
+// 			*msg.outputHash = uint(utils.GenHashKey(*msg.OutputStreamKey))
+// 		}
+// 	}
+// 	return *msg.outputHash
+// }
 
 func (msg *Msg) GetPkSign() string {
 	sign := strings.Builder{}

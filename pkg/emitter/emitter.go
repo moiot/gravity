@@ -45,10 +45,6 @@ func (e *defaultEmitter) Emit(msg *core.Msg) error {
 		return errors.Errorf("[emitter] InputStreamKey nil")
 	}
 
-	if msg.OutputStreamKey == nil {
-		return errors.Errorf("[emitter] OutputStreamKey nil")
-	}
-
 	if msg.InputSequence != nil {
 		return errors.Errorf("[emitter] InputSequence not nil: %v", *msg.InputSequence)
 	}

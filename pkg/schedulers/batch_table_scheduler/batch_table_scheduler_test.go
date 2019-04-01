@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mitchellh/hashstructure"
+
 	"github.com/moiot/gravity/pkg/outputs"
 
 	"github.com/stretchr/testify/require"
@@ -26,18 +28,31 @@ import (
 
 type rows map[string][]*core.Msg
 
+const (
+	PrimaryKeyIndexName  = "PRIM"
+	PrimaryKeyColumnName = "id"
+)
+
 func newMsg(sequence int64, inputStreamKey string, tableName string, pkData string, eventID int) *core.Msg {
+	data := map[string]interface{}{
+		PrimaryKeyColumnName: pkData,
+	}
+
+	h, err := hashstructure.Hash([]interface{}{tableName, PrimaryKeyIndexName, pkData}, nil)
+	if err != nil {
+		panic("failed to hash")
+	}
+
+	debugHashName := fmt.Sprintf("%s.%s.%s", tableName, PrimaryKeyIndexName, pkData)
 	return &core.Msg{
 		Type:  core.MsgDML,
 		Table: tableName,
 		DmlMsg: &core.DMLMsg{
-			Data: map[string]interface{}{
-				"rowName": pkData,
-			},
+			Data: data,
 		},
 		InputSequence:   &sequence,
 		InputStreamKey:  &inputStreamKey,
-		OutputStreamKey: &pkData,
+		OutputDepHashes: []core.OutputHash{{debugHashName, h}},
 		InputContext:    eventID,
 		Done:            make(chan struct{}),
 	}
@@ -73,19 +88,19 @@ func submitTestMsgs(scheduler core.MsgSubmitter, inputStreamKeys []string, nrTab
 					tableMsgs[t] = make(map[string][]*core.Msg)
 				}
 
-				r := pkData(rowIdx)
+				pkDataString := pkData(rowIdx)
 				source := chooseRandomInputStream(inputStreamKeys)
 				j := newMsg(
 					int64(seq),
 					source,
 					t,
-					r,
+					pkDataString,
 					eventIdx,
 				)
-				if _, ok := tableMsgs[t][r]; !ok {
-					tableMsgs[t][r] = []*core.Msg{j}
+				if _, ok := tableMsgs[t][pkDataString]; !ok {
+					tableMsgs[t][pkDataString] = []*core.Msg{j}
 				} else {
-					tableMsgs[t][r] = append(tableMsgs[t][r], j)
+					tableMsgs[t][pkDataString] = append(tableMsgs[t][pkDataString], j)
 				}
 				// log.Printf("submit job source: %v, seq: %v\n", source, seq)
 				if err := scheduler.SubmitMsg(j); err != nil {
@@ -121,7 +136,9 @@ func testTableMsgsEqual(t *testing.T, inputMsgs map[string]rows, outputMsgs map[
 					assert.FailNow(fmt.Sprintf("%s, inputTableName: %s, outputTableName: %s", t.Name(), j.Table, outputMsg.Table))
 				}
 
-				assert.Equal(*j.OutputStreamKey, *outputMsg.OutputStreamKey)
+				for i, h := range j.OutputDepHashes {
+					assert.Equal(h.H, outputMsg.OutputDepHashes[i].H)
+				}
 
 				if j.InputContext != outputMsg.InputContext {
 					assert.FailNow(fmt.Sprintf("%s, input eventID %d, output eventID: %d", t.Name(), j.InputContext, outputMsg.InputContext))
@@ -143,16 +160,17 @@ func (output *outputCollector) GetRouter() core.Router {
 	return core.EmptyRouter{}
 }
 
-func (output *outputCollector) Execute(msgs []*core.Msg) error {
+func (output *outputCollector) Execute(queueIndex int, msgs []*core.Msg) error {
 	output.Lock()
 	defer output.Unlock()
 
+	// log.Infof("[outputCollector] queue: %d, # of messages: %d", queueIndex, len(msgs))
 	for _, m := range msgs {
 		table := m.Table
 		if _, ok := output.receivedRows[table]; !ok {
 			output.receivedRows[table] = make(map[string][]*core.Msg)
 		}
-		rowName := m.DmlMsg.Data["rowName"].(string)
+		rowName := m.DmlMsg.Data[PrimaryKeyColumnName].(string)
 		output.receivedRows[table][rowName] = append(output.receivedRows[table][rowName], m)
 	}
 	return nil
@@ -223,14 +241,14 @@ func TestBatchScheduler(t *testing.T) {
 		{
 			"batch size 5",
 			map[string]interface{}{
-				"nr-worker":           100,
+				"nr-worker":           2,
 				"batch-size":          5,
-				"queue-size":          1024,
-				"sliding-window-size": 1024 * 10,
+				"queue-size":          10,
+				"sliding-window-size": 10,
 			},
 			[]string{"mysqlstream"},
-			200,
-			10,
+			1,
+			2,
 			15,
 		},
 		{
@@ -255,7 +273,7 @@ func TestBatchScheduler(t *testing.T) {
 				assert.FailNow(err.Error())
 			}
 
-			s, ok := plugin.(core.Scheduler)
+			scheduler, ok := plugin.(core.Scheduler)
 			if !ok {
 				assert.FailNow(err.Error())
 			}
@@ -266,11 +284,11 @@ func TestBatchScheduler(t *testing.T) {
 
 			output := &outputCollector{}
 			assert.NoError(output.Start())
-			assert.NoError(s.Start(output))
+			assert.NoError(scheduler.Start(output))
 
-			inputMsgs := submitTestMsgs(s, tt.eventSources, tt.nrTables, tt.nrRows, tt.nrEventsPerRow)
+			inputMsgs := submitTestMsgs(scheduler, tt.eventSources, tt.nrTables, tt.nrRows, tt.nrEventsPerRow)
 			log.Infof("submitted all msgs")
-			s.Close()
+			scheduler.Close()
 			log.Infof("scheduler closed")
 			testTableMsgsEqual(t, inputMsgs, output.receivedRows)
 		})
@@ -335,7 +353,11 @@ func BenchmarkStream(b *testing.B) {
 						},
 					}
 					pk := msg.Table + strconv.Itoa(rand.Intn(hotRecords))
-					msg.OutputStreamKey = &pk
+					h, err := hashstructure.Hash(pk, nil)
+					if err != nil {
+						panic(err.Error())
+					}
+					msg.OutputDepHashes = []core.OutputHash{{PrimaryKeyIndexName, h}}
 					messages[i] = msg
 				}
 				wg.Add(totalRecords)
@@ -393,13 +415,17 @@ func BenchmarkBatch(b *testing.B) {
 					tableName := "table"
 					for i := 0; i < recordsPerTable; i++ {
 						seq := int64(i + 1)
-						pk := fmt.Sprint(seq) // batch mode has no conflict OutputStreamKey
+						h, err := hashstructure.Hash(seq, nil)
+						if err != nil {
+							panic(err.Error())
+						}
+
 						msg := &core.Msg{
 							Type:            core.MsgDML,
 							Table:           tableName,
 							InputSequence:   &seq,
 							InputStreamKey:  &tableName,
-							OutputStreamKey: &pk,
+							OutputDepHashes: []core.OutputHash{{PrimaryKeyIndexName, h}},
 							Done:            make(chan struct{}),
 							AfterCommitCallback: func(m *core.Msg) error {
 								wg.Done()
@@ -423,13 +449,17 @@ func BenchmarkBatch(b *testing.B) {
 							tableName := fmt.Sprint("table-", tbl)
 							for i := 0; i < recordsPerTable; i++ {
 								seq := int64(i + 1)
-								pk := fmt.Sprint(seq) // batch mode has no conflict OutputStreamKey
+								h, err := hashstructure.Hash(seq, nil)
+								if err != nil {
+									panic(err.Error())
+								}
+
 								msg := &core.Msg{
 									Type:            core.MsgDML,
 									Table:           tableName,
 									InputSequence:   &seq,
 									InputStreamKey:  &tableName,
-									OutputStreamKey: &pk,
+									OutputDepHashes: []core.OutputHash{{PrimaryKeyIndexName, h}},
 									Done:            make(chan struct{}),
 									AfterCommitCallback: func(m *core.Msg) error {
 										wg.Done()

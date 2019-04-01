@@ -73,11 +73,40 @@ func TestEmitterWithFilters(t *testing.T) {
 	}
 
 	msgs := []*core.Msg{
-		{Database: "bad_db", Table: "test_table", DmlMsg: dmlMsgs[0], InputStreamKey: utils.NewStringPtr("test"), OutputStreamKey: utils.NewStringPtr("test"), Done: make(chan struct{})},
-		{Database: "test", Table: "test_table", DmlMsg: dmlMsgs[1], InputStreamKey: utils.NewStringPtr("test"), OutputStreamKey: utils.NewStringPtr("test"), Done: make(chan struct{})},
-		{Database: "test", Table: "test_table", DmlMsg: dmlMsgs[2], InputStreamKey: utils.NewStringPtr("test"), OutputStreamKey: utils.NewStringPtr("test"), Done: make(chan struct{})},
-		{Database: "test", Table: "test_table", DmlMsg: dmlMsgs[3], InputStreamKey: utils.NewStringPtr("test"), OutputStreamKey: utils.NewStringPtr("test"), Done: make(chan struct{})},
-		{Database: "test", Table: "test_table", DmlMsg: dmlMsgs[4], InputStreamKey: utils.NewStringPtr("test"), OutputStreamKey: utils.NewStringPtr("test"), Done: make(chan struct{})},
+		{
+			Database:       "bad_db",
+			Table:          "test_table",
+			DmlMsg:         dmlMsgs[0],
+			InputStreamKey: utils.NewStringPtr("test"),
+			Done:           make(chan struct{}),
+		},
+		{
+			Database:       "test",
+			Table:          "test_table",
+			DmlMsg:         dmlMsgs[1],
+			InputStreamKey: utils.NewStringPtr("test"),
+			Done:           make(chan struct{})},
+		{
+			Database:       "test",
+			Table:          "test_table",
+			DmlMsg:         dmlMsgs[2],
+			InputStreamKey: utils.NewStringPtr("test"),
+			Done:           make(chan struct{}),
+		},
+		{
+			Database:       "test",
+			Table:          "test_table",
+			DmlMsg:         dmlMsgs[3],
+			InputStreamKey: utils.NewStringPtr("test"),
+			Done:           make(chan struct{}),
+		},
+		{
+			Database:       "test",
+			Table:          "test_table",
+			DmlMsg:         dmlMsgs[4],
+			InputStreamKey: utils.NewStringPtr("test"),
+			Done:           make(chan struct{}),
+		},
 	}
 
 	for _, m := range msgs {
