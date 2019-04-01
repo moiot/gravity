@@ -43,6 +43,7 @@ const tableDef = `
 CREATE TABLE IF NOT EXISTS ` + "`%s`.`%s`" + `(
 id BIGINT unsigned NOT NULL,
 i INT DEFAULT 0,
+ii INT,
 ui INT unsigned,
 ti  tinyint(4) DEFAULT NULL,
 de decimal(11, 3),
@@ -59,7 +60,8 @@ ch  CHAR(5) CHARACTER SET utf8mb4,
 va varchar(31) CHARACTER SET utf8mb4,
 lva varchar(5000) CHARACTER SET utf8mb4,
 PRIMARY KEY (id),
-UNIQUE KEY (i, ui)
+UNIQUE KEY (i, ui),
+UNIQUE KEY (ii)
 )ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 `
 

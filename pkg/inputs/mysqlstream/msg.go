@@ -432,10 +432,6 @@ func dataHash(schema string, table string, idxName string, idxColumns []string, 
 // Note that unique key's value cannot be NULL/nil
 func ukUpdated(ukColumns []string, newData map[string]interface{}, oldData map[string]interface{}) bool {
 	for _, column := range ukColumns {
-		if newData[column] == nil {
-			panic("unique key nil")
-		}
-
 		// if oldData[column] == nil, we consider this is a insert
 		if oldData[column] != nil && !reflect.DeepEqual(newData[column], oldData[column]) {
 			return true
