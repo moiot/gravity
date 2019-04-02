@@ -470,7 +470,7 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 					Set(float64(len(tableLatchC)))
 			case <-ticker.C:
 				// if there is no message will come, and the current batch is empty, and all latches are releases,
-				// then we can are in a graceful shutdown.
+				// then we can are in a graceful shutdown; otherwise, we try to flush the batch.
 				if closing && len(batch) == 0 && len(latches) == 0 {
 					return
 				} else {
