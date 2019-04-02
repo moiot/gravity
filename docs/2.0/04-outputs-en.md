@@ -12,6 +12,27 @@ Currently, DRC supports the following Output plugins:
 
 ## `async-kafka` configuration
 
+For `async-kafka`, Gravity can guarantee data with the same primary key will be delivered to the same
+partition sequentially.
+
+If there is a change in the primary key, there is no such guarantee. For example, for a MySQL table
+```sql
+CREATE TABLE IF NOT EXISTS test (
+  id int,
+  v int,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+
+INSERT INTO test (id, v) VALUES (1, 1); // (1, 1)
+UPDATE test set v = 2 WHERE id = 1; //(1, 1) --> (1, 2)
+UPDATE test set id = 2 WHERE id = 1; // (1, 2) --> (2, 2)
+
+```
+
+There is no guarantee that event `(1, 1) --> (1, 2)` happens before `(1, 2) --> (2, 2)`. These two events may be sent to
+different kafka partitions.
+ 
+
 ```toml
 #
 # The connection configuration of Kafka 

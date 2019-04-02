@@ -7,6 +7,24 @@
 
 ### async-kafka
 
+`async-kafka` 可以保证唯一键上发生的变更按顺序发送到单个 partition，但并不能保证唯一键有变化时的顺序。
+
+例如
+
+```sql
+CREATE TABLE IF NOT EXISTS test (
+  id int,
+  v int,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+
+INSERT INTO test (id, v) VALUES (1, 1); // (1, 1)
+UPDATE test set v = 2 WHERE id = 1; //(1, 1) --> (1, 2)
+UPDATE test set id = 2 WHERE id = 1; // (1, 2) --> (2, 2)
+
+```
+现在无法保证 `(1, 1) --> (1, 2)` 在 `(1, 2) --> (2, 2)` 之前发生。这两个事件可能被发送到不同的 partition。
+
 ```toml
 #
 # 目标端 Kafka 连接配置

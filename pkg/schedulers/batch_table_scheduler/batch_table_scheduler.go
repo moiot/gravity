@@ -205,7 +205,7 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 				}
 				if scheduler.syncOutput != nil {
 					err := retry.Do(func() error {
-						return scheduler.syncOutput.Execute(workerIndex, msgBatch)
+						return scheduler.syncOutput.Execute(msgBatch)
 					}, scheduler.cfg.NrRetries, scheduler.cfg.RetrySleep)
 
 					if err != nil {
@@ -220,7 +220,7 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 
 					}
 				} else if scheduler.asyncOutput != nil {
-					if err := scheduler.asyncOutput.Execute(workerIndex, msgBatch); err != nil {
+					if err := scheduler.asyncOutput.Execute(msgBatch); err != nil {
 						log.Fatalf("[batchScheduler] err: %v", errors.ErrorStack(err))
 					}
 				}

@@ -146,7 +146,7 @@ func (output *AsyncKafka) GetRouter() core.Router {
 	return routers.KafkaRouter(output.routes)
 }
 
-func (output *AsyncKafka) Execute(workerIndex int, msgs []*core.Msg) error {
+func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 	for _, msg := range msgs {
 		if msg.Type == core.MsgDDL {
 			if err := output.msgAcker.AckMsg(msg); err != nil {
@@ -189,7 +189,10 @@ func (output *AsyncKafka) Execute(workerIndex int, msgs []*core.Msg) error {
 			return errors.Annotatef(err, "topic: %v", topic)
 		}
 
-		partition := workerIndex % len(partitions)
+		var partition uint64
+		if len(msg.OutputDepHashes) > 0 {
+			partition = msg.OutputDepHashes[0].H % uint64(len(partitions))
+		}
 		kafkaMsg := sarama.ProducerMessage{
 			Topic:     topic,
 			Value:     sarama.ByteEncoder(b),

@@ -46,7 +46,7 @@ func (plugin *stdOutput) Start() error {
 func (plugin *stdOutput) Close() {
 }
 
-func (plugin *stdOutput) Execute(_ int, msgs []*core.Msg) error {
+func (plugin *stdOutput) Execute(msgs []*core.Msg) error {
 	for _, msg := range msgs {
 		if msg.DmlMsg != nil {
 			fmt.Fprintf(os.Stdout, "schema: %v, table: %v, dml op: %v, data: %v\n", msg.Database, msg.Table, msg.DmlMsg.Operation, msg.DmlMsg.Data)

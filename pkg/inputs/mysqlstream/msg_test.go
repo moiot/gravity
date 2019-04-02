@@ -123,7 +123,7 @@ func TestGenerateDataHashes(t *testing.T) {
 		h1 := GenerateDataHashes(
 			"test",
 			"test",
-			map[string][]string{"PRIM": {"a"}, "idx_b_c": {"b", "c"}, "idx_d": {"d"}},
+			map[string][]string{MySQLPrimaryKeyName: {"a"}, "idx_b_c": {"b", "c"}, "idx_d": {"d"}},
 			map[string]interface{}{"a": 1, "b": 2, "c": 3, "d": 5, "e": 6},
 			map[string]interface{}{"a": 2, "b": 2, "c": 4, "d": 5, "e": 7},
 		)
@@ -131,12 +131,16 @@ func TestGenerateDataHashes(t *testing.T) {
 		h2 := GenerateDataHashes(
 			"test",
 			"test",
-			map[string][]string{"PRIM": {"a"}, "idx_b_c": {"b", "c"}, "idx_d": {"d"}},
+			map[string][]string{MySQLPrimaryKeyName: {"a"}, "idx_b_c": {"b", "c"}, "idx_d": {"d"}},
 			map[string]interface{}{"a": 1, "b": 2, "c": 3, "d": 5, "e": 8},
 			map[string]interface{}{"a": 2, "b": 2, "c": 4, "d": 5, "e": 9},
 		)
 
 		r.Equal(len(h1), len(h2))
+
+		// new primary key is always the first hash
+		r.Equal(h1[0].H, h2[0].H)
+
 		sort.SliceStable(h1, func(i, j int) bool {
 			return h1[i].H < h1[j].H
 		})
@@ -152,7 +156,7 @@ func TestGenerateDataHashes(t *testing.T) {
 		h3 := GenerateDataHashes(
 			"test",
 			"test",
-			map[string][]string{"PRIM": {"a"}, "idx_b_c": {"b", "c"}, "idx_d": {"d"}},
+			map[string][]string{MySQLPrimaryKeyName: {"a"}, "idx_b_c": {"b", "c"}, "idx_d": {"d"}},
 			map[string]interface{}{"a": 1, "b": 2, "c": 3, "d": 5, "e": 6},
 			map[string]interface{}{"a": 2, "b": 2, "c": 4, "d": 5, "e": 7},
 		)
@@ -160,10 +164,13 @@ func TestGenerateDataHashes(t *testing.T) {
 		h4 := GenerateDataHashes(
 			"test",
 			"test",
-			map[string][]string{"PRIM": {"a"}, "idx_b_c": {"b", "c"}, "idx_d": {"d"}},
+			map[string][]string{MySQLPrimaryKeyName: {"a"}, "idx_b_c": {"b", "c"}, "idx_d": {"d"}},
 			map[string]interface{}{"a": 1, "b": 2, "c": 3, "d": 5, "e": 6},
 			map[string]interface{}{"a": 2, "b": 2, "c": 4, "d": 5, "e": 7},
 		)
+
+		// new primary key is always the first hash
+		r.Equal(h3[0].H, h4[0].H)
 
 		sort.SliceStable(h3, func(i, j int) bool {
 			return h3[i].H < h3[j].H

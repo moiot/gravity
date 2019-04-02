@@ -138,7 +138,7 @@ func (output *MySQLOutput) GetRouter() core.Router {
 }
 
 // msgs in the same batch should have the same table name
-func (output *MySQLOutput) Execute(_ int, msgs []*core.Msg) error {
+func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 	var targetTableDef *schema_store.Table
 	var targetMsgs []*core.Msg
 

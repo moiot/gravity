@@ -160,7 +160,7 @@ func (output *outputCollector) GetRouter() core.Router {
 	return core.EmptyRouter{}
 }
 
-func (output *outputCollector) Execute(queueIndex int, msgs []*core.Msg) error {
+func (output *outputCollector) Execute(msgs []*core.Msg) error {
 	output.Lock()
 	defer output.Unlock()
 

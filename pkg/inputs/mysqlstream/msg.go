@@ -379,6 +379,8 @@ func GenerateDMLDepHashes(msg *core.Msg, tableDef *schema_store.Table) []core.Ou
 	return GenerateDataHashes(tableDef.Schema, tableDef.Name, tableDef.UniqueKeyColumnMap, msg.DmlMsg.Old, msg.DmlMsg.Data)
 }
 
+const MySQLPrimaryKeyName = "PRIMARY"
+
 func GenerateDataHashes(
 	schema string,
 	table string,
@@ -391,27 +393,48 @@ func GenerateDataHashes(
 		log.Fatalf("[GenerateDataHashes] newData nil")
 	}
 
+	if columnNames, ok := uniqKeys[MySQLPrimaryKeyName]; ok {
+		h := dataHashForUKChange(schema, table, MySQLPrimaryKeyName, columnNames, oldData, newData)
+		hashes = append(hashes, h...)
+	}
+
 	for idxName, columnNames := range uniqKeys {
-		var isUKUpdate bool
-		isUKUpdate = ukUpdated(columnNames, newData, oldData)
+		if idxName == MySQLPrimaryKeyName {
+			continue
+		}
+		h := dataHashForUKChange(schema, table, idxName, columnNames, oldData, newData)
+		hashes = append(hashes, h...)
+	}
+	return hashes
+}
 
-		// add hash based on new data
-		keyName, h, err := dataHash(schema, table, idxName, columnNames, newData)
+func dataHashForUKChange(
+	schema string,
+	table string,
+	idxName string,
+	columnNames []string,
+	oldData map[string]interface{},
+	newData map[string]interface{}) []core.OutputHash {
+
+	var hashes []core.OutputHash
+	var isUKUpdate bool
+	isUKUpdate = ukUpdated(columnNames, newData, oldData)
+
+	// add hash based on new data
+	keyName, h, err := dataHash(schema, table, idxName, columnNames, newData)
+	if err != nil {
+		log.Fatalf("[GenerateDMLDepHashes] failed: %v", err.Error())
+	}
+
+	hashes = append(hashes, core.OutputHash{Name: keyName, H: h})
+
+	// add hash if unique key changed
+	if isUKUpdate {
+		keyName, h, err := dataHash(schema, table, idxName, columnNames, oldData)
 		if err != nil {
-			log.Fatalf("[GenerateDMLDepHashes] failed: %v", err.Error())
+			log.Fatalf("[GenerateDataHashes] failed: %v", err.Error())
 		}
-
 		hashes = append(hashes, core.OutputHash{Name: keyName, H: h})
-
-		// add hash if unique key changed
-		if isUKUpdate {
-			keyName, h, err := dataHash(schema, table, idxName, columnNames, oldData)
-			if err != nil {
-				log.Fatalf("[GenerateDataHashes] failed: %v", err.Error())
-			}
-			hashes = append(hashes, core.OutputHash{Name: keyName, H: h})
-		}
-
 	}
 	return hashes
 }
