@@ -189,6 +189,9 @@ func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 			return errors.Annotatef(err, "topic: %v", topic)
 		}
 
+		// data with the same primary key goes to the same partition,
+		// if there is no primary key, use unique index;
+		// if there is no primary key and unique index, use partition 0.
 		var partition uint64
 		if len(msg.OutputDepHashes) > 0 {
 			partition = msg.OutputDepHashes[0].H % uint64(len(partitions))
