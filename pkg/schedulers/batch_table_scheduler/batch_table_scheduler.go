@@ -378,7 +378,7 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 		// having the same output hash.
 		latches := make(map[uint64]int)
 
-		flushFunc := func() bool {
+		flushFunc := func() {
 
 			var curBatch []*core.Msg
 			batchLen := len(batch)
@@ -395,7 +395,7 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 				for _, h := range m.OutputDepHashes {
 					if latches[h.H] > 0 {
 						curBatch = nil
-						return true
+						return
 					}
 				}
 			}
@@ -428,9 +428,8 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 			}
 			batch = batch[len(curBatch):]
 			curBatch = nil
-			return false
 		}
-		ticker := time.NewTicker(500 * time.Millisecond)
+		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 
 		for {
@@ -470,8 +469,12 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 					WithLabelValues(core.PipelineName, "table-latch", key).
 					Set(float64(len(tableLatchC)))
 			case <-ticker.C:
+				// if there is no message will come, and the current batch is empty, and all latches are releases,
+				// then we can are in a graceful shutdown.
 				if closing && len(batch) == 0 && len(latches) == 0 {
 					return
+				} else {
+					flushFunc()
 				}
 			}
 		}
