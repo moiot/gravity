@@ -2,6 +2,7 @@ package async_kafka
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 
 	"github.com/Shopify/sarama"
@@ -191,10 +192,12 @@ func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 
 		// data with the same primary key goes to the same partition,
 		// if there is no primary key, use unique index;
-		// if there is no primary key and unique index, use partition 0.
+		// if there is no primary key and unique index, use a random partition.
 		var partition uint64
 		if len(msg.OutputDepHashes) > 0 {
 			partition = msg.OutputDepHashes[0].H % uint64(len(partitions))
+		} else {
+			partition = rand.Uint64() % uint64(len(partitions))
 		}
 		kafkaMsg := sarama.ProducerMessage{
 			Topic:     topic,
