@@ -2,25 +2,22 @@ package async_kafka
 
 import (
 	"fmt"
-
-	"github.com/moiot/gravity/pkg/core/encoding"
-	"github.com/moiot/gravity/pkg/outputs/routers"
+	"math/rand"
+	"sync"
 
 	"github.com/Shopify/sarama"
 	"github.com/juju/errors"
+	"github.com/mitchellh/mapstructure"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/core/encoding"
 	"github.com/moiot/gravity/pkg/kafka"
 	"github.com/moiot/gravity/pkg/metrics"
+	"github.com/moiot/gravity/pkg/outputs/routers"
 	"github.com/moiot/gravity/pkg/registry"
-	"github.com/moiot/gravity/pkg/utils"
-
-	"sync"
-
-	"github.com/mitchellh/mapstructure"
 )
 
 const Name = "async-kafka"
@@ -192,7 +189,16 @@ func (output *AsyncKafka) Execute(msgs []*core.Msg) error {
 		if err != nil {
 			return errors.Annotatef(err, "topic: %v", topic)
 		}
-		partition := int(utils.GenHashKey(*msg.OutputStreamKey)) % len(partitions)
+
+		// data with the same primary key goes to the same partition,
+		// if there is no primary key, use unique index;
+		// if there is no primary key and unique index, use a random partition.
+		var partition uint64
+		if len(msg.OutputDepHashes) > 0 {
+			partition = msg.OutputDepHashes[0].H % uint64(len(partitions))
+		} else {
+			partition = rand.Uint64() % uint64(len(partitions))
+		}
 		kafkaMsg := sarama.ProducerMessage{
 			Topic:     topic,
 			Value:     sarama.ByteEncoder(b),

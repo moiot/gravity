@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mitchellh/hashstructure"
+
 	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -210,7 +212,12 @@ func (tailer *OplogTailer) Run() {
 			}
 			c.Add(1)
 			msg.InputStreamKey = utils.NewStringPtr("mongooplog")
-			msg.OutputStreamKey = utils.NewStringPtr(outputStreamKey(msg.Oplog))
+			idKey := outputStreamKey(msg.Oplog)
+			h, err := hashstructure.Hash(idKey, nil)
+			if err != nil {
+				log.Fatalf("failed to generate hash: %v", err.Error())
+			}
+			msg.OutputDepHashes = []core.OutputHash{{idKey, h}}
 			msg.InputContext = config.MongoPosition(op.Timestamp)
 			msg.AfterCommitCallback = tailer.AfterMsgCommit
 			if err := tailer.emitter.Emit(&msg); err != nil {

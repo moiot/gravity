@@ -1,8 +1,12 @@
 package mysqlstream
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 	"time"
+
+	"github.com/mitchellh/hashstructure"
 
 	"github.com/pingcap/parser/ast"
 
@@ -86,7 +90,7 @@ func NewInsertMsgs(
 		msg.DmlMsg = dmlMsg
 		msg.Done = make(chan struct{})
 		msg.InputStreamKey = utils.NewStringPtr(inputStreamKey)
-		msg.OutputStreamKey = utils.NewStringPtr(msg.GetPkSign())
+		msg.OutputDepHashes = GenerateDMLDepHashes(&msg, tableDef)
 		msgs[rowIndex] = &msg
 	}
 	return msgs, nil
@@ -161,7 +165,7 @@ func NewUpdateMsgs(
 			msg.DmlMsg = dmlMsg
 			msg.Done = make(chan struct{})
 			msg.InputStreamKey = utils.NewStringPtr(inputStreamKey)
-			msg.OutputStreamKey = utils.NewStringPtr(msg.GetPkSign())
+			msg.OutputDepHashes = GenerateDMLDepHashes(&msg, tableDef)
 			msgs = append(msgs, &msg)
 		} else {
 			// first delete old row
@@ -188,7 +192,7 @@ func NewUpdateMsgs(
 			msgDelete.DmlMsg = dmlMsg1
 			msgDelete.Done = make(chan struct{})
 			msgDelete.InputStreamKey = utils.NewStringPtr(inputStreamKey)
-			msgDelete.OutputStreamKey = utils.NewStringPtr(msgDelete.GetPkSign())
+			msgDelete.OutputDepHashes = GenerateDMLDepHashes(&msgDelete, tableDef)
 			msgs = append(msgs, &msgDelete)
 
 			// then insert new row
@@ -216,7 +220,7 @@ func NewUpdateMsgs(
 			msgInsert.DmlMsg = dmlMsg2
 			msgInsert.Done = make(chan struct{})
 			msgInsert.InputStreamKey = utils.NewStringPtr(inputStreamKey)
-			msgInsert.OutputStreamKey = utils.NewStringPtr(msgInsert.GetPkSign())
+			msgInsert.OutputDepHashes = GenerateDMLDepHashes(&msgInsert, tableDef)
 			msgs = append(msgs, &msgInsert)
 		}
 	}
@@ -306,7 +310,7 @@ func NewDeleteMsgs(
 		msg.DmlMsg = dmlMsg
 		msg.Done = make(chan struct{})
 		msg.InputStreamKey = utils.NewStringPtr(inputStreamKey)
-		msg.OutputStreamKey = utils.NewStringPtr(msg.GetPkSign())
+		msg.OutputDepHashes = GenerateDMLDepHashes(&msg, tableDef)
 		msgs[rowIndex] = &msg
 	}
 
@@ -315,7 +319,7 @@ func NewDeleteMsgs(
 }
 
 func NewDDLMsg(
-	callback core.AfterMsgCommitFunc,
+	callback core.MsgCallbackFunc,
 	dbName string,
 	table string,
 	ast ast.StmtNode,
@@ -336,19 +340,17 @@ func NewDDLMsg(
 		Done:                make(chan struct{}),
 		InputContext:        inputContext{op: ddl, position: position},
 		InputStreamKey:      utils.NewStringPtr(inputStreamKey),
-		OutputStreamKey:     utils.NewStringPtr(""),
 		AfterCommitCallback: callback,
 	}
 }
 
-func NewBarrierMsg(callback core.AfterMsgCommitFunc) *core.Msg {
+func NewBarrierMsg(callback core.MsgCallbackFunc) *core.Msg {
 	return &core.Msg{
 		Type:                core.MsgCtl,
 		Timestamp:           time.Now(),
 		Done:                make(chan struct{}),
 		InputContext:        inputContext{op: barrier},
 		InputStreamKey:      utils.NewStringPtr(inputStreamKey),
-		OutputStreamKey:     utils.NewStringPtr(""),
 		AfterCommitCallback: callback,
 		Phase: core.Phase{
 			EnterInput: time.Now(),
@@ -356,7 +358,7 @@ func NewBarrierMsg(callback core.AfterMsgCommitFunc) *core.Msg {
 	}
 }
 
-func NewXIDMsg(ts int64, received time.Time, callback core.AfterMsgCommitFunc, position utils.MySQLBinlogPosition) *core.Msg {
+func NewXIDMsg(ts int64, received time.Time, callback core.MsgCallbackFunc, position utils.MySQLBinlogPosition) *core.Msg {
 	return &core.Msg{
 		Phase: core.Phase{
 			EnterInput: received,
@@ -366,7 +368,97 @@ func NewXIDMsg(ts int64, received time.Time, callback core.AfterMsgCommitFunc, p
 		Done:                make(chan struct{}),
 		InputContext:        inputContext{op: xid, position: position},
 		InputStreamKey:      utils.NewStringPtr(inputStreamKey),
-		OutputStreamKey:     utils.NewStringPtr(""),
 		AfterCommitCallback: callback,
 	}
+}
+
+func GenerateDMLDepHashes(msg *core.Msg, tableDef *schema_store.Table) []core.OutputHash {
+	if msg.DmlMsg == nil {
+		log.Fatalf("[GenerateDMLDepHashes] dml msg nil")
+	}
+	return GenerateDataHashes(tableDef.Schema, tableDef.Name, tableDef.UniqueKeyColumnMap, msg.DmlMsg.Old, msg.DmlMsg.Data)
+}
+
+const MySQLPrimaryKeyName = "PRIMARY"
+
+func GenerateDataHashes(
+	schema string,
+	table string,
+	uniqKeys map[string][]string,
+	oldData map[string]interface{},
+	newData map[string]interface{}) []core.OutputHash {
+
+	var hashes []core.OutputHash
+	if newData == nil {
+		log.Fatalf("[GenerateDataHashes] newData nil")
+	}
+
+	if columnNames, ok := uniqKeys[MySQLPrimaryKeyName]; ok {
+		h := dataHashForUKChange(schema, table, MySQLPrimaryKeyName, columnNames, oldData, newData)
+		hashes = append(hashes, h...)
+	}
+
+	for idxName, columnNames := range uniqKeys {
+		if idxName == MySQLPrimaryKeyName {
+			continue
+		}
+		h := dataHashForUKChange(schema, table, idxName, columnNames, oldData, newData)
+		hashes = append(hashes, h...)
+	}
+	return hashes
+}
+
+func dataHashForUKChange(
+	schema string,
+	table string,
+	idxName string,
+	columnNames []string,
+	oldData map[string]interface{},
+	newData map[string]interface{}) []core.OutputHash {
+
+	var hashes []core.OutputHash
+	var isUKUpdate bool
+	isUKUpdate = ukUpdated(columnNames, newData, oldData)
+
+	// add hash based on new data
+	keyName, h, err := dataHash(schema, table, idxName, columnNames, newData)
+	if err != nil {
+		log.Fatalf("[GenerateDMLDepHashes] failed: %v", err.Error())
+	}
+
+	hashes = append(hashes, core.OutputHash{Name: keyName, H: h})
+
+	// add hash if unique key changed
+	if isUKUpdate {
+		keyName, h, err := dataHash(schema, table, idxName, columnNames, oldData)
+		if err != nil {
+			log.Fatalf("[GenerateDataHashes] failed: %v", err.Error())
+		}
+		hashes = append(hashes, core.OutputHash{Name: keyName, H: h})
+	}
+	return hashes
+}
+
+func dataHash(schema string, table string, idxName string, idxColumns []string, data map[string]interface{}) (string, uint64, error) {
+	key := []interface{}{schema, table, idxName}
+	for _, columnName := range idxColumns {
+		key = append(key, columnName, data[columnName])
+	}
+
+	h, err := hashstructure.Hash(key, nil)
+	if err != nil {
+		return "", 0, errors.Trace(err)
+	}
+	return fmt.Sprint(key), h, nil
+}
+
+// Note that unique key's value cannot be NULL/nil
+func ukUpdated(ukColumns []string, newData map[string]interface{}, oldData map[string]interface{}) bool {
+	for _, column := range ukColumns {
+		// if oldData[column] == nil, we consider this is a insert
+		if oldData[column] != nil && !reflect.DeepEqual(newData[column], oldData[column]) {
+			return true
+		}
+	}
+	return false
 }

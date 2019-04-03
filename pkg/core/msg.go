@@ -3,10 +3,10 @@ package core
 import (
 	"fmt"
 	"hash/fnv"
+	"strings"
 	"time"
 
 	"github.com/juju/errors"
-
 	"github.com/pingcap/parser/ast"
 	log "github.com/sirupsen/logrus"
 
@@ -37,8 +37,14 @@ const (
 	Delete DMLOp = "delete"
 )
 
-type AfterMsgCommitFunc func(m *Msg) error
+type MsgCallbackFunc func(m *Msg) error
 
+// OutputHash defines the hash value of the message's output.
+// Name is used just for better debug/test purpose.
+type OutputHash struct {
+	Name string
+	H    uint64
+}
 type Msg struct {
 	Phase
 
@@ -57,14 +63,17 @@ type Msg struct {
 	TimeZone  *time.Location
 	Oplog     *gtm.Op
 
-	InputStreamKey  *string
-	OutputStreamKey *string
+	InputStreamKey *string
+
+	// OutputDepHashed defines the dependency of this msg.
+	OutputDepHashes []OutputHash
 	Done            chan struct{}
 
 	InputSequence *int64
 
 	InputContext        interface{}
-	AfterCommitCallback AfterMsgCommitFunc
+	AfterCommitCallback MsgCallbackFunc
+	AfterAckCallback    MsgCallbackFunc
 }
 
 func (msg *Msg) SequenceNumber() int64 {
@@ -96,16 +105,34 @@ type MsgAcker interface {
 	AckMsg(msg *Msg) error
 }
 
-func (msg Msg) GetPkSign() string {
-	var sign string
+// func (msg *Msg) OutputHash() uint {
+// 	if msg.outputHash == nil {
+// 		msg.outputHash = new(uint)
+// 		if msg.OutputStreamKey == NoDependencyOutput {
+// 			*msg.outputHash = uint(atomic.AddUint64(&noDependencyOutputHash, 1))
+// 		} else {
+// 			*msg.outputHash = uint(utils.GenHashKey(*msg.OutputStreamKey))
+// 		}
+// 	}
+// 	return *msg.outputHash
+// }
+
+func (msg *Msg) GetPkSign() string {
+	sign := strings.Builder{}
+	sign.Grow(20)
+	sign.WriteString(msg.Database)
+	sign.WriteString("`.`")
+	sign.WriteString(msg.Table)
+	sign.WriteString(":")
 	for _, v := range msg.DmlMsg.Pks {
 		pkString := fmt.Sprint(v)
 		if pkString == "" {
 			log.Warnf("[mysql/job_msg] GetPartitionKeyFromPayload: empty primary key")
 		}
-		sign += pkString + "_"
+		sign.WriteString(pkString)
+		sign.WriteString("_")
 	}
-	return sign
+	return sign.String()
 }
 
 type DDLMsg struct {

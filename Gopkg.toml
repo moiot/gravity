@@ -135,3 +135,7 @@
 [[constraint]]
   name = "github.com/golang/protobuf"
   version = "1.2.0"
+
+[[constraint]]
+  name = "github.com/mitchellh/hashstructure"
+  version = "1.0.0"

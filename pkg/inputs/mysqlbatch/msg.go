@@ -4,16 +4,14 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/moiot/gravity/pkg/metrics"
-
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser/ast"
-
 	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 	_ "github.com/pingcap/tidb/types/parser_driver"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mysql"
 	"github.com/moiot/gravity/pkg/schema_store"
 	"github.com/moiot/gravity/pkg/utils"
@@ -26,7 +24,7 @@ func NewMsg(
 	rowPtrs []interface{},
 	columnTypes []*sql.ColumnType,
 	sourceTableDef *schema_store.Table,
-	callbackFunc core.AfterMsgCommitFunc,
+	callbackFunc core.MsgCallbackFunc,
 	positions []TablePosition,
 	scanTime time.Time) *core.Msg {
 
@@ -59,7 +57,6 @@ func NewMsg(
 	msg.DmlMsg = dmlMsg
 	msg.Type = core.MsgDML
 	msg.InputStreamKey = utils.NewStringPtr(utils.TableIdentity(sourceTableDef.Schema, sourceTableDef.Name))
-	msg.OutputStreamKey = utils.NewStringPtr(msg.GetPkSign())
 	msg.Done = make(chan struct{})
 	msg.AfterCommitCallback = callbackFunc
 	msg.InputContext = positions
@@ -88,7 +85,6 @@ func NewCreateTableMsg(parser *parser.Parser, table *schema_store.Table, createT
 
 	msg.Type = core.MsgDDL
 	msg.InputStreamKey = utils.NewStringPtr(utils.TableIdentity(table.Schema, table.Name))
-	msg.OutputStreamKey = utils.NewStringPtr("")
 	msg.Done = make(chan struct{})
 	msg.Phase = core.Phase{
 		EnterInput: time.Now(),
@@ -102,10 +98,9 @@ func NewBarrierMsg(tableDef *schema_store.Table) *core.Msg {
 		Phase: core.Phase{
 			EnterInput: time.Now(),
 		},
-		Type:            core.MsgCtl,
-		InputStreamKey:  utils.NewStringPtr(utils.TableIdentity(tableDef.Schema, tableDef.Name)),
-		OutputStreamKey: utils.NewStringPtr(""),
-		Done:            make(chan struct{}),
+		Type:           core.MsgCtl,
+		InputStreamKey: utils.NewStringPtr(utils.TableIdentity(tableDef.Schema, tableDef.Name)),
+		Done:           make(chan struct{}),
 	}
 	return &msg
 }
@@ -115,10 +110,9 @@ func NewCloseInputStreamMsg(tableDef *schema_store.Table) *core.Msg {
 		Phase: core.Phase{
 			EnterInput: time.Now(),
 		},
-		Type:            core.MsgCloseInputStream,
-		InputStreamKey:  utils.NewStringPtr(utils.TableIdentity(tableDef.Schema, tableDef.Name)),
-		OutputStreamKey: utils.NewStringPtr(""),
-		Done:            make(chan struct{}),
+		Type:           core.MsgCloseInputStream,
+		InputStreamKey: utils.NewStringPtr(utils.TableIdentity(tableDef.Schema, tableDef.Name)),
+		Done:           make(chan struct{}),
 	}
 	metrics.InputCounter.WithLabelValues(core.PipelineName, msg.Database, msg.Table, string(msg.Type), "").Add(1)
 	return &msg

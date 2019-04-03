@@ -3,8 +3,6 @@ package batch_table_scheduler
 import (
 	"sync"
 
-	"time"
-
 	"github.com/juju/errors"
 )
 
@@ -15,7 +13,6 @@ type workingElement struct {
 
 type workingSet struct {
 	sync.Mutex
-	ticker   *time.Ticker
 	elements map[string]*workingElement
 }
 
@@ -36,10 +33,13 @@ func (ws *workingSet) checkConflict(k string) (ack chan struct{}, conflict bool)
 }
 
 func (ws *workingSet) checkConflictWithBatch(batch []string) ([]chan struct{}, bool) {
+	acks := make([]chan struct{}, len(batch))
+	if len(batch) == 0 {
+		return acks, false
+	}
 	ws.Lock()
 	defer ws.Unlock()
 
-	acks := make([]chan struct{}, len(batch))
 	conflicts := make([]bool, len(batch))
 	hasConflict := false
 
@@ -93,6 +93,9 @@ func (ws *workingSet) checkAndPut(k string) (hadConflict bool) {
 }
 
 func (ws *workingSet) checkAndPutBatch(batch []string) (hadConflict bool) {
+	if len(batch) == 0 {
+		return false
+	}
 	acks, hadConflict := ws.checkConflictWithBatch(batch)
 	if hadConflict {
 		for _, ack := range acks {
@@ -130,22 +133,6 @@ func (ws *workingSet) numElements() int {
 }
 
 func newWorkingSet() *workingSet {
-	ws := workingSet{elements: make(map[string]*workingElement), ticker: time.NewTicker(100 * time.Millisecond)}
-
-	// we need a background goroutine here,=
-	// since some component may not send ack back to scheduler
-	go func() {
-		for range ws.ticker.C {
-			// big lock here
-			ws.Lock()
-			for k, e := range ws.elements {
-				if e.nrWaitingItem == 0 {
-					delete(ws.elements, k)
-				}
-			}
-			ws.Unlock()
-		}
-	}()
-
+	ws := workingSet{elements: make(map[string]*workingElement)}
 	return &ws
 }
