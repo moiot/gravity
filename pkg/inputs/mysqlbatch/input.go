@@ -194,7 +194,7 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 	plugin.ctx = ctx
 	plugin.cancel = cancelFunc
 
-	tableDefs, tableConfigs := GetTables(scanDB, sourceSchemaStore, cfg.TableConfigs, router)
+	tableDefs, tableConfigs := GetTables(scanDB, sourceSchemaStore, cfg.IgnoreTables, cfg.TableConfigs, router)
 	if err != nil {
 		return errors.Trace(err)
 	}
