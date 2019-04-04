@@ -19,7 +19,7 @@ import (
 
 // GetTables returns a list of table definition based on the schema, table name patterns
 // We only support single sourceDB for now.
-func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []TableConfig, router core.Router) ([]*schema_store.Table, []TableConfig) {
+func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, ignoreTables []TableConfig, tableConfigs []TableConfig, router core.Router) ([]*schema_store.Table, []TableConfig) {
 	var tableDefs []*schema_store.Table
 	var retTableConfigs []TableConfig
 
@@ -58,8 +58,12 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 		}
 
 		for _, tableName := range allTables {
+			if ignoreTable(tableName, ignoreTables) {
+				continue
+			}
+
 			for _, tablePattern := range tableConfigs[i].Table {
-				if utils.Glob(tablePattern, tableName) {
+				if tableConfigs[i].Schema == schemaName && utils.Glob(tablePattern, tableName) {
 					tableDef, ok := schema[tableName]
 					if !ok {
 						log.Fatalf("table def not found, schema: %v, table: %v", schemaName, tableName)
@@ -73,6 +77,8 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 		}
 	}
 
+	// if there is no definition for `table-configs`, we could use router definition in the output
+	// to generate tables we would like to scan.
 	if len(tableConfigs) == 0 && router != nil {
 		for schemaName, tables := range allSchema {
 			for _, tableName := range tables {
@@ -104,6 +110,18 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, tableConfigs []
 	}
 
 	return tableDefs, retTableConfigs
+}
+
+func ignoreTable(table string, ignoreTableConfig []TableConfig) bool {
+	for _, cfg := range ignoreTableConfig {
+		for _, tablePattern := range cfg.Table {
+			if utils.Glob(tablePattern, table) {
+				return true
+			}
+		}
+
+	}
+	return false
 }
 
 func DeleteEmptyTables(db *sql.DB, tables []*schema_store.Table, tableConfigs []TableConfig) ([]*schema_store.Table, []TableConfig) {

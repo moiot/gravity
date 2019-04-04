@@ -86,29 +86,6 @@ mode = "batch"
 # 源端 MySQL 的连接配置
 # - 必填
 #
-[input.config]
-# 总体扫描的并发线程数
-# - 默认为 10，表示最多允许 10 个表同时扫描
-# - 可选
-nr-scanner = 10
-
-# 单次扫描所去的行数
-# - 默认为 10000，表示一次拉取 10000 行
-# - 可选
-table-scan-batch = 10000
-
-# 全局限制，每秒所允许的 batch 数
-# - 默认为 1
-# - 可选
-#
-batch-per-second-limit = 1
-
-# 全局限制，没有找到单列主键、唯一索引时，最多多少行的表可用全表扫描方式读取，否则报错退出。
-# - 默认为 100,000
-# - 可选
-#
-max-full-dump-count = 10000
-
 [input.config.source]
 host = "127.0.0.1"
 username = "_gravity"
@@ -140,6 +117,44 @@ table = "test_source_*"
 # 指定扫描的列名字。默认情况下，如果不指定的话，系统会自动探测唯一键作为扫描的列。
 # 请仔细核对这个配置，确保这个列上面有唯一索引。
 scan-column = "id"
+
+# ignore-tables 定义了扫描时忽略的表
+# 默认情况下，如果一个表同时满足一下条件，gravity 会报错
+#
+# 1. 没有主键
+# 2. 没有唯一索引
+# 3. 表的总行数小于 max-full-dump-count.
+#
+# 定义 ignore-tables 可以忽略这些错误
+[[input.config.ignore-tables]]
+schema = "test_1"
+table = "test_source_1"
+
+
+[input.config]
+# 总体扫描的并发线程数
+# - 默认为 10，表示最多允许 10 个表同时扫描
+# - 可选
+nr-scanner = 10
+
+# 单次扫描所去的行数
+# - 默认为 10000，表示一次拉取 10000 行
+# - 可选
+table-scan-batch = 10000
+
+# 全局限制，每秒所允许的 batch 数
+# - 默认为 1
+# - 可选
+#
+batch-per-second-limit = 1
+
+# 全局限制，没有找到单列主键、唯一索引时，最多多少行的表可用全表扫描方式读取，否则报错退出。
+# - 默认为 100,000
+# - 可选
+#
+max-full-dump-count = 10000
+
+
 
 ```
 

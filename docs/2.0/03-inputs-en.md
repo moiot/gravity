@@ -114,7 +114,7 @@ location = "Local"
 
 #
 # The table to be scanned
-# Required
+# Optional. If not specified, output router will be used.
 [[input.config.table-configs]]
 schema = "test_1"
 table = "test_source_*"
@@ -122,10 +122,23 @@ table = "test_source_*"
 [[input.config.table-configs]]
 schema = "test_2"
 table = "test_source_*"
+
 # Optional
 # Enforce the column to scan for tables. If you don't specifiy this value, the system will use a column that has unique index.
 # Make sure you know what you are doing: YOU NEED TO SPECIFY A COLUMN THAT HAVE A UNIQUE INDEX.
 scan-column = "id"
+
+# you can ignore talbes defined in input.config.table-configs
+# gravity do not support scan of these tables if it matches all of these condition:
+#
+# 1. do not have primary key
+# 2. do not have unique key
+# 3. the number of rows in this table is greater than max-full-dump-count.
+#
+# To ignore these tables, you can setup a ingore table list.
+[[input.config.ignore-tables]]
+schema = "test_1"
+table = "test_source_1"
 
 [input.config]
 
