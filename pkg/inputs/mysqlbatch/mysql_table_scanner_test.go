@@ -404,7 +404,7 @@ func TestTableScanner_Start(t *testing.T) {
 			r.NoError(err)
 			cfg := c.cfg
 
-			tableDefs, tableConfigs := GetTables(db, schemaStore, cfg.TableConfigs, nil)
+			tableDefs, tableConfigs := GetTables(db, schemaStore, nil, cfg.TableConfigs, nil)
 			r.Equal(1, len(tableDefs))
 			r.Equal(1, len(tableConfigs))
 
