@@ -58,7 +58,7 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, ignoreTables []
 		}
 
 		for _, tableName := range allTables {
-			if ignoreTable(tableName, ignoreTables) {
+			if ignoreTable(schemaName, tableName, ignoreTables) {
 				continue
 			}
 
@@ -112,10 +112,10 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, ignoreTables []
 	return tableDefs, retTableConfigs
 }
 
-func ignoreTable(table string, ignoreTableConfig []TableConfig) bool {
+func ignoreTable(schema string, table string, ignoreTableConfig []TableConfig) bool {
 	for _, cfg := range ignoreTableConfig {
 		for _, tablePattern := range cfg.Table {
-			if utils.Glob(tablePattern, table) {
+			if schema == cfg.Schema && utils.Glob(tablePattern, table) {
 				return true
 			}
 		}
