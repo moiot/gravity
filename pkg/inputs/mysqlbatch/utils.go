@@ -63,7 +63,7 @@ func GetTables(db *sql.DB, schemaStore schema_store.SchemaStore, ignoreTables []
 			}
 
 			for _, tablePattern := range tableConfigs[i].Table {
-				if tableConfigs[i].Schema == schemaName && utils.Glob(tablePattern, tableName) {
+				if utils.Glob(tablePattern, tableName) {
 					tableDef, ok := schema[tableName]
 					if !ok {
 						log.Fatalf("table def not found, schema: %v, table: %v", schemaName, tableName)

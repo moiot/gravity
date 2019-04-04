@@ -82,6 +82,14 @@ port = 3306
 
 ## `mysql` batch configuration
 
+mysql batch mode does not support scanning a table with the following properties:
+
+If a table do not have primary keys, do not have a unique key, and the number of rows exceeds `max-full-dump-count`;
+
+`gravity` will stop and raise error.
+
+You can use `ignore-tables` to ignore these tables. 
+
 ```toml
 [input]
 type = "mysql"

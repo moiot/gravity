@@ -78,6 +78,10 @@ port = 3306
 
 ### mysql 全量模式
 
+如果表没有主键，并且没有唯一索引，并且并且表的总行数大于 `max-full-dump-count`，`gravity`会报错。
+
+你可以通过 `ignore-tables` 忽略这些表。
+
 ```toml
 [input]
 type = "mysql"
@@ -119,12 +123,7 @@ table = "test_source_*"
 scan-column = "id"
 
 # ignore-tables 定义了扫描时忽略的表
-# 默认情况下，如果一个表同时满足一下条件，gravity 会报错
-#
-# 1. 没有主键
-# 2. 没有唯一索引
-# 3. 表的总行数小于 max-full-dump-count.
-#
+
 # 定义 ignore-tables 可以忽略这些错误
 [[input.config.ignore-tables]]
 schema = "test_1"
