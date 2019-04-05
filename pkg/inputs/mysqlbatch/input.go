@@ -36,7 +36,9 @@ type PluginConfig struct {
 
 	SourceProbeCfg *helper.SourceProbeCfg `mapstructure:"source-probe-config"json:"source-probe-config"`
 
-	TableConfigs []TableConfig `mapstructure:"table-configs"json:"table-configs"`
+	TableConfigs []TableConfig `mapstructure:"table-configs" json:"table-configs"`
+
+	IgnoreTables []TableConfig `mapstructure:"ignore-tables" json:"ignore-tables"`
 
 	NrScanner        int   `mapstructure:"nr-scanner" toml:"nr-scanner" json:"nr-scanner"`
 	TableScanBatch   int   `mapstructure:"table-scan-batch" toml:"table-scan-batch" json:"table-scan-batch"`
@@ -192,7 +194,7 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 	plugin.ctx = ctx
 	plugin.cancel = cancelFunc
 
-	tableDefs, tableConfigs := GetTables(scanDB, sourceSchemaStore, cfg.TableConfigs, router)
+	tableDefs, tableConfigs := GetTables(scanDB, sourceSchemaStore, cfg.IgnoreTables, cfg.TableConfigs, router)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -224,7 +226,7 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 		estimatedRowCount[i] = rowCount
 	}
 	if len(allErrors) > 0 {
-		return errors.Errorf("failed detect %d tables scan column", len(allErrors))
+		return errors.Errorf("failed detect %d tables scan column, consider define ignore-tables to ignore", len(allErrors))
 	}
 
 	tableDefs, tableConfigs, scanColumnsArray, estimatedRowCount, err = InitializePositionAndDeleteScannedTable(
