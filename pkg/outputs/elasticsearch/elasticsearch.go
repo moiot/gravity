@@ -93,7 +93,6 @@ func (output *ElasticsearchOutput) Close() {
 func (output *ElasticsearchOutput) Execute(msgs []*core.Msg) error {
 	var reqs []elastic.BulkableRequest
 	for _, msg := range msgs {
-		log.Infof("[output_elasticsearch] msg: %v", msg)
 		// only support dml message
 		if msg.DmlMsg == nil {
 			continue

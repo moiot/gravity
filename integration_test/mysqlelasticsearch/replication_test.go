@@ -83,7 +83,6 @@ func TestMySQL2ElasticsearchReplication(t *testing.T) {
 
 	cnt, err := getDocCount(es, mysql_test.TestTableName)
 	r.NoError(err)
-
 	r.Equal(cnt, batchOpCnt)
 
 	streamOpCnt := 200
