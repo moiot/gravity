@@ -108,9 +108,16 @@ func (output *ElasticsearchOutput) Execute(msgs []*core.Msg) error {
 
 		var req elastic.BulkableRequest
 		if msg.DmlMsg.Operation == core.Delete {
-			req = elastic.NewBulkDeleteRequest().Index(route.TargetIndex).Type(route.TargetType).Id(genDocID(msg))
+			req = elastic.NewBulkDeleteRequest().
+				Index(route.TargetIndex).
+				Type(route.TargetType).
+				Id(genDocID(msg))
 		} else {
-			req = elastic.NewBulkIndexRequest().Index(route.TargetIndex).Type(route.TargetType).Id(genDocID(msg)).Doc(msg.DmlMsg.Data)
+			req = elastic.NewBulkIndexRequest().
+				Index(route.TargetIndex).
+				Type(route.TargetType).
+				Id(genDocID(msg)).
+				Doc(msg.DmlMsg.Data)
 		}
 		reqs = append(reqs, req)
 	}
