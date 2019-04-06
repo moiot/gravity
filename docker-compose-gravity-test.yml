@@ -49,6 +49,17 @@ services:
     logging:
       driver: none
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:6.3.2
+    container_name: elasticsearch
+    environment:
+      - http.host=0.0.0.0
+      - xpack.security.transport.filter.allow=0.0.0.0
+      - cluster.name=gravity
+      - "ES_JAVA_OPTS=-Xms750m -Xmx750m"
+    logging:
+      driver: none
+
   gravity-test:
     build:
       context: ./
@@ -58,4 +69,5 @@ services:
     environment:
       - MONGO_HOST=mongo
       - KAFKA_BROKER=kafka:9092
-    command: ["bash", "./wait-for-it.sh", "source-db:3306","-t", "0",  "--", "./wait-for-it.sh", "target-db:3306","-t", "0",  "--", "./wait-for-it.sh", "mongo:27017", "-t", "0", "--", "./wait-for-it.sh", "kafka:9092", "-t", "0", "--", "make", "go-test"]
+      - ELASTICSEARCH_URLS=http://elasticsearch:9200
+    command: ["bash", "./wait-for-it.sh", "source-db:3306","-t", "0",  "--", "./wait-for-it.sh", "target-db:3306","-t", "0",  "--", "./wait-for-it.sh", "mongo:27017", "-t", "0", "--", "./wait-for-it.sh", "kafka:9092", "-t", "0", "--", "./wait-for-it.sh", "elasticsearch:9200", "-t", "0",  "--", "make", "go-test"]

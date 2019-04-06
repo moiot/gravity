@@ -315,6 +315,19 @@
   revision = "c7d06af17c68cd34c835053720b21f6549d9b0ee"
 
 [[projects]]
+  branch = "master"
+  digest = "1:d594a6358158ddbd8996cefe7982228a1f57a6d0f27b6ea71b7e04cf578170aa"
+  name = "github.com/mailru/easyjson"
+  packages = [
+    ".",
+    "buffer",
+    "jlexer",
+    "jwriter",
+  ]
+  pruneopts = "T"
+  revision = "1ea4449da9834f4d333f1cc461c374aea217d249"
+
+[[projects]]
   digest = "1:4a83abc6be2399d91925b820f56ec273770d0768a90a10a6d2b132a2dfc51aa8"
   name = "github.com/matttproud/golang_protobuf_extensions"
   packages = ["pbutil"]
@@ -377,6 +390,18 @@
   pruneopts = "T"
   revision = "4dadeb3030eda0273a12382bb2348ffc7c9d1a39"
   version = "v1.0.0"
+
+[[projects]]
+  digest = "1:e9d3a1bfa7b1e68af08bc37eb8bb57e8f6485ac8ba4f1e595b19ab31335d9d76"
+  name = "github.com/olivere/elastic"
+  packages = [
+    ".",
+    "config",
+    "uritemplates",
+  ]
+  pruneopts = "T"
+  revision = "8a3f2cdf773521f77a2b9517d131c6cf28be6ca1"
+  version = "v6.2.17"
 
 [[projects]]
   digest = "1:0e65a0b6d1aa037a552285666ed4ed79c1c1944c95d3123750f618920ade9033"
@@ -497,6 +522,14 @@
   ]
   pruneopts = "T"
   revision = "a7fd2aaa9719b64c2de3f6c6cd7cb235cb701b56"
+
+[[projects]]
+  digest = "1:cf31692c14422fa27c83a05292eb5cbe0fb2775972e8f1f8446a71549bd8980b"
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  pruneopts = "T"
+  revision = "ba968bfe8b2f7e042a574c888954fccecfa385b4"
+  version = "v0.8.1"
 
 [[projects]]
   digest = "1:22aa691fe0213cb5c07d103f9effebcb7ad04bee45a0ce5fe5369d0ca2ec3a1f"
@@ -852,6 +885,7 @@
     "github.com/juju/errors",
     "github.com/mitchellh/hashstructure",
     "github.com/mitchellh/mapstructure",
+    "github.com/olivere/elastic",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
     "github.com/onsi/gomega/gstruct",
