@@ -21,9 +21,15 @@ const (
 	Name = "elasticsearch"
 )
 
+type ElasticsearchServerAuth struct {
+	Username string `mapstructure:"username" toml:"username" json:"username"`
+	Password string `mapstructure:"password" toml:"password" json:"password"`
+}
+
 type ElasticsearchServerConfig struct {
-	URLs  []string `mapstructure:"urls" toml:"urls" json:"urls"`
-	Sniff bool     `mapstructure:"sniff" toml:"sniff" json:"sniff"`
+	URLs  []string                 `mapstructure:"urls" toml:"urls" json:"urls"`
+	Sniff bool                     `mapstructure:"sniff" toml:"sniff" json:"sniff"`
+	Auth  *ElasticsearchServerAuth `mapstructure:"auth" toml:"auth" json:"auth"`
 }
 
 type ElasticsearchPluginConfig struct {
@@ -78,7 +84,16 @@ func (output *ElasticsearchOutput) GetRouter() core.Router {
 
 func (output *ElasticsearchOutput) Start() error {
 	serverConfig := output.config.ServerConfig
-	client, err := elastic.NewClient(elastic.SetSniff(serverConfig.Sniff), elastic.SetURL(serverConfig.URLs...))
+	options := []elastic.ClientOptionFunc{
+		elastic.SetURL(serverConfig.URLs...),
+		elastic.SetSniff(serverConfig.Sniff),
+	}
+
+	if auth := serverConfig.Auth; auth != nil {
+		options = append(options, elastic.SetBasicAuth(auth.Username, auth.Password))
+	}
+
+	client, err := elastic.NewClient(options...)
 	if err != nil {
 		return errors.Trace(err)
 	}

@@ -2,7 +2,9 @@ package elasticsearch
 
 import (
 	"context"
+	"encoding/base64"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/moiot/gravity/pkg/core"
@@ -76,42 +78,46 @@ const ResponseOK = `
 }
 `
 
-func TestBadRequest(t *testing.T) {
+func TestBasicAuth(t *testing.T) {
 	r := require.New(t)
+	username, password := "username", "password"
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/_bulk", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte(ResponseBadRequest))
-	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-	})
+	mux.HandleFunc("/_bulk", basicAuthWrapper(username, password, staticHandler(http.StatusOK, ResponseOK)))
+	mux.HandleFunc("/", basicAuthWrapper(username, password, staticHandler(http.StatusOK, "")))
 
 	srv := &http.Server{Addr: ":9200", Handler: mux}
 	defer srv.Shutdown(context.TODO())
 	go srv.ListenAndServe()
 
-	output, err := startElasticsearchOutput()
+	output, err := defaultElasticsearchOutput()
 	r.NoError(err)
+	output.config.ServerConfig.Auth = &ElasticsearchServerAuth{
+		Username: username,
+		Password: password,
+	}
+	r.NoError(output.Start())
+
+	r.NoError(output.Execute(defaultMsgs()))
+}
+
+func TestBadRequest(t *testing.T) {
+	r := require.New(t)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/_bulk", staticHandler(http.StatusOK, ResponseBadRequest))
+	mux.HandleFunc("/", staticHandler(http.StatusOK, ""))
+
+	srv := &http.Server{Addr: ":9200", Handler: mux}
+	defer srv.Shutdown(context.TODO())
+	go srv.ListenAndServe()
+
+	output, err := defaultElasticsearchOutput()
+	r.NoError(err)
+	r.NoError(output.Start())
 
 	r.Panics(func() {
-		output.Execute([]*core.Msg{
-			{
-				Database: "test-db",
-				Type:     core.MsgDML,
-				Table:    "test-table",
-				DmlMsg: &core.DMLMsg{
-					Operation: core.Insert,
-					Data: map[string]interface{}{
-						"id": "abc",
-					},
-					Pks: map[string]interface{}{
-						"id": "abc",
-					},
-				},
-			},
-		})
+		output.Execute(defaultMsgs())
 	})
 }
 
@@ -119,21 +125,17 @@ func TestIgnoreBadRequest(t *testing.T) {
 	r := require.New(t)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/_bulk", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte(ResponseBadRequest))
-	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-	})
+	mux.HandleFunc("/_bulk", staticHandler(http.StatusOK, ResponseBadRequest))
+	mux.HandleFunc("/", staticHandler(http.StatusOK, ""))
 
 	srv := &http.Server{Addr: ":9200", Handler: mux}
 	defer srv.Shutdown(context.TODO())
 	go srv.ListenAndServe()
 
-	output, err := startElasticsearchOutput()
+	output, err := defaultElasticsearchOutput()
 	r.NoError(err)
 	output.config.IgnoreBadRequest = true
+	r.NoError(output.Start())
 
 	r.NoError(output.Execute(defaultMsgs()))
 }
@@ -147,16 +149,15 @@ func TestTooManyRequests(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/_bulk", counter.handler)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-	})
+	mux.HandleFunc("/", staticHandler(http.StatusOK, ""))
 
 	srv := &http.Server{Addr: ":9200", Handler: mux}
 	defer srv.Shutdown(context.TODO())
 	go srv.ListenAndServe()
 
-	output, err := startElasticsearchOutput()
+	output, err := defaultElasticsearchOutput()
 	r.NoError(err)
+	r.NoError(output.Start())
 
 	r.NoError(output.Execute(defaultMsgs()))
 	r.Equal(counter.Count, 2)
@@ -181,7 +182,7 @@ func defaultMsgs() []*core.Msg {
 	}
 }
 
-func startElasticsearchOutput() (*ElasticsearchOutput, error) {
+func defaultElasticsearchOutput() (*ElasticsearchOutput, error) {
 	output := &ElasticsearchOutput{}
 	err := output.Configure("mock", utils.Struct2Map(
 		&ElasticsearchPluginConfig{
@@ -201,10 +202,6 @@ func startElasticsearchOutput() (*ElasticsearchOutput, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = output.Start()
-	if err != nil {
-		return nil, err
-	}
 	return output, nil
 }
 
@@ -220,4 +217,43 @@ func (c *Counter) handler(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(ResponseOK))
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+func staticHandler(code int, content string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(code)
+		if content != "" {
+			w.Write([]byte(content))
+		}
+	}
+}
+
+func basicAuthWrapper(username, password string, handler func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+
+		s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+		if len(s) != 2 {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		b, err := base64.StdEncoding.DecodeString(s[1])
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		pair := strings.SplitN(string(b), ":", 2)
+		if len(pair) != 2 {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if pair[0] != username || pair[1] != password {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		handler(w, r)
+	}
 }
