@@ -2,9 +2,7 @@ package elasticsearch
 
 import (
 	"context"
-	"encoding/base64"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/moiot/gravity/pkg/core"
@@ -230,27 +228,9 @@ func staticHandler(code int, content string) func(w http.ResponseWriter, r *http
 
 func basicAuthWrapper(username, password string, handler func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+		user, pass, _ := r.BasicAuth()
 
-		s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
-		if len(s) != 2 {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		b, err := base64.StdEncoding.DecodeString(s[1])
-		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		pair := strings.SplitN(string(b), ":", 2)
-		if len(pair) != 2 {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		if pair[0] != username || pair[1] != password {
+		if user != username || pass != password {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
