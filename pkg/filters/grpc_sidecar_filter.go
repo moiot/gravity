@@ -131,6 +131,8 @@ func (f *grpcFilterType) Filter(msg *core.Msg) (bool, error) {
 
 func (f *grpcFilterType) Close() error {
 	f.client.Kill()
+	f.client = nil
+	f.delegate = nil
 	return nil
 }
 
