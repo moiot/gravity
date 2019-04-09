@@ -19,6 +19,8 @@ package filters
 import (
 	"os/exec"
 
+	log "github.com/sirupsen/logrus"
+
 	hplugin "github.com/hashicorp/go-plugin"
 	"github.com/juju/errors"
 	"github.com/moiot/gravity/pkg/core"
@@ -43,9 +45,12 @@ const (
 )
 
 type grpcFilterType struct {
+	configData map[string]interface{}
 	BaseFilter
-	client   *hplugin.Client
-	delegate core.IFilter
+	binaryURL string
+	name      string
+	client    *hplugin.Client
+	delegate  core.IFilter
 }
 
 func (f *grpcFilterType) Configure(data map[string]interface{}) error {
@@ -55,59 +60,63 @@ func (f *grpcFilterType) Configure(data map[string]interface{}) error {
 		return errors.Errorf("empty binary-url")
 	}
 
-	// name is the binary name. when we downloaded the binary, we use this name to
+	// name is the binary name. when we download the binary, we use this name to
 	// launch the process
 	name, ok := data["name"]
 	if !ok {
 		return errors.Errorf("empty binary name")
 	}
 
-	urlString := url.(string)
-	nameString := name.(string)
+	f.configData = data
+	f.binaryURL = url.(string)
+	f.name = name.(string)
 
-	fileName, err := utils.GetExecutable(urlString, BinaryDir, nameString)
+	err := f.ConfigureMatchers(data)
 	if err != nil {
 		return errors.Trace(err)
 	}
-
-	// start the process
-	client := hplugin.NewClient(&hplugin.ClientConfig{
-		HandshakeConfig: grpc.HandshakeConfig,
-		Plugins:         grpc.PluginMap,
-		Cmd:             exec.Command(fileName),
-		AllowedProtocols: []hplugin.Protocol{
-			hplugin.ProtocolGRPC,
-		},
-	})
-
-	rpcClient, err := client.Client()
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	f.client = client
-
-	raw, err := rpcClient.Dispense(grpc.PluginName)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	delegate := raw.(core.IFilter)
-	f.delegate = delegate
-
-	err = f.ConfigureMatchers(data)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	if err := f.delegate.Configure(data); err != nil {
-		return errors.Trace(err)
-	}
-
 	return nil
 }
 
 func (f *grpcFilterType) Filter(msg *core.Msg) (bool, error) {
+
+	if f.client == nil {
+		log.Infof("[grpcFilter] init client")
+		fileName, err := utils.GetExecutable(f.binaryURL, BinaryDir, f.name)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+
+		// start the process
+		client := hplugin.NewClient(&hplugin.ClientConfig{
+			HandshakeConfig: grpc.HandshakeConfig,
+			Plugins:         grpc.PluginMap,
+			Cmd:             exec.Command(fileName),
+			AllowedProtocols: []hplugin.Protocol{
+				hplugin.ProtocolGRPC,
+			},
+		})
+
+		rpcClient, err := client.Client()
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+
+		raw, err := rpcClient.Dispense(grpc.PluginName)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+
+		log.Infof("[grpcFilter] configure remote server")
+		delegate := raw.(core.IFilter)
+		if err := delegate.Configure(f.configData); err != nil {
+			return false, errors.Trace(err)
+		}
+
+		f.client = client
+		f.delegate = delegate
+	}
+
 	if !f.Matchers.Match(msg) {
 		return true, nil
 	}
