@@ -18,6 +18,7 @@ package filters
 
 import (
 	"os/exec"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 
@@ -51,6 +52,7 @@ type grpcFilterType struct {
 	name      string
 	client    *hplugin.Client
 	delegate  core.IFilter
+	once      sync.Once
 }
 
 func (f *grpcFilterType) Configure(data map[string]interface{}) error {
@@ -79,12 +81,11 @@ func (f *grpcFilterType) Configure(data map[string]interface{}) error {
 }
 
 func (f *grpcFilterType) Filter(msg *core.Msg) (bool, error) {
-
-	if f.client == nil {
+	f.once.Do(func() {
 		log.Infof("[grpcFilter] init client")
 		fileName, err := utils.GetExecutable(f.binaryURL, BinaryDir, f.name)
 		if err != nil {
-			return false, errors.Trace(err)
+			log.Fatalf("[grpcFilter] %v", err.Error())
 		}
 
 		// start the process
@@ -99,23 +100,23 @@ func (f *grpcFilterType) Filter(msg *core.Msg) (bool, error) {
 
 		rpcClient, err := client.Client()
 		if err != nil {
-			return false, errors.Trace(err)
+			log.Fatalf("[grpcFilter]: %v", err.Error())
 		}
 
 		raw, err := rpcClient.Dispense(grpc.PluginName)
 		if err != nil {
-			return false, errors.Trace(err)
+			log.Fatalf("[grpcFilter]: %v", err.Error())
 		}
 
 		log.Infof("[grpcFilter] configure remote server")
 		delegate := raw.(core.IFilter)
 		if err := delegate.Configure(f.configData); err != nil {
-			return false, errors.Trace(err)
+			log.Fatalf("[grpcFilter]: %v", err.Error())
 		}
 
 		f.client = client
 		f.delegate = delegate
-	}
+	})
 
 	if !f.Matchers.Match(msg) {
 		return true, nil
