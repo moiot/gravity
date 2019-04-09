@@ -42,8 +42,8 @@ func NewElasticsearchRoutes(configData []map[string]interface{}) ([]*Elasticsear
 		route.AllMatchers = retMatchers
 
 		if targetIndex, ok := routeConfig["target-index"]; !ok {
-			// maybe the default value can be the table name?
-			return nil, errors.Errorf("target-index is required")
+			// the default value is the table name
+			route.TargetIndex = ""
 		} else {
 			targetIndexString, ok := targetIndex.(string)
 			if !ok {

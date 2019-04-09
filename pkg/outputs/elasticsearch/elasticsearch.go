@@ -2,6 +2,7 @@ package elasticsearch
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -121,15 +122,19 @@ func (output *ElasticsearchOutput) Execute(msgs []*core.Msg) error {
 			continue
 		}
 
+		index := route.TargetIndex
+		if index == "" {
+			index = msg.Table
+		}
 		var req elastic.BulkableRequest
 		if msg.DmlMsg.Operation == core.Delete {
 			req = elastic.NewBulkDeleteRequest().
-				Index(route.TargetIndex).
+				Index(index).
 				Type(route.TargetType).
 				Id(genDocID(msg))
 		} else {
 			req = elastic.NewBulkIndexRequest().
-				Index(route.TargetIndex).
+				Index(index).
 				Type(route.TargetType).
 				Id(genDocID(msg)).
 				Doc(msg.DmlMsg.Data)
@@ -145,6 +150,11 @@ func genDocID(msg *core.Msg) string {
 		pks = append(pks, fmt.Sprint(v))
 	}
 	return strings.Join(pks, "_")
+}
+
+func marshalError(err *elastic.ErrorDetails) string {
+	bytes, _ := json.Marshal(err)
+	return string(bytes)
 }
 
 func (output *ElasticsearchOutput) sendBulkRequests(reqs []elastic.BulkableRequest) error {
@@ -164,31 +174,21 @@ func (output *ElasticsearchOutput) sendBulkRequests(reqs []elastic.BulkableReque
 				// tags: [pipelineName, index, action(index/create/delete/update)].
 				// indices created in 6.x only allow a single-type per index, so we don't need the type as a tag.
 				metrics.OutputCounter.WithLabelValues(output.pipelineName, result.Index, action, "", "").Add(1)
+			} else if result.Status == http.StatusNotFound && action == "delete" {
+				// delete but not found, just ignore it.
+				metrics.OutputCounter.WithLabelValues(output.pipelineName, result.Index, action, "", "").Add(1)
+				continue
+			} else if result.Status == http.StatusTooManyRequests {
+				// when the server returns 429, it must be that all requests have failed.
+				time.Sleep(5 * time.Second)
+				return output.sendBulkRequests(reqs)
+			} else if output.config.IgnoreBadRequest {
+				// TODO do we need a metcris in prometheus for this?
+				log.Infof("[output_elasticsearch] Received and ignored an error from server, status: [%d], index: %s, details: %s.", result.Status, result.Index, marshalError(result.Error))
+			} else {
+				log.Panicf("[output_elasticsearch] Received an error from server, status: [%d], index: %s, details: %s.", result.Status, result.Index, marshalError(result.Error))
 			}
 		}
 	}
-
-	failedResponses := bulkResponse.Failed()
-	if len(failedResponses) == 0 {
-		return nil
-	}
-
-	canRetry := false
-	for _, failedResponse := range failedResponses {
-		if failedResponse.Status == http.StatusTooManyRequests {
-			canRetry = true
-			break
-		} else if output.config.IgnoreBadRequest {
-			// TODO do we need a metcris in prometheus for this?
-			log.Infof("[output_elasticsearch] Received and ignored an error from server, status: [%d], type: %s, reason: %s.", failedResponse.Status, failedResponse.Error.Type, failedResponse.Error.Reason)
-		} else {
-			log.Panicf("[output_elasticsearch] Received an error from server, status: [%d], type: %s, reason: %s.", failedResponse.Status, failedResponse.Error.Type, failedResponse.Error.Reason)
-		}
-	}
-	if !canRetry {
-		return nil
-	}
-	// when the server returns 429, it must be that all requests have failed.
-	time.Sleep(5 * time.Second)
-	return output.sendBulkRequests(reqs)
+	return nil
 }
