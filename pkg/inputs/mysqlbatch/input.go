@@ -199,9 +199,6 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 		return errors.Trace(err)
 	}
 
-	// Delete empty table
-	tableDefs, tableConfigs = DeleteEmptyTables(scanDB, tableDefs, tableConfigs)
-
 	// Detect any potential error before any work is done, so that we can check the error early.
 	scanColumnsArray := make([][]string, len(tableDefs))
 	estimatedRowCount := make([]int64, len(tableDefs))

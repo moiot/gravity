@@ -57,6 +57,11 @@ func (tableScanner *TableScanner) Start() error {
 					log.Fatalf("[TableScanner] initTableDDL for %s.%s, err: %s", work.TableDef.Schema, work.TableDef.Name, errors.ErrorStack(err))
 				}
 
+				if utils.IsTableEmpty(tableScanner.db, work.TableDef.Schema, work.TableDef.Name) {
+					log.Infof("[TableScanner] skip scan empty table %s", fullTableName)
+					continue
+				}
+
 				max, min, exists, err := GetMaxMin(tableScanner.positionCache, fullTableName)
 				if err != nil {
 					log.Fatalf("[TableScanner] GetMaxMin failed: %v", errors.ErrorStack(err))
@@ -80,7 +85,7 @@ func (tableScanner *TableScanner) Start() error {
 						tableScanner.cfg.TableScanBatch)
 
 					if tableScanner.ctx.Err() == nil {
-						log.Infof("[table_worker] LoopInBatch done with table %s", fullTableName)
+						log.Infof("[TableScanner] LoopInBatch done with table %s", fullTableName)
 					} else if tableScanner.ctx.Err() == context.Canceled {
 						log.Infof("[TableScanner] LoopInBatch canceled")
 						return
