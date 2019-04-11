@@ -129,7 +129,7 @@ func (t *BinlogTailer) createMsgs(
 	if binlog.Type == pb.BinlogType_DDL {
 		metrics.InputCounter.WithLabelValues(t.name, "", "", string(core.MsgDDL), "").Add(1)
 		ddlStmt := string(binlog.DdlData.DdlQuery)
-		if strings.Contains(ddlStmt, consts.DDLTag) {
+		if t.config.IgnoreBiDirectionalData && strings.Contains(ddlStmt, consts.DDLTag) {
 			log.Info("ignore internal ddl: ", ddlStmt)
 			return msgList, nil
 		} else {

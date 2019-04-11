@@ -386,7 +386,7 @@ func (tailer *BinlogTailer) Start() error {
 					continue
 				}
 
-				if strings.Contains(ddlSQL, consts.DDLTag) {
+				if tailer.cfg.IgnoreBiDirectionalData && strings.Contains(ddlSQL, consts.DDLTag) {
 					log.Infof("ignore internal ddl: %s", ddlSQL)
 					continue
 				}

@@ -1050,14 +1050,10 @@ func TestMySQLTagDDL(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
 			Mode: config.Stream,
-			Config: map[string]interface{}{
-				"source": map[string]interface{}{
-					"host":     sourceDBConfig.Host,
-					"username": sourceDBConfig.Username,
-					"password": sourceDBConfig.Password,
-					"port":     sourceDBConfig.Port,
-				},
-			},
+			Config: utils.Struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+				Source:                  sourceDBConfig,
+				IgnoreBiDirectionalData: true,
+			}),
 		},
 		OutputPlugin: config.GenericConfig{
 			Type: "mysql",

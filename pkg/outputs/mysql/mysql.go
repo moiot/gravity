@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
@@ -385,7 +386,7 @@ func splitMsgBatchWithDelete(msgBatch []*core.Msg) [][]*core.Msg {
 }
 
 func (output *MySQLOutput) executeDDL(targetSchema, stmt string) error {
-	stmt = consts.DDLTag + stmt
+	stmt = consts.DDLTag + fmt.Sprintf("/*%s*/", core.PipelineName) + stmt
 	if targetSchema != "" {
 		tx, err := output.db.Begin()
 		if err != nil {
