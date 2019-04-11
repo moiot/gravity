@@ -426,7 +426,8 @@ func TestTableScanner_Start(t *testing.T) {
 					tableDefs, tableConfigs = DeleteEmptyTables(db, tableDefs, tableConfigs)
 					r.Equal(0, len(tableDefs))
 				} else {
-					_, err := InitTablePosition(db, positionCache, tableDefs[i], c.scanColumns, 100)
+					cnt := int64(100)
+					_, err := InitTablePosition(db, positionCache, tableDefs[i], c.scanColumns, &cnt)
 					r.NoError(err)
 				}
 			}

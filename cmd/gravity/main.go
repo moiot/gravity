@@ -11,12 +11,13 @@ import (
 	"syscall"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 
 	hplugin "github.com/hashicorp/go-plugin"
+
 	"github.com/moiot/gravity/pkg/app"
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
@@ -182,7 +183,7 @@ func statusHandler(server *app.Server, name, hash string) func(http.ResponseWrit
 		position, v, exist, err := server.PositionCache.GetEncodedPersistentPosition()
 		if err != nil || !exist {
 			writer.WriteHeader(http.StatusInternalServerError)
-			log.Error("[statusHandler] failed to get positionRepoModel, exist: %v, err: %v", exist, errors.ErrorStack(err))
+			log.Errorf("[statusHandler] failed to get positionRepoModel, exist: %v, err: %v", exist, errors.ErrorStack(err))
 			return
 		}
 
