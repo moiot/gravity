@@ -199,9 +199,6 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 		return errors.Trace(err)
 	}
 
-	// Delete empty table
-	tableDefs, tableConfigs = DeleteEmptyTables(scanDB, tableDefs, tableConfigs)
-
 	// Detect any potential error before any work is done, so that we can check the error early.
 	scanColumnsArray := make([][]string, len(tableDefs))
 	estimatedRowCount := make([]int64, len(tableDefs))
@@ -380,7 +377,7 @@ func InitTablePosition(
 	positionCache position_store.PositionCacheInterface,
 	tableDef *schema_store.Table,
 	scanColumns []string,
-	estimatedRowCount int64) (bool, error) {
+	estimatedRowCount *int64) (bool, error) {
 
 	fullTableName := utils.TableIdentity(tableDef.Schema, tableDef.Name)
 	_, _, exists, err := GetMaxMin(positionCache, fullTableName)
@@ -388,30 +385,37 @@ func InitTablePosition(
 		return false, errors.Trace(err)
 	}
 
+	empty := utils.IsTableEmpty(db, tableDef.Schema, tableDef.Name)
+	if empty {
+		*estimatedRowCount = 0
+	} else {
+		if *estimatedRowCount == 0 {
+			*estimatedRowCount = 1
+		}
+	}
+
 	if !exists {
-		maxPositions := make([]TablePosition, len(scanColumns))
-		minPositions := make([]TablePosition, len(scanColumns))
-		if IsScanColumnsForDump(scanColumns) {
-			maxPositions[0] = TablePosition{Column: ScanColumnForDump, Type: PlainInt, Value: 1}
-			minPositions[0] = TablePosition{Column: ScanColumnForDump, Type: PlainInt, Value: 0}
-			if err := PutMaxMin(positionCache, fullTableName, maxPositions, minPositions); err != nil {
-				return false, errors.Trace(err)
-			}
+		var maxPositions []TablePosition
+		var minPositions []TablePosition
+
+		if empty || IsScanColumnsForDump(scanColumns) {
+			maxPositions = append(maxPositions, TablePosition{Column: ScanColumnForDump, Type: PlainInt, Value: 1})
+			minPositions = append(minPositions, TablePosition{Column: ScanColumnForDump, Type: PlainInt, Value: 0})
 			log.Infof("[InitTablePosition] scan dump PutMaxMin table: %v, maxPos: %+v, minPos: %+v", fullTableName, maxPositions, minPositions)
 		} else {
 			retMax, retMin := FindMaxMinValueFromDB(db, tableDef.Schema, tableDef.Name, scanColumns)
 			for i, column := range scanColumns {
-				maxPositions[i] = TablePosition{Value: retMax[i], Column: column}
-				minPositions[i] = TablePosition{Value: retMin[i], Column: column}
-			}
-
-			if err := PutMaxMin(positionCache, fullTableName, maxPositions, minPositions); err != nil {
-				return false, errors.Trace(err)
+				maxPositions = append(maxPositions, TablePosition{Value: retMax[i], Column: column})
+				minPositions = append(minPositions, TablePosition{Value: retMin[i], Column: column})
 			}
 			log.Infof("[InitTablePosition] scan key PutMaxMin table: %v, maxPos: %+v, minPos: %+v", fullTableName, maxPositions, minPositions)
 		}
 
-		if err := PutEstimatedCount(positionCache, fullTableName, estimatedRowCount); err != nil {
+		if err := PutMaxMin(positionCache, fullTableName, maxPositions, minPositions); err != nil {
+			return false, errors.Trace(err)
+		}
+
+		if err := PutEstimatedCount(positionCache, fullTableName, *estimatedRowCount); err != nil {
 			return false, errors.Trace(err)
 		}
 

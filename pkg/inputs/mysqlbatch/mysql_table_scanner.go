@@ -57,6 +57,15 @@ func (tableScanner *TableScanner) Start() error {
 					log.Fatalf("[TableScanner] initTableDDL for %s.%s, err: %s", work.TableDef.Schema, work.TableDef.Name, errors.ErrorStack(err))
 				}
 
+				if work.EstimatedRowCount == 0 {
+					// close the stream
+					if err := waitAndCloseStream(work.TableDef, tableScanner.emitter); err != nil {
+						log.Fatalf("[TableScanner] failed to emit close stream closeMsg: %v", errors.ErrorStack(err))
+					}
+					log.Infof("[TableScanner] skip scan empty table %s", fullTableName)
+					continue
+				}
+
 				max, min, exists, err := GetMaxMin(tableScanner.positionCache, fullTableName)
 				if err != nil {
 					log.Fatalf("[TableScanner] GetMaxMin failed: %v", errors.ErrorStack(err))
@@ -80,7 +89,7 @@ func (tableScanner *TableScanner) Start() error {
 						tableScanner.cfg.TableScanBatch)
 
 					if tableScanner.ctx.Err() == nil {
-						log.Infof("[table_worker] LoopInBatch done with table %s", fullTableName)
+						log.Infof("[TableScanner] LoopInBatch done with table %s", fullTableName)
 					} else if tableScanner.ctx.Err() == context.Canceled {
 						log.Infof("[TableScanner] LoopInBatch canceled")
 						return

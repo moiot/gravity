@@ -7,6 +7,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"time"
 
 	"strconv"
 
@@ -14,13 +15,13 @@ import (
 
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/natefinch/lumberjack.v2"
+	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
 var PipelineName = "unknown"
 
 const (
-	defaultLogTimeFormat = "2006/01/02 15:04:05.000"
+	defaultLogTimeFormat = time.RFC3339
 	defaultLogMaxSize    = 300 // MB
 	defaultLogFormat     = "json"
 	defaultLogLevel      = log.InfoLevel

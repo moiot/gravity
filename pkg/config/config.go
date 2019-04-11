@@ -115,9 +115,10 @@ type MySQLConfig struct {
 }
 
 type SourceTiDBConfig struct {
-	SourceDB          *utils.DBConfig    `mapstructure:"source-db" toml:"source-db" json:"source-db"`
-	SourceKafka       *SourceKafkaConfig `mapstructure:"source-kafka" toml:"source-kafka" json:"source-kafka"`
-	OffsetStoreConfig *SourceProbeCfg    `mapstructure:"offset-store" toml:"offset-store" json:"offset-store"`
+	SourceDB                *utils.DBConfig    `mapstructure:"source-db" toml:"source-db" json:"source-db"`
+	SourceKafka             *SourceKafkaConfig `mapstructure:"source-kafka" toml:"source-kafka" json:"source-kafka"`
+	OffsetStoreConfig       *SourceProbeCfg    `mapstructure:"offset-store" toml:"offset-store" json:"offset-store"`
+	IgnoreBiDirectionalData bool               `mapstructure:"ignore-bidirectional-data" toml:"ignore-bidirectional-data" json:"ignore-bidirectional-data"`
 }
 
 type GtmConfig struct {
