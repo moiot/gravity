@@ -165,7 +165,7 @@ func InitializePositionAndDeleteScannedTable(
 
 	for i, t := range tables {
 		// Initialize table position and delete table that finished scan.
-		finished, err := InitTablePosition(db, positionCache, t, scanColumnsArray[i], estimatedRowCount[i])
+		finished, err := InitTablePosition(db, positionCache, t, scanColumnsArray[i], &estimatedRowCount[i])
 		if err != nil {
 			return nil, nil, nil, nil, errors.Trace(err)
 		}

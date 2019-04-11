@@ -158,7 +158,7 @@ func (scheduler *batchScheduler) Healthy() bool {
 	for k, w := range scheduler.slidingWindows {
 		watermark := w.Watermark()
 		if !watermark.Healthy() {
-			log.Warnf("[batchScheduler.Healthy] sliding window %s not healthy, watermark: %s", k, watermark)
+			log.Warnf("[batchScheduler.Healthy] sliding window %s not healthy, watermark: %s", k, time.Since(watermark.ProcessTime).Seconds())
 			return false
 		}
 	}

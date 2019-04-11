@@ -57,7 +57,11 @@ func (tableScanner *TableScanner) Start() error {
 					log.Fatalf("[TableScanner] initTableDDL for %s.%s, err: %s", work.TableDef.Schema, work.TableDef.Name, errors.ErrorStack(err))
 				}
 
-				if utils.IsTableEmpty(tableScanner.db, work.TableDef.Schema, work.TableDef.Name) {
+				if work.EstimatedRowCount == 0 {
+					// close the stream
+					if err := waitAndCloseStream(work.TableDef, tableScanner.emitter); err != nil {
+						log.Fatalf("[TableScanner] failed to emit close stream closeMsg: %v", errors.ErrorStack(err))
+					}
 					log.Infof("[TableScanner] skip scan empty table %s", fullTableName)
 					continue
 				}
