@@ -76,6 +76,51 @@ const ResponseOK = `
 }
 `
 
+func TestNoPrimaryKey(t *testing.T) {
+	r := require.New(t)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/_bulk", staticHandler(http.StatusOK, ResponseOK))
+	mux.HandleFunc("/", staticHandler(http.StatusOK, ""))
+
+	srv := &http.Server{Addr: ":9200", Handler: mux}
+	defer srv.Shutdown(context.TODO())
+	go srv.ListenAndServe()
+
+	output, err := defaultElasticsearchOutput()
+	r.NoError(err)
+
+	r.NoError(output.Start())
+
+	msgs := defaultMsgs()
+	msgs[0].DmlMsg.Pks = map[string]interface{}{}
+
+	r.Error(output.Execute(msgs))
+}
+
+func TestIgnoreNoPrimaryKey(t *testing.T) {
+	r := require.New(t)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/_bulk", staticHandler(http.StatusOK, ResponseOK))
+	mux.HandleFunc("/", staticHandler(http.StatusOK, ""))
+
+	srv := &http.Server{Addr: ":9200", Handler: mux}
+	defer srv.Shutdown(context.TODO())
+	go srv.ListenAndServe()
+
+	output, err := defaultElasticsearchOutput()
+	r.NoError(err)
+	output.router[0].IgnoreNoPrimaryKey = true
+
+	r.NoError(output.Start())
+
+	msgs := defaultMsgs()
+	msgs[0].DmlMsg.Pks = map[string]interface{}{}
+
+	r.NoError(output.Execute(msgs))
+}
+
 func TestBasicAuth(t *testing.T) {
 	r := require.New(t)
 	username, password := "username", "password"
@@ -114,9 +159,7 @@ func TestBadRequest(t *testing.T) {
 	r.NoError(err)
 	r.NoError(output.Start())
 
-	r.Panics(func() {
-		output.Execute(defaultMsgs())
-	})
+	r.Error(output.Execute(defaultMsgs()))
 }
 
 func TestIgnoreBadRequest(t *testing.T) {
@@ -141,12 +184,8 @@ func TestIgnoreBadRequest(t *testing.T) {
 func TestTooManyRequests(t *testing.T) {
 	r := require.New(t)
 
-	counter := &Counter{
-		Count: 0,
-	}
-
 	mux := http.NewServeMux()
-	mux.HandleFunc("/_bulk", counter.handler)
+	mux.HandleFunc("/_bulk", staticHandler(http.StatusOK, ResponseTooManyRequests))
 	mux.HandleFunc("/", staticHandler(http.StatusOK, ""))
 
 	srv := &http.Server{Addr: ":9200", Handler: mux}
@@ -157,8 +196,7 @@ func TestTooManyRequests(t *testing.T) {
 	r.NoError(err)
 	r.NoError(output.Start())
 
-	r.NoError(output.Execute(defaultMsgs()))
-	r.Equal(counter.Count, 2)
+	r.Error(output.Execute(defaultMsgs()))
 }
 
 func defaultMsgs() []*core.Msg {
@@ -201,20 +239,6 @@ func defaultElasticsearchOutput() (*ElasticsearchOutput, error) {
 		return nil, err
 	}
 	return output, nil
-}
-
-type Counter struct {
-	Count int
-}
-
-func (c *Counter) handler(w http.ResponseWriter, r *http.Request) {
-	c.Count++
-	if c.Count == 1 {
-		w.Write([]byte(ResponseTooManyRequests))
-	} else {
-		w.Write([]byte(ResponseOK))
-	}
-	w.WriteHeader(http.StatusOK)
 }
 
 func staticHandler(code int, content string) func(w http.ResponseWriter, r *http.Request) {

@@ -2,11 +2,7 @@ package elasticsearch
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
-	"strings"
-	"time"
 
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
@@ -113,18 +109,23 @@ func (output *ElasticsearchOutput) Execute(msgs []*core.Msg) error {
 		if msg.DmlMsg == nil {
 			continue
 		}
-		// must have a primary key
-		if len(msg.DmlMsg.Pks) == 0 {
-			continue
-		}
+
 		route, ok := output.router.Match(msg)
 		if !ok {
 			continue
 		}
 
+		if len(msg.DmlMsg.Pks) == 0 {
+			if route.IgnoreNoPrimaryKey {
+				continue
+			} else {
+				return errors.Errorf("[output_elasticsearch] Table must have at least one primary key, database: %s, table: %s.", msg.Database, msg.Table)
+			}
+		}
+
 		index := route.TargetIndex
 		if index == "" {
-			index = msg.Table
+			index = genIndexName(msg.Table)
 		}
 		var req elastic.BulkableRequest
 		if msg.DmlMsg.Operation == core.Delete {
@@ -144,19 +145,6 @@ func (output *ElasticsearchOutput) Execute(msgs []*core.Msg) error {
 	return output.sendBulkRequests(reqs)
 }
 
-func genDocID(msg *core.Msg) string {
-	pks := []string{}
-	for _, v := range msg.DmlMsg.Pks {
-		pks = append(pks, fmt.Sprint(v))
-	}
-	return strings.Join(pks, "_")
-}
-
-func marshalError(err *elastic.ErrorDetails) string {
-	bytes, _ := json.Marshal(err)
-	return string(bytes)
-}
-
 func (output *ElasticsearchOutput) sendBulkRequests(reqs []elastic.BulkableRequest) error {
 	if len(reqs) == 0 {
 		return nil
@@ -170,25 +158,31 @@ func (output *ElasticsearchOutput) sendBulkRequests(reqs []elastic.BulkableReque
 
 	for _, item := range bulkResponse.Items {
 		for action, result := range item {
-			if result.Status >= 200 && result.Status <= 299 {
-				// tags: [pipelineName, index, action(index/create/delete/update)].
+			if output.isSuccessful(result, action) {
+				// tags: [pipelineName, index, action(index/create/delete/update), status(200/400)].
 				// indices created in 6.x only allow a single-type per index, so we don't need the type as a tag.
-				metrics.OutputCounter.WithLabelValues(output.pipelineName, result.Index, action, "", "").Add(1)
-			} else if result.Status == http.StatusNotFound && action == "delete" {
-				// delete but not found, just ignore it.
-				metrics.OutputCounter.WithLabelValues(output.pipelineName, result.Index, action, "", "").Add(1)
-				continue
+				var status int
+				if result.Status == http.StatusBadRequest {
+					log.Warnf("[output_elasticsearch] The remote server returned an error: (400) Bad request, index: %s, details: %s.", result.Index, marshalError(result.Error))
+					status = http.StatusBadRequest
+				} else {
+					// 200/201/404(delete) -> 200 because the request is successful
+					status = http.StatusOK
+				}
+				metrics.OutputCounter.WithLabelValues(output.pipelineName, result.Index, action, string(status), "").Add(1)
 			} else if result.Status == http.StatusTooManyRequests {
 				// when the server returns 429, it must be that all requests have failed.
-				time.Sleep(5 * time.Second)
-				return output.sendBulkRequests(reqs)
-			} else if output.config.IgnoreBadRequest {
-				// TODO do we need a metcris in prometheus for this?
-				log.Infof("[output_elasticsearch] Received and ignored an error from server, status: [%d], index: %s, details: %s.", result.Status, result.Index, marshalError(result.Error))
+				return errors.Errorf("[output_elasticsearch] The remote server returned an error: (429) Too Many Requests.")
 			} else {
-				log.Panicf("[output_elasticsearch] Received an error from server, status: [%d], index: %s, details: %s.", result.Status, result.Index, marshalError(result.Error))
+				return errors.Errorf("[output_elasticsearch] Received an error from server, status: [%d], index: %s, details: %s.", result.Status, result.Index, marshalError(result.Error))
 			}
 		}
 	}
 	return nil
+}
+
+func (output *ElasticsearchOutput) isSuccessful(result *elastic.BulkResponseItem, action string) bool {
+	return (result.Status >= 200 && result.Status <= 299) ||
+		(result.Status == http.StatusNotFound && action == "delete") || // delete but not found, just ignore it.
+		(result.Status == http.StatusBadRequest && output.config.IgnoreBadRequest) // ignore index not found, parse error, etc.
 }

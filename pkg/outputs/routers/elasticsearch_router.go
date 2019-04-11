@@ -9,8 +9,9 @@ import (
 
 type ElasticsearchRoute struct {
 	RouteMatchers
-	TargetIndex string
-	TargetType  string
+	TargetIndex        string
+	TargetType         string
+	IgnoreNoPrimaryKey bool
 }
 
 type ElasticsearchRouter []*ElasticsearchRoute
@@ -41,26 +42,23 @@ func NewElasticsearchRoutes(configData []map[string]interface{}) ([]*Elasticsear
 
 		route.AllMatchers = retMatchers
 
-		if targetIndex, ok := routeConfig["target-index"]; !ok {
-			// the default value is the table name
-			route.TargetIndex = ""
-		} else {
-			targetIndexString, ok := targetIndex.(string)
-			if !ok {
-				return nil, errors.Errorf("target-index is invalid")
-			}
-			route.TargetIndex = targetIndexString
+		targetIndex, err := getString(routeConfig, "target-index", "")
+		if err != nil {
+			return nil, err
 		}
+		route.TargetIndex = targetIndex
 
-		if targetType, ok := routeConfig["target-type"]; !ok {
-			route.TargetType = "doc"
-		} else {
-			targetTypeString, ok := targetType.(string)
-			if !ok {
-				return nil, errors.Errorf("target-index is invalid")
-			}
-			route.TargetType = targetTypeString
+		targetType, err := getString(routeConfig, "target-type", "doc")
+		if err != nil {
+			return nil, err
 		}
+		route.TargetType = targetType
+
+		ignoreNoPrimaryKey, err := getBool(routeConfig, "ignore-no-primary-key", false)
+		if err != nil {
+			return nil, err
+		}
+		route.IgnoreNoPrimaryKey = ignoreNoPrimaryKey
 
 		routes = append(routes, &route)
 	}
