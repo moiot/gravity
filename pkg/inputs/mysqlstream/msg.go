@@ -234,7 +234,10 @@ func deserialize(raw interface{}, column schema_store.Column) interface{} {
 
 	ct := strings.ToLower(column.ColType)
 	if strings.Contains(ct, "text") || strings.Contains(ct, "char") || ct == "json" {
-		return string(raw.([]uint8))
+		_, ok := raw.([]uint8)
+		if ok {
+			return string(raw.([]uint8))
+		}
 	}
 
 	// https://github.com/siddontang/go-mysql/issues/338
