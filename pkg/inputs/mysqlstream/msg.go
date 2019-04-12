@@ -233,7 +233,7 @@ func deserialize(raw interface{}, column schema_store.Column) interface{} {
 	}
 
 	ct := strings.ToLower(column.ColType)
-	if ct == "text" || ct == "json" {
+	if strings.Contains(ct, "text") || strings.Contains(ct, "char") || ct == "json" {
 		return string(raw.([]uint8))
 	}
 
