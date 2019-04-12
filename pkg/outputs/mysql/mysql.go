@@ -345,7 +345,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 
 func restore(node ast.Node) string {
 	writer := &strings.Builder{}
-	ctx := format.NewRestoreCtx(format.DefaultRestoreFlags, writer)
+	ctx := format.NewRestoreCtx(format.RestoreStringSingleQuotes|format.RestoreKeyWordLowercase|format.RestoreNameBackQuotes, writer)
 	err := node.Restore(ctx)
 	if err != nil {
 		log.Fatalf("error restore ddl %s, err: %s", node.Text(), err)
