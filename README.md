@@ -40,6 +40,7 @@ It is designed to be a customizable data replication tool that:
 |---|---|
 |  MySQL/TiDB | ✅  | 
 |  Kafka |  ✅ |   
+| Elasticsearch | Beta |
 
 
 ### Data mutation support

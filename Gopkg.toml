@@ -139,3 +139,7 @@
 [[constraint]]
   name = "github.com/mitchellh/hashstructure"
   version = "1.0.0"
+
+[[constraint]]
+  name = "github.com/olivere/elastic"
+  version = "6.2.17"
