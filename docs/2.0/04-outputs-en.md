@@ -9,6 +9,7 @@ Currently, DRC supports the following Output plugins:
 
 - `async-kafka`: Sends the Input message to Kafka asynchronously.
 - `mysql`: Writes data in MySQL.
+- `elasticsearch`: Stores and index data in Elasticsearch.
 
 ## `async-kafka` configuration
 
@@ -152,4 +153,52 @@ In the above configuration, if `use-bidirection` is set to "true" as follows, DR
 [output.config.execution-engine]
 # "true" means enabling the write operation of the bidirectional synchronization identifier.
 use-bidirection = true
+```
+
+### Elasticsearch
+
+Important notices:
+
+- this plugin is still in beta
+- it only supports Elasticsearch version 6.x
+
+```
+[output]
+type = "elasticsearch"
+
+[output.config]
+# Whether to ignore 400(bad request) responses.
+# Elasticsearch will return 400 when the index name is invalid or the document parsing error.
+# it is disabled by default, so the synchronization will be failed when the remote server returned a 400 error.
+ignore-bad-request = true
+
+#
+# The server configuration of Elasticsearch
+# Required
+#
+[output.config.server]
+urls = ["http://127.0.0.1:9200"]
+sniff = false
+
+#
+# The basic auth configuration
+# Optional
+#
+[output.config.server.auth]
+username = ""
+password = ""
+
+#
+# The routing configuration
+# Required
+#
+[[output.config.routes]]
+match-schema = "test"
+match-table = "test_source_table_*"
+target-index = "test-index" # the default value is the table name of each DML msg
+target-type = "_doc" # the default value is 'doc'
+# Whether to ignore a DML msg without a primary key.
+# output will use the primary key as the id of the document, so the synchronized table must have a primary key.
+# it is disabled by default, so the synchronization will be failed when a DML message has no primary key.
+ignore-no-primary-key = false
 ```
