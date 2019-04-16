@@ -82,7 +82,11 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, session *
 			}
 		}
 
-		chunks := calculateChunks(session, collections, cfg.ChunkThreshold, cfg.WorkerCnt)
+		chunks, err := calculateChunks(session, collections, cfg.ChunkThreshold, cfg.WorkerCnt)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
 		batchPositionValue := PositionValue{
 			Start:  startPos,
 			Chunks: chunks,
@@ -108,7 +112,7 @@ func calculateChunks(
 	session *mgo.Session,
 	collections map[string][]string,
 	chunkThreshold int,
-	chunkCnt int) []chunk {
+	chunkCnt int) ([]chunk, error) {
 
 	var ret []chunk
 	for db, colls := range collections {
@@ -126,7 +130,11 @@ func calculateChunks(
 				//
 				// Reference: https://docs.mongodb.com/manual/reference/operator/aggregation/sample/#pipe._S_sample
 				sampleCnt := int(math.Min(maxSampleSize, float64(count)*0.05))
-				for i, mm := range mongo.BucketAuto(session, db, coll, sampleCnt, chunkCnt) {
+				buckets, err := mongo.BucketAuto(session, db, coll, sampleCnt, chunkCnt)
+				if err != nil {
+					return []chunk{}, errors.Trace(err)
+				}
+				for i, mm := range buckets {
 					if i == 0 {
 						ret = append(ret, chunk{
 							Database:   db,
@@ -163,5 +171,5 @@ func calculateChunks(
 			}
 		}
 	}
-	return ret
+	return ret, nil
 }

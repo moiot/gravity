@@ -116,7 +116,7 @@ type MinMax struct {
 	Max bson.ObjectId
 }
 
-func BucketAuto(session *mgo.Session, db string, collection string, sampleCnt int, bucketCnt int) []MinMax {
+func BucketAuto(session *mgo.Session, db string, collection string, sampleCnt int, bucketCnt int) ([]MinMax, error) {
 	start := time.Now()
 	iter := session.DB(db).C(collection).Pipe([]bson.M{
 		{
@@ -129,6 +129,9 @@ func BucketAuto(session *mgo.Session, db string, collection string, sampleCnt in
 			},
 		},
 	}).Iter()
+
+	defer iter.Close()
+
 	var record bson.M
 	var ret []MinMax
 	for iter.Next(&record) {
@@ -138,9 +141,11 @@ func BucketAuto(session *mgo.Session, db string, collection string, sampleCnt in
 			Max: t["max"].(bson.ObjectId),
 		})
 	}
-	if err := iter.Close(); err != nil {
-		log.Fatalf("[mongo.BucketAuto] error iter: %s", errors.ErrorStack(err))
+
+	if err := iter.Err(); err != nil {
+		return ret, errors.Trace(err)
 	}
+
 	log.Infof("BucketAuto finished. sample: %d, bucket: %d, eclipsed: %s", sampleCnt, bucketCnt, time.Since(start))
-	return ret
+	return ret, nil
 }
