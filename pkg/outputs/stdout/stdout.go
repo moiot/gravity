@@ -20,23 +20,44 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/juju/errors"
+	"github.com/mitchellh/mapstructure"
+	"github.com/moiot/gravity/pkg/outputs/routers"
+
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/registry"
 )
 
 const Name = "stdout"
 
+type StdoutPluginConfig struct {
+	Routes []map[string]interface{} `mapstructure:"routes"  json:"routes"`
+}
+
 type stdOutput struct {
 	pipelineName string
+	routes       []*routers.MySQLRoute
 }
 
 func (plugin *stdOutput) Configure(pipelineName string, data map[string]interface{}) error {
 	plugin.pipelineName = pipelineName
+
+	pluginConfig := StdoutPluginConfig{}
+	err := mapstructure.Decode(data, &pluginConfig)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// init routes
+	plugin.routes, err = routers.NewMySQLRoutes(pluginConfig.Routes)
+	if err != nil {
+		return errors.Trace(err)
+	}
 	return nil
 }
 
 func (plugin *stdOutput) GetRouter() core.Router {
-	return core.EmptyRouter{}
+	return routers.MySQLRouter(plugin.routes)
 }
 
 func (plugin *stdOutput) Start() error {
@@ -48,6 +69,19 @@ func (plugin *stdOutput) Close() {
 
 func (plugin *stdOutput) Execute(msgs []*core.Msg) error {
 	for _, msg := range msgs {
+
+		matched := false
+		for _, route := range plugin.routes {
+			if route.Match(msg) {
+				matched = true
+				break
+			}
+		}
+
+		if !matched {
+			continue
+		}
+
 		if msg.DmlMsg != nil {
 			fmt.Fprintf(os.Stdout, "schema: %v, table: %v, dml op: %v, data: %v\n", msg.Database, msg.Table, msg.DmlMsg.Operation, msg.DmlMsg.Data)
 		} else if msg.DdlMsg != nil {
