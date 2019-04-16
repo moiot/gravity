@@ -61,7 +61,12 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, session *
 	if !exist {
 		options := gtm.DefaultOptions()
 		options.Fill(session, "")
-		startPos := gtm.LastOpTimestamp(session, options)
+		startPos, err := gtm.LastOpTimestamp(session, options)
+		if err != nil {
+			if !cfg.IgnoreOplogError {
+				return errors.Trace(err)
+			}
+		}
 
 		collections := make(map[string][]string)
 		for db, colls := range mongo.ListAllCollections(session) {
@@ -99,7 +104,12 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, session *
 
 const maxSampleSize = 100000
 
-func calculateChunks(session *mgo.Session, collections map[string][]string, chunkThreshold int, chunkCnt int) []chunk {
+func calculateChunks(
+	session *mgo.Session,
+	collections map[string][]string,
+	chunkThreshold int,
+	chunkCnt int) []chunk {
+
 	var ret []chunk
 	for db, colls := range collections {
 		for _, coll := range colls {
@@ -108,6 +118,13 @@ func calculateChunks(session *mgo.Session, collections map[string][]string, chun
 				continue
 			} else if count > chunkThreshold {
 				seq := 0
+				// If all the following conditions are met, $sample uses a pseudo-random cursor to select documents:
+				//
+				// - $sample is the first stage of the pipeline
+				// - N is less than 5% of the total documents in the collection
+				// - The collection contains more than 100 documents
+				//
+				// Reference: https://docs.mongodb.com/manual/reference/operator/aggregation/sample/#pipe._S_sample
 				sampleCnt := int(math.Min(maxSampleSize, float64(count)*0.05))
 				for i, mm := range mongo.BucketAuto(session, db, coll, sampleCnt, chunkCnt) {
 					if i == 0 {

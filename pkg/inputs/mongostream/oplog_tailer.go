@@ -112,12 +112,12 @@ func (tailer *OplogTailer) Run() {
 		log.Fatalf("[oplogTailer] failed to get position: %v", errors.Trace(err))
 	}
 
-	after := func(session *mgo.Session, options *gtm.Options) bson.MongoTimestamp {
+	after := func(session *mgo.Session, options *gtm.Options) (bson.MongoTimestamp, error) {
 		positionValue, err := GetPositionValue(tailer.positionCache)
 		if err != nil {
-			log.Fatalf("[oplogTailer] failed to get position: %v", errors.Trace(err))
+			return bson.MongoTimestamp(positionValue.CurrentPosition), errors.Trace(err)
 		}
-		return bson.MongoTimestamp(positionValue.CurrentPosition)
+		return bson.MongoTimestamp(positionValue.CurrentPosition), nil
 	}
 
 	// If timestamp is 0, we start from the LastOpTimestamp
