@@ -15,7 +15,8 @@ import (
 
 func TestSetupInitialPosition(t *testing.T) {
 	r := require.New(t)
-	repo := position_repos.NewMemoRepo()
+
+	repo := position_repos.NewMemRepo("test")
 
 	t.Run("when position does not exist", func(tt *testing.T) {
 		// it get a start binlog position and save it

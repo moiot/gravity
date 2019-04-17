@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/moiot/gravity/pkg/position_repos"
-	"github.com/moiot/gravity/pkg/registry"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/stretchr/testify/require"
@@ -20,24 +19,11 @@ func StringDecoder(s string) (interface{}, error) {
 	return s, nil
 }
 
-func NewMemRepo() position_repos.PositionRepo {
-	plugin, err := registry.GetPlugin(registry.PositionRepo, position_repos.MemRepoName)
-	if err != nil {
-		panic(err.Error())
-	}
-	plugin.Configure("test", nil)
-	repo := plugin.(position_repos.PositionRepo)
-	if err := repo.Init(); err != nil {
-		panic(err.Error())
-	}
-	return repo
-}
-
 func TestPositionCache_New(t *testing.T) {
 	r := require.New(t)
 
 	t.Run("when repo dont have any data", func(tt *testing.T) {
-		repo := NewMemRepo()
+		repo := position_repos.NewMemRepo("test")
 
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
@@ -48,7 +34,7 @@ func TestPositionCache_New(t *testing.T) {
 	})
 
 	t.Run("when repo has some data", func(tt *testing.T) {
-		repo := NewMemRepo()
+		repo := position_repos.NewMemRepo("test")
 		err := repo.Put(t.Name(), position_repos.PositionMeta{Stage: config.Stream}, "test")
 		r.NoError(err)
 

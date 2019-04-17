@@ -76,3 +76,16 @@ func (repo *memRepo) Delete(pipelineName string) error {
 func (repo *memRepo) Close() error {
 	return nil
 }
+
+func NewMemRepo(pipelineName string) PositionRepo {
+	plugin, err := registry.GetPlugin(registry.PositionRepo, MemRepoName)
+	if err != nil {
+		panic(err.Error())
+	}
+	plugin.Configure(pipelineName, nil)
+	repo := plugin.(PositionRepo)
+	if err := repo.Init(); err != nil {
+		panic(err.Error())
+	}
+	return repo
+}

@@ -37,7 +37,7 @@ func initRepo(repo position_repos.PositionRepo, pipelineName string, startGTID s
 func TestSetupInitialPosition(t *testing.T) {
 	r := require.New(t)
 
-	repo := position_repos.NewMemoRepo()
+	repo := position_repos.NewMemRepo("test")
 
 	t.Run("when there isn't any position in position repo", func(tt *testing.T) {
 		tt.Run("when start spec is nil", func(ttt *testing.T) {
