@@ -9,7 +9,7 @@ import (
 	"github.com/moiot/gravity/pkg/inputs/helper"
 	"github.com/moiot/gravity/pkg/inputs/mongobatch"
 	"github.com/moiot/gravity/pkg/inputs/mongostream"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/registry"
 )
 
@@ -68,7 +68,7 @@ func (i *input) Configure(pipelineName string, data map[string]interface{}) erro
 	return nil
 }
 
-func (i *input) NewPositionCache() (position_store.PositionCacheInterface, error) {
+func (i *input) NewPositionCache() (position_cache.PositionCacheInterface, error) {
 	newer, ok := i.Input.(core.PositionCacheCreator)
 	if !ok {
 		return nil, errors.Errorf("not a PositionCacheCreator")

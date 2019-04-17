@@ -7,8 +7,9 @@ package mock_position_store
 import (
 	reflect "reflect"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	gomock "github.com/golang/mock/gomock"
-	position_store "github.com/moiot/gravity/pkg/position_store"
 )
 
 // MockPositionCacheInterface is a mock of PositionCacheInterface interface
@@ -69,9 +70,9 @@ func (mr *MockPositionCacheInterfaceMockRecorder) Flush() *gomock.Call {
 }
 
 // Get mocks base method
-func (m *MockPositionCacheInterface) Get() (position_store.Position, bool, error) {
+func (m *MockPositionCacheInterface) Get() (position_repos.Position, bool, error) {
 	ret := m.ctrl.Call(m, "Get")
-	ret0, _ := ret[0].(position_store.Position)
+	ret0, _ := ret[0].(position_repos.Position)
 	ret1, _ := ret[1].(bool)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
@@ -83,9 +84,9 @@ func (mr *MockPositionCacheInterfaceMockRecorder) Get() *gomock.Call {
 }
 
 // GetEncodedPersistentPosition mocks base method
-func (m *MockPositionCacheInterface) GetEncodedPersistentPosition() (position_store.PositionMeta, string, bool, error) {
+func (m *MockPositionCacheInterface) GetEncodedPersistentPosition() (position_repos.PositionMeta, string, bool, error) {
 	ret := m.ctrl.Call(m, "GetEncodedPersistentPosition")
-	ret0, _ := ret[0].(position_store.PositionMeta)
+	ret0, _ := ret[0].(position_repos.PositionMeta)
 	ret1, _ := ret[1].(string)
 	ret2, _ := ret[2].(bool)
 	ret3, _ := ret[3].(error)
@@ -98,7 +99,7 @@ func (mr *MockPositionCacheInterfaceMockRecorder) GetEncodedPersistentPosition()
 }
 
 // Put mocks base method
-func (m *MockPositionCacheInterface) Put(arg0 position_store.Position) error {
+func (m *MockPositionCacheInterface) Put(arg0 position_repos.Position) error {
 	ret := m.ctrl.Call(m, "Put", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0

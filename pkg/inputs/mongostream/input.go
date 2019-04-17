@@ -2,25 +2,28 @@ package mongostream
 
 import (
 	"context"
+
 	"sync"
+
+	"github.com/moiot/gravity/pkg/position_repos"
+	mgo "gopkg.in/mgo.v2"
 
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
 	log "github.com/sirupsen/logrus"
-	mgo "gopkg.in/mgo.v2"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/mongo"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/registry"
 )
 
 type PluginConfig struct {
-	// MongoSource *config.MongoSource `mapstructure:"source" toml:"source" json:"source"`
-	Source        *config.MongoConnConfig `mapstructure:"source" toml:"source" json:"source"`
-	StartPosition *config.MongoPosition   `mapstructure:"start-position" toml:"start-position" json:"start-position"`
-	GtmConfig     *config.GtmConfig       `mapstructure:"gtm-config" toml:"gtm-config" json:"gtm-config"`
+	Source        *config.MongoConnConfig     `mapstructure:"source" toml:"source" json:"source"`
+	PositionRepo  *config.GenericPluginConfig `mapstructure:"position-repo" toml:"position-repo" json:"position-repo"`
+	StartPosition *config.MongoPosition       `mapstructure:"start-position" toml:"start-position" json:"start-position"`
+	GtmConfig     *config.GtmConfig           `mapstructure:"gtm-config" toml:"gtm-config" json:"gtm-config"`
 }
 
 type mongoStreamInputPlugin struct {
@@ -33,7 +36,8 @@ type mongoStreamInputPlugin struct {
 
 	ctx           context.Context
 	cancel        context.CancelFunc
-	positionCache position_store.PositionCacheInterface
+	positionRepo  position_repos.PositionRepo
+	positionCache position_cache.PositionCacheInterface
 	mongoSession  *mgo.Session
 	oplogTailer   *OplogTailer
 	oplogChecker  *OplogChecker
@@ -57,27 +61,35 @@ func (plugin *mongoStreamInputPlugin) Configure(pipelineName string, data map[st
 	if cfg.Source == nil {
 		return errors.Errorf("no mongo source configured")
 	}
+
+	if cfg.PositionRepo == nil {
+		cfg.PositionRepo = position_repos.NewMongoRepoConfig(cfg.Source)
+	}
+
+	positionRepo, err := registry.GetPlugin(registry.PositionRepo, cfg.PositionRepo.Type)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if err := positionRepo.Configure(pipelineName, cfg.PositionRepo.Config); err != nil {
+		return errors.Trace(err)
+	}
+
+	plugin.positionRepo = positionRepo.(position_repos.PositionRepo)
 	plugin.cfg = &cfg
 	return nil
 }
 
-func (plugin *mongoStreamInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
-	session, err := mongo.CreateMongoSession(plugin.cfg.Source)
-	if err != nil {
+func (plugin *mongoStreamInputPlugin) NewPositionCache() (position_cache.PositionCacheInterface, error) {
+	if err := plugin.positionRepo.Init(); err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	positionRepo, err := position_store.NewMongoPositionRepo(session)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	positionCache, err := position_store.NewPositionCache(
+	positionCache, err := position_cache.NewPositionCache(
 		plugin.pipelineName,
-		positionRepo,
+		plugin.positionRepo,
 		OplogPositionValueEncoder,
 		OplogPositionValueDecoder,
-		position_store.DefaultFlushPeriod)
+		position_cache.DefaultFlushPeriod)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -89,7 +101,7 @@ func (plugin *mongoStreamInputPlugin) NewPositionCache() (position_store.Positio
 	return positionCache, nil
 }
 
-func (plugin *mongoStreamInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
+func (plugin *mongoStreamInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_cache.PositionCacheInterface) error {
 	plugin.emitter = emitter
 	plugin.positionCache = positionCache
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
@@ -140,8 +152,8 @@ func (plugin *mongoStreamInputPlugin) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *mongoStreamInputPlugin) Done() chan position_store.Position {
-	c := make(chan position_store.Position)
+func (plugin *mongoStreamInputPlugin) Done() chan position_repos.Position {
+	c := make(chan position_repos.Position)
 	go func() {
 		plugin.Wait()
 		position, exist, err := plugin.positionCache.Get()

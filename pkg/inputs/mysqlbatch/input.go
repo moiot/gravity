@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	"github.com/moiot/gravity/pkg/inputs/helper"
 
 	"github.com/juju/errors"
@@ -14,7 +16,7 @@ import (
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/schema_store"
 	"github.com/moiot/gravity/pkg/utils"
@@ -35,6 +37,8 @@ type PluginConfig struct {
 	SourceSlave *utils.DBConfig `mapstructure:"source-slave" toml:"source-slave" json:"source-slave"`
 
 	SourceProbeCfg *helper.SourceProbeCfg `mapstructure:"source-probe-config"json:"source-probe-config"`
+
+	PositionRepo *config.GenericPluginConfig `mapstructure:"position-repo" toml:"position-repo" json:"position-repo"`
 
 	TableConfigs []TableConfig `mapstructure:"table-configs" json:"table-configs"`
 
@@ -88,12 +92,13 @@ type mysqlBatchInputPlugin struct {
 
 	throttle *time.Ticker
 
-	positionCache position_store.PositionCacheInterface
+	positionRepo  position_repos.PositionRepo
+	positionCache position_cache.PositionCacheInterface
 
 	tableScanners []*TableScanner
 
 	// startBinlogPos utils.MySQLBinlogPosition
-	doneC chan position_store.Position
+	doneC chan position_repos.Position
 
 	closeOnce sync.Once
 }
@@ -125,25 +130,34 @@ func (plugin *mysqlBatchInputPlugin) Configure(pipelineName string, data map[str
 
 	plugin.probeDBConfig, plugin.probeSQLAnnotation = helper.GetProbCfg(cfg.SourceProbeCfg, cfg.Source)
 
+	if cfg.PositionRepo == nil {
+		cfg.PositionRepo = position_repos.NewMySQLRepoConfig(plugin.probeSQLAnnotation, plugin.probeDBConfig)
+	}
+
+	positionRepo, err := registry.GetPlugin(registry.PositionRepo, cfg.PositionRepo.Type)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if err := positionRepo.Configure(pipelineName, cfg.PositionRepo.Config); err != nil {
+		return errors.Trace(err)
+	}
+
+	plugin.positionRepo = positionRepo.(position_repos.PositionRepo)
 	plugin.cfg = &cfg
 	return nil
 }
 
-func (plugin *mysqlBatchInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
-
-	positionRepo, err := position_store.NewMySQLRepo(
-		plugin.probeDBConfig,
-		plugin.probeSQLAnnotation)
-	if err != nil {
+func (plugin *mysqlBatchInputPlugin) NewPositionCache() (position_cache.PositionCacheInterface, error) {
+	if err := plugin.positionRepo.Init(); err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	positionCache, err := position_store.NewPositionCache(
+	positionCache, err := position_cache.NewPositionCache(
 		plugin.pipelineName,
-		positionRepo,
+		plugin.positionRepo,
 		EncodeBatchPositionValue,
 		DecodeBatchPositionValue,
-		position_store.DefaultFlushPeriod)
+		position_cache.DefaultFlushPeriod)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -161,7 +175,7 @@ func (plugin *mysqlBatchInputPlugin) NewPositionCache() (position_store.Position
 	return positionCache, nil
 }
 
-func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
+func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_cache.PositionCacheInterface) error {
 	cfg := plugin.cfg
 	plugin.positionCache = positionCache
 
@@ -263,7 +277,7 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 		plugin.tableScanners = append(plugin.tableScanners, tableScanner)
 	}
 
-	plugin.doneC = make(chan position_store.Position)
+	plugin.doneC = make(chan position_repos.Position)
 
 	for _, tableScanner := range plugin.tableScanners {
 		if err := tableScanner.Start(); err != nil {
@@ -285,7 +299,7 @@ func (plugin *mysqlBatchInputPlugin) SendDeadSignal() error {
 	return nil
 }
 
-func (plugin *mysqlBatchInputPlugin) Done() chan position_store.Position {
+func (plugin *mysqlBatchInputPlugin) Done() chan position_repos.Position {
 	return plugin.doneC
 }
 
@@ -325,7 +339,7 @@ func (plugin *mysqlBatchInputPlugin) Close() {
 
 }
 
-func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.PositionCacheInterface) {
+func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_cache.PositionCacheInterface) {
 	for idx := range plugin.tableScanners {
 		plugin.tableScanners[idx].Wait()
 	}
@@ -351,8 +365,8 @@ func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.Pos
 
 		// Notice that we should not change streamPosition stage in this plugin.
 		// Changing the stage is done by two stage plugin.
-		streamPosition := position_store.Position{
-			PositionMeta: position_store.PositionMeta{
+		streamPosition := position_repos.Position{
+			PositionMeta: position_repos.PositionMeta{
 				Name:       plugin.pipelineName,
 				Stage:      config.Stream,
 				UpdateTime: time.Now(),
@@ -374,7 +388,7 @@ func (plugin *mysqlBatchInputPlugin) waitFinish(positionCache position_store.Pos
 
 func InitTablePosition(
 	db *sql.DB,
-	positionCache position_store.PositionCacheInterface,
+	positionCache position_cache.PositionCacheInterface,
 	tableDef *schema_store.Table,
 	scanColumns []string,
 	estimatedRowCount *int64) (bool, error) {

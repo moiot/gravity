@@ -13,6 +13,7 @@ type PluginType string
 
 const (
 	InputPlugin              PluginType = "input"
+	PositionRepo             PluginType = "positionRepo"
 	OutputPlugin             PluginType = "output"
 	FilterPlugin             PluginType = "filters"
 	MatcherPlugin            PluginType = "matcher"

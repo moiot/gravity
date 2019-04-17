@@ -7,10 +7,13 @@ import (
 	"sync"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
+
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	"github.com/moiot/gravity/pkg/config"
 
-	"github.com/json-iterator/go"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -286,7 +289,7 @@ func DecodeBatchPositionValue(s string) (interface{}, error) {
 	return nil, errors.Errorf("no valid version")
 }
 
-func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB *sql.DB) error {
+func SetupInitialPosition(cache position_cache.PositionCacheInterface, sourceDB *sql.DB) error {
 	_, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)
@@ -314,7 +317,7 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB 
 			Start:       startPosition,
 			TableStates: make(map[string]TableStatsV1),
 		}
-		position := position_store.Position{}
+		position := position_repos.Position{}
 		position.Value = batchPositionValue
 		position.Stage = config.Batch
 		position.UpdateTime = time.Now()
@@ -331,7 +334,7 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, sourceDB 
 
 var mu sync.Mutex
 
-func GetStartBinlog(cache position_store.PositionCacheInterface) (utils.MySQLBinlogPosition, error) {
+func GetStartBinlog(cache position_cache.PositionCacheInterface) (utils.MySQLBinlogPosition, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -352,7 +355,7 @@ func GetStartBinlog(cache position_store.PositionCacheInterface) (utils.MySQLBin
 	return batchPositionValue.Start, nil
 }
 
-func GetCurrentPos(cache position_store.PositionCacheInterface, fullTableName string) ([]TablePosition, bool, bool, error) {
+func GetCurrentPos(cache position_cache.PositionCacheInterface, fullTableName string) ([]TablePosition, bool, bool, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -382,7 +385,7 @@ func GetCurrentPos(cache position_store.PositionCacheInterface, fullTableName st
 	}
 }
 
-func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName string, pos []TablePosition, incScanCount bool) error {
+func PutCurrentPos(cache position_cache.PositionCacheInterface, fullTableName string, pos []TablePosition, incScanCount bool) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -415,7 +418,7 @@ func PutCurrentPos(cache position_store.PositionCacheInterface, fullTableName st
 	return errors.Trace(cache.Put(position))
 }
 
-func PutDone(cache position_store.PositionCacheInterface, fullTableName string) error {
+func PutDone(cache position_cache.PositionCacheInterface, fullTableName string) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -445,7 +448,7 @@ func PutDone(cache position_store.PositionCacheInterface, fullTableName string) 
 	return errors.Trace(cache.Put(position))
 }
 
-func PutEstimatedCount(cache position_store.PositionCacheInterface, fullTableName string, estimatedCount int64) error {
+func PutEstimatedCount(cache position_cache.PositionCacheInterface, fullTableName string, estimatedCount int64) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -476,7 +479,7 @@ func PutEstimatedCount(cache position_store.PositionCacheInterface, fullTableNam
 	return errors.Trace(cache.Put(position))
 }
 
-func GetMaxMin(cache position_store.PositionCacheInterface, fullTableName string) ([]TablePosition, []TablePosition, bool, error) {
+func GetMaxMin(cache position_cache.PositionCacheInterface, fullTableName string) ([]TablePosition, []TablePosition, bool, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -506,7 +509,7 @@ func GetMaxMin(cache position_store.PositionCacheInterface, fullTableName string
 	return append([]TablePosition(nil), stats.Max...), append([]TablePosition(nil), stats.Min...), true, nil
 }
 
-func PutMaxMin(cache position_store.PositionCacheInterface, fullTableName string, max []TablePosition, min []TablePosition) error {
+func PutMaxMin(cache position_cache.PositionCacheInterface, fullTableName string, max []TablePosition, min []TablePosition) error {
 	mu.Lock()
 	defer mu.Unlock()
 

@@ -115,10 +115,11 @@ type MySQLConfig struct {
 }
 
 type SourceTiDBConfig struct {
-	SourceDB                *utils.DBConfig    `mapstructure:"source-db" toml:"source-db" json:"source-db"`
-	SourceKafka             *SourceKafkaConfig `mapstructure:"source-kafka" toml:"source-kafka" json:"source-kafka"`
-	OffsetStoreConfig       *SourceProbeCfg    `mapstructure:"offset-store" toml:"offset-store" json:"offset-store"`
-	IgnoreBiDirectionalData bool               `mapstructure:"ignore-bidirectional-data" toml:"ignore-bidirectional-data" json:"ignore-bidirectional-data"`
+	SourceDB    *utils.DBConfig    `mapstructure:"source-db" toml:"source-db" json:"source-db"`
+	SourceKafka *SourceKafkaConfig `mapstructure:"source-kafka" toml:"source-kafka" json:"source-kafka"`
+	// OffsetStoreConfig       *SourceProbeCfg    `mapstructure:"offset-store" toml:"offset-store" json:"offset-store"`
+	PositionRepo            *GenericPluginConfig `mapstructure:"position-repo" toml:"position-repo" json:"position-repo"`
+	IgnoreBiDirectionalData bool                 `mapstructure:"ignore-bidirectional-data" toml:"ignore-bidirectional-data" json:"ignore-bidirectional-data"`
 }
 
 type GtmConfig struct {
@@ -134,7 +135,7 @@ type MongoConnConfig struct {
 	Username string `mapstructure:"username" toml:"username" json:"username"`
 	Password string `mapstructure:"password" toml:"password" json:"password"`
 	Database string `mapstructure:"database" toml:"database" json:"database"`
-	Direct   bool   `mapstructure:"-" toml:"-" json:"-"`
+	Direct   bool   `mapstructure:"direct" toml:"direct" json:"direct"`
 }
 
 type TargetMySQLWorkerConfig struct {

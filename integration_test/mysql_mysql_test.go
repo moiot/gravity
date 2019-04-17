@@ -514,13 +514,13 @@ func TestMySQLBatchNoTableConfig(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
 			Mode: config.Batch,
-			Config: utils.Struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+			Config: utils.MustAny2Map(mysqlstream.MySQLBinlogInputPluginConfig{
 				Source: sourceDBConfig,
 			}),
 		},
-		OutputPlugin: config.GenericConfig{
+		OutputPlugin: config.GenericPluginConfig{
 			Type: "mysql",
-			Config: utils.Struct2Map(mysql.MySQLPluginConfig{
+			Config: utils.MustAny2Map(mysql.MySQLPluginConfig{
 				DBConfig:  targetDBConfig,
 				EnableDDL: true,
 				Routes: []map[string]interface{}{
@@ -572,13 +572,13 @@ func TestZeroTime(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
 			Mode: config.Replication,
-			Config: utils.Struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+			Config: utils.MustAny2Map(mysqlstream.MySQLBinlogInputPluginConfig{
 				Source: sourceDBConfig,
 			}),
 		},
-		OutputPlugin: config.GenericConfig{
+		OutputPlugin: config.GenericPluginConfig{
 			Type: "mysql",
-			Config: utils.Struct2Map(mysql.MySQLPluginConfig{
+			Config: utils.MustAny2Map(mysql.MySQLPluginConfig{
 				DBConfig:  targetDBConfig,
 				EnableDDL: true,
 				Routes: []map[string]interface{}{
@@ -667,7 +667,7 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 				"mode":          "batch",
 			},
 		},
-		OutputPlugin: config.GenericConfig{
+		OutputPlugin: config.GenericPluginConfig{
 			Type: "mysql",
 			Config: map[string]interface{}{
 				"target": map[string]interface{}{
@@ -677,7 +677,7 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 					"port":     targetDBConfig.Port,
 				},
 				"enable-ddl": true,
-				"sql-engine-config": &config.GenericConfig{
+				"sql-engine-config": &config.GenericPluginConfig{
 					Type: "mysql-insert-ignore",
 				},
 				"routes": []map[string]interface{}{
@@ -960,14 +960,14 @@ func TestMySQLToMyBidirection(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
 			Mode: config.Stream,
-			Config: utils.Struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+			Config: utils.MustAny2Map(mysqlstream.MySQLBinlogInputPluginConfig{
 				IgnoreBiDirectionalData: true,
 				Source:                  sourceDBConfig,
 			}),
 		},
-		OutputPlugin: config.GenericConfig{
+		OutputPlugin: config.GenericPluginConfig{
 			Type: "mysql",
-			Config: utils.Struct2Map(mysql.MySQLPluginConfig{
+			Config: utils.MustAny2Map(mysql.MySQLPluginConfig{
 				DBConfig:  targetDBConfig,
 				EnableDDL: true,
 				Routes: []map[string]interface{}{
@@ -977,9 +977,9 @@ func TestMySQLToMyBidirection(t *testing.T) {
 						"target-schema": targetDBName,
 					},
 				},
-				EngineConfig: &config.GenericConfig{
+				EngineConfig: &config.GenericPluginConfig{
 					Type: sql_execution_engine.MySQLReplaceEngine,
-					Config: utils.Struct2Map(sql_execution_engine.MysqlReplaceEngineConfig{
+					Config: utils.MustAny2Map(sql_execution_engine.MysqlReplaceEngineConfig{
 						TagInternalTxn: true,
 					}),
 				},
@@ -1050,12 +1050,12 @@ func TestMySQLTagDDL(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: "mysql",
 			Mode: config.Stream,
-			Config: utils.Struct2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+			Config: utils.MustAny2Map(mysqlstream.MySQLBinlogInputPluginConfig{
 				Source:                  sourceDBConfig,
 				IgnoreBiDirectionalData: true,
 			}),
 		},
-		OutputPlugin: config.GenericConfig{
+		OutputPlugin: config.GenericPluginConfig{
 			Type: "mysql",
 			Config: map[string]interface{}{
 				"target": map[string]interface{}{
@@ -1127,7 +1127,7 @@ func TestMySQLDDL(t *testing.T) {
 				},
 			},
 		},
-		OutputPlugin: config.GenericConfig{
+		OutputPlugin: config.GenericPluginConfig{
 			Type: "mysql",
 			Config: map[string]interface{}{
 				"target": map[string]interface{}{
@@ -1220,7 +1220,7 @@ func TestMySQLDDLNoRoute(t *testing.T) {
 				},
 			},
 		},
-		OutputPlugin: config.GenericConfig{
+		OutputPlugin: config.GenericPluginConfig{
 			Type: "mysql",
 			Config: map[string]interface{}{
 				"target": map[string]interface{}{

@@ -4,15 +4,17 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	"github.com/juju/errors"
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/inputs/helper"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/utils"
 	gomysql "github.com/siddontang/go-mysql/mysql"
 )
 
-func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCacheInterface, startPositionSpec *utils.MySQLBinlogPosition) error {
+func SetupInitialPosition(db *sql.DB, positionCache position_cache.PositionCacheInterface, startPositionSpec *utils.MySQLBinlogPosition) error {
 	position, exist, err := positionCache.Get()
 	if err != nil {
 		return errors.Trace(err)
@@ -43,8 +45,8 @@ func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCache
 			binlogPositionValue.CurrentPosition = &p
 		}
 
-		position := position_store.Position{
-			PositionMeta: position_store.PositionMeta{
+		position := position_repos.Position{
+			PositionMeta: position_repos.PositionMeta{
 				Stage:      config.Stream,
 				UpdateTime: time.Now(),
 			},
@@ -84,7 +86,7 @@ func SetupInitialPosition(db *sql.DB, positionCache position_store.PositionCache
 	return errors.Trace(positionCache.Flush())
 }
 
-func GetCurrentPositionValue(cache position_store.PositionCacheInterface) (utils.MySQLBinlogPosition, error) {
+func GetCurrentPositionValue(cache position_cache.PositionCacheInterface) (utils.MySQLBinlogPosition, error) {
 	_, current, err := getBinlogPositionsValue(cache)
 	if err != nil {
 		return utils.MySQLBinlogPosition{}, errors.Trace(err)
@@ -92,7 +94,7 @@ func GetCurrentPositionValue(cache position_store.PositionCacheInterface) (utils
 	return *current, nil
 }
 
-func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, currentPosition utils.MySQLBinlogPosition) error {
+func UpdateCurrentPositionValue(cache position_cache.PositionCacheInterface, currentPosition utils.MySQLBinlogPosition) error {
 	start, _, err := getBinlogPositionsValue(cache)
 	if err != nil {
 		return errors.Trace(err)
@@ -103,8 +105,8 @@ func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, cur
 		CurrentPosition: &currentPosition,
 	}
 
-	position := position_store.Position{
-		PositionMeta: position_store.PositionMeta{
+	position := position_repos.Position{
+		PositionMeta: position_repos.PositionMeta{
 			Stage: config.Stream,
 		},
 
@@ -127,7 +129,7 @@ func ToGoMySQLPosition(p utils.MySQLBinlogPosition) (gomysql.Position, gomysql.M
 	return gomysql.Position{Name: p.BinLogFileName, Pos: p.BinLogFilePos}, mysqlGTIDSet, nil
 }
 
-func getBinlogPositionsValue(cache position_store.PositionCacheInterface) (*utils.MySQLBinlogPosition, *utils.MySQLBinlogPosition, error) {
+func getBinlogPositionsValue(cache position_cache.PositionCacheInterface) (*utils.MySQLBinlogPosition, *utils.MySQLBinlogPosition, error) {
 	position, exist, err := cache.Get()
 	if err != nil {
 		return nil, nil, errors.Trace(err)

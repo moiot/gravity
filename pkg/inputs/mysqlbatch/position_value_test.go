@@ -4,21 +4,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/mysql_test"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/utils"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSetupInitialPosition(t *testing.T) {
 	r := require.New(t)
-	repo := position_store.NewMemoRepo()
+
+	repo := position_repos.NewMemRepo("test")
 
 	t.Run("when position does not exist", func(tt *testing.T) {
 		// it get a start binlog position and save it
 		pipelineName := utils.TestCaseMd5Name(tt)
-		cache, err := position_store.NewPositionCache(
+		cache, err := position_cache.NewPositionCache(
 			pipelineName,
 			repo,
 			EncodeBatchPositionValue,
@@ -52,9 +55,9 @@ func TestSetupInitialPosition(t *testing.T) {
 
 		s, err := EncodeBatchPositionValue(batchPositionValue)
 		r.NoError(err)
-		r.NoError(repo.Put(pipelineName, position_store.PositionMeta{Name: pipelineName, Stage: config.Batch}, s))
+		r.NoError(repo.Put(pipelineName, position_repos.PositionMeta{Name: pipelineName, Stage: config.Batch}, s))
 
-		cache, err := position_store.NewPositionCache(
+		cache, err := position_cache.NewPositionCache(
 			pipelineName,
 			repo,
 			EncodeBatchPositionValue,

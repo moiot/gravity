@@ -36,7 +36,7 @@ func TestChunkedBatch(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: inputs.Mongo,
 			Mode: config.Batch,
-			Config: utils.Struct2Map(
+			Config: utils.MustAny2Map(
 				mongobatch.Config{
 					Source:         &mongoCfg,
 					ChunkThreshold: 200,
@@ -44,9 +44,9 @@ func TestChunkedBatch(t *testing.T) {
 				},
 			),
 		},
-		OutputPlugin: config.GenericConfig{
+		OutputPlugin: config.GenericPluginConfig{
 			Type: outputs.AsyncKafka,
-			Config: utils.Struct2Map(async_kafka.AsyncKafkaPluginConfig{
+			Config: utils.MustAny2Map(async_kafka.AsyncKafkaPluginConfig{
 				KafkaConfig: &config.KafkaGlobalConfig{
 					BrokerAddrs: kafkaBroker,
 					Mode:        "async",
@@ -125,16 +125,16 @@ func TestNonChunkBatch(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: inputs.Mongo,
 			Mode: config.Batch,
-			Config: utils.Struct2Map(
+			Config: utils.MustAny2Map(
 				mongobatch.Config{
 					Source:    &mongoCfg,
 					BatchSize: 100,
 				},
 			),
 		},
-		OutputPlugin: config.GenericConfig{
+		OutputPlugin: config.GenericPluginConfig{
 			Type: outputs.AsyncKafka,
-			Config: utils.Struct2Map(async_kafka.AsyncKafkaPluginConfig{
+			Config: utils.MustAny2Map(async_kafka.AsyncKafkaPluginConfig{
 				KafkaConfig: &config.KafkaGlobalConfig{
 					BrokerAddrs: kafkaBroker,
 					Mode:        "async",

@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/juju/errors"
+
 	"github.com/serialx/hashring"
 	log "github.com/sirupsen/logrus"
 	mgo "gopkg.in/mgo.v2"
@@ -79,7 +81,7 @@ type OpLogEntry map[string]interface{}
 
 type OpFilter func(*Op) bool
 
-type TimestampGenerator func(*mgo.Session, *Options) bson.MongoTimestamp
+type TimestampGenerator func(*mgo.Session, *Options) (bson.MongoTimestamp, error)
 
 type OpBuf struct {
 	UseBufferDuration bool
@@ -368,11 +370,13 @@ func ParseTimestamp(timestamp bson.MongoTimestamp) (int32, int32) {
 	return int32(ts), int32(ordinal)
 }
 
-func LastOpTimestamp(session *mgo.Session, options *Options) bson.MongoTimestamp {
+func LastOpTimestamp(session *mgo.Session, options *Options) (bson.MongoTimestamp, error) {
 	var opLog OpLog
 	collection := OpLogCollection(session, options)
-	collection.Find(nil).Sort("-$natural").One(&opLog)
-	return opLog.Timestamp
+	if err := collection.Find(nil).Sort("-$natural").One(&opLog); err != nil {
+		return opLog.Timestamp, errors.Trace(err)
+	}
+	return opLog.Timestamp, nil
 }
 
 func GetOpLogQuery(session *mgo.Session, after bson.MongoTimestamp, options *Options) *mgo.Query {
@@ -391,7 +395,12 @@ func TailOps(ctx *OpCtx, session *mgo.Session, channels []OpChan, options *Optio
 	if err != nil {
 		panic(fmt.Sprintf("Invalid value <%s> for CursorTimeout", *options.CursorTimeout))
 	}
-	currTimestamp := options.After(s, options)
+
+	currTimestamp, err := options.After(s, options)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	iter := GetOpLogQuery(s, currTimestamp, options).Tail(duration)
 	for {
 		var entry OpLog

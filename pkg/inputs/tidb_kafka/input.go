@@ -4,8 +4,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 
 	"github.com/mitchellh/mapstructure"
 
@@ -36,7 +38,8 @@ type tidbKafkaStreamInputPlugin struct {
 
 	ctx           context.Context
 	cancel        context.CancelFunc
-	positionCache position_store.PositionCacheInterface
+	positionRepo  position_repos.PositionRepo
+	positionCache position_cache.PositionCacheInterface
 	binlogTailer  *BinlogTailer
 	binlogChecker binlog_checker.BinlogChecker
 }
@@ -61,36 +64,43 @@ func (plugin *tidbKafkaStreamInputPlugin) Configure(pipelineName string, data ma
 		return errors.Errorf("source-kafka must be configured")
 	}
 
-	if cfg.OffsetStoreConfig == nil {
+	if cfg.PositionRepo == nil {
 		return errors.Errorf("offset-positionCache must be configured")
 	}
+
+	positionRepo, err := registry.GetPlugin(registry.PositionRepo, cfg.PositionRepo.Type)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if err := positionRepo.Configure(pipelineName, cfg.PositionRepo.Config); err != nil {
+		return errors.Trace(err)
+	}
+
+	plugin.positionRepo = positionRepo.(position_repos.PositionRepo)
 
 	plugin.cfg = &cfg
 
 	return nil
 }
 
-func (plugin *tidbKafkaStreamInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
-	positionRepo, err := position_store.NewMySQLRepo(
-		plugin.cfg.OffsetStoreConfig.SourceMySQL,
-		plugin.cfg.OffsetStoreConfig.Annotation)
-	if err != nil {
+func (plugin *tidbKafkaStreamInputPlugin) NewPositionCache() (position_cache.PositionCacheInterface, error) {
+	if err := plugin.positionRepo.Init(); err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	positionCache, err := position_store.NewPositionCache(
+	positionCache, err := position_cache.NewPositionCache(
 		plugin.pipelineName,
-		positionRepo,
+		plugin.positionRepo,
 		KafkaPositionValueEncoder,
 		KafkaPositionValueDecoder,
-		position_store.DefaultFlushPeriod)
+		position_cache.DefaultFlushPeriod)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	return positionCache, nil
 }
 
-func (plugin *tidbKafkaStreamInputPlugin) Start(emitter core.Emitter, positionCache position_store.PositionCacheInterface) error {
+func (plugin *tidbKafkaStreamInputPlugin) Start(emitter core.Emitter, positionCache position_cache.PositionCacheInterface) error {
 	plugin.emitter = emitter
 	plugin.gravityServerID = utils.GenerateRandomServerID()
 	plugin.positionCache = positionCache
@@ -137,8 +147,8 @@ func (plugin *tidbKafkaStreamInputPlugin) Stage() config.InputMode {
 	return config.Stream
 }
 
-func (plugin *tidbKafkaStreamInputPlugin) Done() chan position_store.Position {
-	c := make(chan position_store.Position)
+func (plugin *tidbKafkaStreamInputPlugin) Done() chan position_repos.Position {
+	c := make(chan position_repos.Position)
 	go func() {
 		plugin.binlogTailer.Wait()
 		position, exist, err := plugin.positionCache.Get()

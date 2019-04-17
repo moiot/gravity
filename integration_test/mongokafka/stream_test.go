@@ -39,7 +39,7 @@ func TestStream(t *testing.T) {
 				},
 			},
 		},
-		OutputPlugin: gravityConfig.GenericConfig{
+		OutputPlugin: gravityConfig.GenericPluginConfig{
 			Type: "async-kafka",
 			Config: map[string]interface{}{
 				"kafka-global-config": map[string]interface{}{

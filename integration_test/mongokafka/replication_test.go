@@ -35,15 +35,15 @@ func TestReplication(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: inputs.Mongo,
 			Mode: config.Replication,
-			Config: utils.Struct2Map(
+			Config: utils.MustAny2Map(
 				mongobatch.Config{
 					Source: &mongoCfg,
 				},
 			),
 		},
-		OutputPlugin: config.GenericConfig{
+		OutputPlugin: config.GenericPluginConfig{
 			Type: outputs.AsyncKafka,
-			Config: utils.Struct2Map(async_kafka.AsyncKafkaPluginConfig{
+			Config: utils.MustAny2Map(async_kafka.AsyncKafkaPluginConfig{
 				KafkaConfig: &config.KafkaGlobalConfig{
 					BrokerAddrs: kafkaBroker,
 					Mode:        "async",

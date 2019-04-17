@@ -13,7 +13,7 @@ import (
 	"github.com/moiot/gravity/pkg/filters"
 	_ "github.com/moiot/gravity/pkg/inputs"
 	_ "github.com/moiot/gravity/pkg/outputs"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/schedulers/batch_table_scheduler"
 )
@@ -23,7 +23,7 @@ type Server struct {
 	filters       []core.IFilter
 	Emitter       core.Emitter
 	Scheduler     core.Scheduler
-	PositionCache position_store.PositionCacheInterface
+	PositionCache position_cache.PositionCacheInterface
 	Output        core.Output
 
 	// When Input is done, server will be closed, when config changed, server will also be closed;
@@ -58,7 +58,7 @@ func ParsePlugins(pipelineConfig config.PipelineConfigV3) (*Server, error) {
 
 	// scheduler
 	if pipelineConfig.SchedulerPlugin == nil {
-		pipelineConfig.SchedulerPlugin = &config.GenericConfig{
+		pipelineConfig.SchedulerPlugin = &config.GenericPluginConfig{
 			Type:   "batch-table-scheduler",
 			Config: batch_table_scheduler.DefaultConfig,
 		}

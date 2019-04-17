@@ -20,7 +20,7 @@ import (
 	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/utils"
 )
 
@@ -38,7 +38,7 @@ type OplogTailer struct {
 	gtmConfig     *config.GtmConfig
 	opCtx         *gtm.OpCtx
 	sourceHost    string
-	positionCache position_store.PositionCacheInterface
+	positionCache position_cache.PositionCacheInterface
 	stopped       bool
 }
 
@@ -112,12 +112,12 @@ func (tailer *OplogTailer) Run() {
 		log.Fatalf("[oplogTailer] failed to get position: %v", errors.Trace(err))
 	}
 
-	after := func(session *mgo.Session, options *gtm.Options) bson.MongoTimestamp {
+	after := func(session *mgo.Session, options *gtm.Options) (bson.MongoTimestamp, error) {
 		positionValue, err := GetPositionValue(tailer.positionCache)
 		if err != nil {
-			log.Fatalf("[oplogTailer] failed to get position: %v", errors.Trace(err))
+			return bson.MongoTimestamp(positionValue.CurrentPosition), errors.Trace(err)
 		}
-		return bson.MongoTimestamp(positionValue.CurrentPosition)
+		return bson.MongoTimestamp(positionValue.CurrentPosition), nil
 	}
 
 	// If timestamp is 0, we start from the LastOpTimestamp
@@ -282,7 +282,7 @@ type OplogTailerOpt struct {
 	session       *mgo.Session
 	oplogChecker  *OplogChecker
 	sourceHost    string
-	positionCache position_store.PositionCacheInterface
+	positionCache position_cache.PositionCacheInterface
 	emitter       core.Emitter
 	router        core.Router
 	logger        log.Logger

@@ -14,15 +14,21 @@
  * // limitations under the License.
  */
 
-package position_store
+package position_repos
 
 import (
-	"time"
-
 	"github.com/juju/errors"
-
 	"github.com/moiot/gravity/pkg/config"
+	"time"
 )
+
+type PositionRepo interface {
+	Init() error
+	Get(pipelineName string) (PositionMeta, string, bool, error)
+	Put(pipelineName string, positionMeta PositionMeta, v string) error
+	Delete(pipelineName string) error
+	Close() error
+}
 
 type PositionMeta struct {
 	// Version is the schema version of position
@@ -61,3 +67,7 @@ func (p Position) Validate() error {
 
 	return nil
 }
+
+type PositionValueEncoder func(v interface{}) (string, error)
+type PositionValueDecoder func(s string) (interface{}, error)
+

@@ -5,12 +5,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 )
 
 type TwoStageInputPlugin struct {
@@ -38,7 +40,7 @@ func NewTwoStageInputPlugin(full, incremental core.Input) (core.Input, error) {
 	}, nil
 }
 
-func (i *TwoStageInputPlugin) NewPositionCache() (position_store.PositionCacheInterface, error) {
+func (i *TwoStageInputPlugin) NewPositionCache() (position_cache.PositionCacheInterface, error) {
 	caches := twoStagePositionCache{}
 	caches.current = &atomic.Value{}
 
@@ -77,7 +79,7 @@ func (i *TwoStageInputPlugin) NewPositionCache() (position_store.PositionCacheIn
 	return &caches, nil
 }
 
-func (i *TwoStageInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
+func (i *TwoStageInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_cache.PositionCacheInterface) error {
 	if i.Stage() == config.Stream {
 		log.Info("[TwoStageInputPlugin.Start] with inc")
 		return i.incremental.Start(emitter, router, positionCache)
@@ -184,7 +186,7 @@ func (i *TwoStageInputPlugin) Stage() config.InputMode {
 	return i.positionCache.current.Load().(config.InputMode)
 }
 
-func (i *TwoStageInputPlugin) Done() chan position_store.Position {
+func (i *TwoStageInputPlugin) Done() chan position_repos.Position {
 	if i.Stage() == config.Stream {
 		return i.incremental.Done()
 	} else {
@@ -209,8 +211,8 @@ func (i *TwoStageInputPlugin) Close() {
 }
 
 type twoStagePositionCache struct {
-	incremental position_store.PositionCacheInterface
-	full        position_store.PositionCacheInterface
+	incremental position_cache.PositionCacheInterface
+	full        position_cache.PositionCacheInterface
 	current     *atomic.Value
 }
 
@@ -230,7 +232,7 @@ func (s *twoStagePositionCache) Close() {
 	}
 }
 
-func (s *twoStagePositionCache) Put(position position_store.Position) error {
+func (s *twoStagePositionCache) Put(position position_repos.Position) error {
 	if s.Stage() == config.Stream {
 		return errors.Trace(s.incremental.Put(position))
 	} else {
@@ -238,7 +240,7 @@ func (s *twoStagePositionCache) Put(position position_store.Position) error {
 	}
 }
 
-func (s *twoStagePositionCache) Get() (position_store.Position, bool, error) {
+func (s *twoStagePositionCache) Get() (position_repos.Position, bool, error) {
 	if s.Stage() == config.Stream {
 		return s.incremental.Get()
 	} else {
@@ -246,7 +248,7 @@ func (s *twoStagePositionCache) Get() (position_store.Position, bool, error) {
 	}
 }
 
-func (s *twoStagePositionCache) GetEncodedPersistentPosition() (position_store.PositionMeta, string, bool, error) {
+func (s *twoStagePositionCache) GetEncodedPersistentPosition() (position_repos.PositionMeta, string, bool, error) {
 	if s.Stage() == config.Stream {
 		return s.incremental.GetEncodedPersistentPosition()
 	} else {

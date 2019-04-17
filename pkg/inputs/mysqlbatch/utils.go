@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 
 	"github.com/juju/errors"
 
@@ -152,7 +152,7 @@ func DeleteEmptyTables(db *sql.DB, tables []*schema_store.Table, tableConfigs []
 
 func InitializePositionAndDeleteScannedTable(
 	db *sql.DB,
-	positionCache position_store.PositionCacheInterface,
+	positionCache position_cache.PositionCacheInterface,
 	scanColumnsArray [][]string,
 	estimatedRowCount []int64,
 	tables []*schema_store.Table,

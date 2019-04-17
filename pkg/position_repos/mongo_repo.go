@@ -1,13 +1,36 @@
-package position_store
+/*
+ *
+ * // Copyright 2019 , Beijing Mobike Technology Co., Ltd.
+ * //
+ * // Licensed under the Apache License, Version 2.0 (the "License");
+ * // you may not use this file except in compliance with the License.
+ * // You may obtain a copy of the License at
+ * //
+ * //     http://www.apache.org/licenses/LICENSE-2.0
+ * //
+ * // Unless required by applicable law or agreed to in writing, software
+ * // distributed under the License is distributed on an "AS IS" BASIS,
+ * // See the License for the specific language governing permissions and
+ * // limitations under the License.
+ */
+
+package position_repos
 
 import (
 	"time"
 
-	"github.com/json-iterator/go"
+	mgo "gopkg.in/mgo.v2"
+
+	jsoniter "github.com/json-iterator/go"
+
+	"github.com/mitchellh/mapstructure"
+	"github.com/moiot/gravity/pkg/mongo"
+	"github.com/moiot/gravity/pkg/registry"
+	"github.com/moiot/gravity/pkg/utils"
+
 	"github.com/moiot/gravity/pkg/config"
 
 	"github.com/juju/errors"
-	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -15,6 +38,7 @@ const (
 	mongoPositionDB         = "_gravity"
 	mongoPositionCollection = "gravity_positions"
 	Version                 = "1.0"
+	MongoRepoName           = "mongo-repo"
 )
 
 var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
@@ -45,13 +69,53 @@ type MongoPositionRet struct {
 	LastUpdate string `json:"last_update" bson:"last_update"`
 }
 
+//
+// [input.config.position-repo]
+// type = "mongo-repo"
+// [input.config.position-repo.config]
+// host = ...
+// port = ...
+//
 type mongoPositionRepo struct {
-	session *mgo.Session
+	mongoConfig config.MongoConnConfig
+	session     *mgo.Session
 }
 
 type PositionWrapper struct {
 	PositionMeta
 	MongoValue string `bson:"value" json:"value"`
+}
+
+func init() {
+	registry.RegisterPlugin(registry.PositionRepo, MongoRepoName, &mongoPositionRepo{}, false)
+}
+
+func (repo *mongoPositionRepo) Configure(pipelineName string, data map[string]interface{}) error {
+	if err := mapstructure.Decode(data, &repo.mongoConfig); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+func (repo *mongoPositionRepo) Init() error {
+	session, err := mongo.CreateMongoSession(&repo.mongoConfig)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	repo.session = session
+
+	session.SetMode(mgo.Primary, true)
+	collection := session.DB(mongoPositionDB).C(mongoPositionCollection)
+	err = collection.EnsureIndex(mgo.Index{
+		Key:    []string{"name"},
+		Unique: true,
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
 }
 
 func (repo *mongoPositionRepo) Get(pipelineName string) (PositionMeta, string, bool, error) {
@@ -132,16 +196,23 @@ func (repo *mongoPositionRepo) Close() error {
 	return nil
 }
 
-func NewMongoPositionRepo(session *mgo.Session) (PositionRepo, error) {
-	session.SetMode(mgo.Primary, true)
-	collection := session.DB(mongoPositionDB).C(mongoPositionCollection)
-	err := collection.EnsureIndex(mgo.Index{
-		Key:    []string{"name"},
-		Unique: true,
-	})
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	return &mongoPositionRepo{session: session}, nil
+func NewMongoRepoConfig(source *config.MongoConnConfig) *config.GenericPluginConfig {
+	cfg := config.GenericPluginConfig{}
+	cfg.Type = MongoRepoName
+	cfg.Config = utils.MustAny2Map(source)
+	return &cfg
 }
+
+// func NewMongoPositionRepo(session *mgo.Session) (core.PositionRepo, error) {
+// 	session.SetMode(mgo.Primary, true)
+// 	collection := session.DB(mongoPositionDB).C(mongoPositionCollection)
+// 	err := collection.EnsureIndex(mgo.Index{
+// 		Key:    []string{"name"},
+// 		Unique: true,
+// 	})
+// 	if err != nil {
+// 		return nil, errors.Trace(err)
+// 	}
+//
+// 	return &mongoPositionRepo{session: session}, nil
+// }

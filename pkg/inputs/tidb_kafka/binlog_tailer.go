@@ -18,7 +18,7 @@ import (
 	"github.com/moiot/gravity/pkg/kafka"
 	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mysql_test"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	pb "github.com/moiot/gravity/pkg/protocol/tidb"
 	"github.com/moiot/gravity/pkg/sarama_cluster"
 	"github.com/moiot/gravity/pkg/schema_store"
@@ -283,7 +283,7 @@ func (t *BinlogTailer) dispatchMsg(msg *core.Msg) error {
 func NewBinlogTailer(
 	pipelineName string,
 	serverID uint32,
-	positionCache position_store.PositionCacheInterface,
+	positionCache position_cache.PositionCacheInterface,
 	config *gCfg.SourceTiDBConfig,
 	emitter core.Emitter,
 	binlogChecker binlog_checker.BinlogChecker,

@@ -4,23 +4,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	"github.com/juju/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/moiot/gravity/pkg/config"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/utils"
 )
 
 func TestSetupInitialPosition(t *testing.T) {
-	repo := position_store.NewMemoRepo()
+	repo := position_repos.NewMemRepo("test")
 	r := require.New(t)
 
 	t.Run("when the initial position is empty", func(tt *testing.T) {
 		tt.Run("when the start spec is empty", func(ttt *testing.T) {
 			// it sets the current spec to MongoPosition(0), and keep the start spec empty
 			pipelineName := utils.TestCaseMd5Name(ttt)
-			cache, err := position_store.NewPositionCache(
+			cache, err := position_cache.NewPositionCache(
 				pipelineName,
 				repo,
 				OplogPositionValueEncoder,
@@ -46,7 +48,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			// it sets the start position and current position to start spec
 			pipelineName := utils.TestCaseMd5Name(ttt)
 
-			cache, err := position_store.NewPositionCache(
+			cache, err := position_cache.NewPositionCache(
 				pipelineName,
 				repo,
 				OplogPositionValueEncoder,
@@ -76,7 +78,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			current := config.MongoPosition(200)
 			r.NoError(initPosition(repo, pipelineName, start, current))
 
-			cache, err := position_store.NewPositionCache(
+			cache, err := position_cache.NewPositionCache(
 				pipelineName,
 				repo,
 				OplogPositionValueEncoder,
@@ -105,7 +107,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			current := config.MongoPosition(200)
 			r.NoError(initPosition(repo, pipelineName, start, current))
 
-			cache, err := position_store.NewPositionCache(
+			cache, err := position_cache.NewPositionCache(
 				pipelineName,
 				repo,
 				OplogPositionValueEncoder,
@@ -150,13 +152,13 @@ func TestSetupInitialPosition(t *testing.T) {
 	})
 }
 
-func initPosition(repo position_store.PositionRepo, pipelineName string, start config.MongoPosition, current config.MongoPosition) error {
+func initPosition(repo position_repos.PositionRepo, pipelineName string, start config.MongoPosition, current config.MongoPosition) error {
 	positionValue := OplogPositionValue{
 		StartPosition:   &start,
 		CurrentPosition: current,
 	}
 
-	m := position_store.PositionMeta{
+	m := position_repos.PositionMeta{
 		Name:  pipelineName,
 		Stage: config.Stream,
 	}

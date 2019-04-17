@@ -39,7 +39,7 @@ func (c *PipelineConfigV2) ToV3() PipelineConfigV3 {
 
 	for _, f := range c.FilterPlugins {
 		m := f.(map[string]interface{})
-		ff := GenericConfig{
+		ff := GenericPluginConfig{
 			Type: m["type"].(string),
 		}
 		delete(m, "type")
@@ -53,7 +53,7 @@ func (c *PipelineConfigV2) ToV3() PipelineConfigV3 {
 	}
 
 	for k, v := range c.SchedulerPlugins {
-		ret.SchedulerPlugin = &GenericConfig{
+		ret.SchedulerPlugin = &GenericPluginConfig{
 			Type:   k,
 			Config: v.(map[string]interface{}),
 		}

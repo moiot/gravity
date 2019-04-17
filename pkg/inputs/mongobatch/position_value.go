@@ -5,6 +5,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
@@ -15,7 +17,7 @@ import (
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 )
 
 var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
@@ -52,7 +54,7 @@ func Decode(s string) (interface{}, error) {
 	return v, nil
 }
 
-func SetupInitialPosition(cache position_store.PositionCacheInterface, session *mgo.Session, router core.Router, cfg Config) error {
+func SetupInitialPosition(cache position_cache.PositionCacheInterface, session *mgo.Session, router core.Router, cfg Config) error {
 	_, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)
@@ -61,7 +63,12 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, session *
 	if !exist {
 		options := gtm.DefaultOptions()
 		options.Fill(session, "")
-		startPos := gtm.LastOpTimestamp(session, options)
+		startPos, err := gtm.LastOpTimestamp(session, options)
+		if err != nil {
+			if !cfg.IgnoreOplogError {
+				return errors.Trace(err)
+			}
+		}
 
 		collections := make(map[string][]string)
 		for db, colls := range mongo.ListAllCollections(session) {
@@ -77,12 +84,16 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, session *
 			}
 		}
 
-		chunks := calculateChunks(session, collections, cfg.ChunkThreshold, cfg.WorkerCnt)
+		chunks, err := calculateChunks(session, collections, cfg.ChunkThreshold, cfg.WorkerCnt)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
 		batchPositionValue := PositionValue{
 			Start:  startPos,
 			Chunks: chunks,
 		}
-		position := position_store.Position{}
+		position := position_repos.Position{}
 		position.Value = batchPositionValue
 		position.Stage = config.Batch
 		position.UpdateTime = time.Now()
@@ -99,7 +110,12 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, session *
 
 const maxSampleSize = 100000
 
-func calculateChunks(session *mgo.Session, collections map[string][]string, chunkThreshold int, chunkCnt int) []chunk {
+func calculateChunks(
+	session *mgo.Session,
+	collections map[string][]string,
+	chunkThreshold int,
+	chunkCnt int) ([]chunk, error) {
+
 	var ret []chunk
 	for db, colls := range collections {
 		for _, coll := range colls {
@@ -108,8 +124,19 @@ func calculateChunks(session *mgo.Session, collections map[string][]string, chun
 				continue
 			} else if count > chunkThreshold {
 				seq := 0
+				// If all the following conditions are met, $sample uses a pseudo-random cursor to select documents:
+				//
+				// - $sample is the first stage of the pipeline
+				// - N is less than 5% of the total documents in the collection
+				// - The collection contains more than 100 documents
+				//
+				// Reference: https://docs.mongodb.com/manual/reference/operator/aggregation/sample/#pipe._S_sample
 				sampleCnt := int(math.Min(maxSampleSize, float64(count)*0.05))
-				for i, mm := range mongo.BucketAuto(session, db, coll, sampleCnt, chunkCnt) {
+				buckets, err := mongo.BucketAuto(session, db, coll, sampleCnt, chunkCnt)
+				if err != nil {
+					return []chunk{}, errors.Trace(err)
+				}
+				for i, mm := range buckets {
 					if i == 0 {
 						ret = append(ret, chunk{
 							Database:   db,
@@ -146,5 +173,5 @@ func calculateChunks(session *mgo.Session, collections map[string][]string, chun
 			}
 		}
 	}
-	return ret
+	return ret, nil
 }

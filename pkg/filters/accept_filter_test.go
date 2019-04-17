@@ -14,7 +14,7 @@ import (
 func Test_acceptFilterType_Filter(t *testing.T) {
 	a := assert.New(t)
 
-	data := []config.GenericConfig{
+	data := []config.GenericPluginConfig{
 		{
 			Type: AcceptFilterName,
 			Config: map[string]interface{}{

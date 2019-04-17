@@ -39,15 +39,15 @@ func TestMongo2MysqlReplication(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: inputs.Mongo,
 			Mode: config.Replication,
-			Config: utils.Struct2Map(
+			Config: utils.MustAny2Map(
 				mongobatch.Config{
 					Source: &mongoCfg,
 				},
 			),
 		},
-		OutputPlugin: config.GenericConfig{
+		OutputPlugin: config.GenericPluginConfig{
 			Type: outputs.Mysql,
-			Config: utils.Struct2Map(mysql.MySQLPluginConfig{
+			Config: utils.MustAny2Map(mysql.MySQLPluginConfig{
 				DBConfig: targetDBC,
 				Routes: []map[string]interface{}{
 					{

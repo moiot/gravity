@@ -3,11 +3,13 @@ package mongostream
 import (
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
 
 	"github.com/moiot/gravity/pkg/config"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 )
 
 var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
@@ -33,7 +35,7 @@ func OplogPositionValueDecoder(v string) (interface{}, error) {
 	return positions, nil
 }
 
-func SetupInitialPosition(cache position_store.PositionCacheInterface, startPositionInSpec *config.MongoPosition) error {
+func SetupInitialPosition(cache position_cache.PositionCacheInterface, startPositionInSpec *config.MongoPosition) error {
 	position, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)
@@ -53,8 +55,8 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 			StartPosition:   startPositionInSpec,
 		}
 
-		position := position_store.Position{
-			PositionMeta: position_store.PositionMeta{
+		position := position_repos.Position{
+			PositionMeta: position_repos.PositionMeta{
 				Stage:      config.Stream,
 				UpdateTime: time.Now(),
 			},
@@ -95,7 +97,7 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, startPosi
 	return errors.Trace(cache.Flush())
 }
 
-func GetPositionValue(cache position_store.PositionCacheInterface) (OplogPositionValue, error) {
+func GetPositionValue(cache position_cache.PositionCacheInterface) (OplogPositionValue, error) {
 
 	position, exist, err := cache.Get()
 	if err != nil {
@@ -114,7 +116,7 @@ func GetPositionValue(cache position_store.PositionCacheInterface) (OplogPositio
 	return oplogPositionValue, nil
 }
 
-func UpdateCurrentPositionValue(cache position_store.PositionCacheInterface, positionValue config.MongoPosition) error {
+func UpdateCurrentPositionValue(cache position_cache.PositionCacheInterface, positionValue config.MongoPosition) error {
 
 	position, exist, err := cache.Get()
 	if err != nil {
