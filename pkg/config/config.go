@@ -135,7 +135,7 @@ type MongoConnConfig struct {
 	Username string `mapstructure:"username" toml:"username" json:"username"`
 	Password string `mapstructure:"password" toml:"password" json:"password"`
 	Database string `mapstructure:"database" toml:"database" json:"database"`
-	Direct   bool   `mapstructure:"-" toml:"-" json:"-"`
+	Direct   bool   `mapstructure:"direct" toml:"direct" json:"direct"`
 }
 
 type TargetMySQLWorkerConfig struct {
