@@ -36,7 +36,7 @@ func TestGrpcFilterFactoryType(t *testing.T) {
 	} else {
 		r.FailNow("runtime not supported")
 	}
-	data := []config.GenericConfig{
+	data := []config.GenericPluginConfig{
 		{
 			Type: "grpc-sidecar",
 			Config: map[string]interface{}{

@@ -9,12 +9,12 @@ import (
 const PipelineConfigV3Version = "1.0"
 
 type PipelineConfigV3 struct {
-	PipelineName    string          `yaml:"name" toml:"name" json:"name"`
-	Version         string          `yaml:"version" toml:"version" json:"version"`
-	InputPlugin     InputConfig     `yaml:"input" toml:"input" json:"input"`
-	FilterPlugins   []GenericConfig `yaml:"filters" toml:"filters" json:"filters,omitempty"`
-	OutputPlugin    GenericConfig   `yaml:"output" toml:"output" json:"output"`
-	SchedulerPlugin *GenericConfig  `yaml:"scheduler" toml:"scheduler" json:"scheduler,omitempty"`
+	PipelineName    string                `yaml:"name" toml:"name" json:"name"`
+	Version         string                `yaml:"version" toml:"version" json:"version"`
+	InputPlugin     InputConfig           `yaml:"input" toml:"input" json:"input"`
+	FilterPlugins   []GenericPluginConfig `yaml:"filters" toml:"filters" json:"filters,omitempty"`
+	OutputPlugin    GenericPluginConfig   `yaml:"output" toml:"output" json:"output"`
+	SchedulerPlugin *GenericPluginConfig  `yaml:"scheduler" toml:"scheduler" json:"scheduler,omitempty"`
 }
 
 func (c *PipelineConfigV3) SetDefault() {
@@ -58,7 +58,7 @@ type InputConfig struct {
 	Config map[string]interface{} `yaml:"config"  json:"config"  toml:"config"`
 }
 
-type GenericConfig struct {
+type GenericPluginConfig struct {
 	Type   string                 `yaml:"type"  json:"type"  toml:"type"`
 	Config map[string]interface{} `yaml:"config"  json:"config,omitempty"  toml:"config,omitempty"`
 }

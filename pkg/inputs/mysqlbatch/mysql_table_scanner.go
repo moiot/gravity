@@ -19,7 +19,7 @@ import (
 
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/mysql"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/schema_store"
 	"github.com/moiot/gravity/pkg/utils"
 )
@@ -28,7 +28,7 @@ type TableScanner struct {
 	pipelineName  string
 	tableWorkC    chan *TableWork
 	cfg           *PluginConfig
-	positionCache position_store.PositionCacheInterface
+	positionCache position_cache.PositionCacheInterface
 	db            *sql.DB
 	emitter       core.Emitter
 	throttle      *time.Ticker
@@ -474,7 +474,7 @@ func NewTableScanner(
 	pipelineName string,
 	tableWorkC chan *TableWork,
 	db *sql.DB,
-	positionCache position_store.PositionCacheInterface,
+	positionCache position_cache.PositionCacheInterface,
 	emitter core.Emitter,
 	throttle *time.Ticker,
 	schemaStore schema_store.SchemaStore,

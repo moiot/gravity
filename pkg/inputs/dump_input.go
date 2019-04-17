@@ -3,10 +3,11 @@ package inputs
 import (
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
+	"github.com/moiot/gravity/pkg/position_repos"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 
 	"github.com/moiot/gravity/pkg/registry"
 )
@@ -28,11 +29,11 @@ func (plugin *dumpInput) Configure(pipelineName string, data map[string]interfac
 	return nil
 }
 
-func (plugin *dumpInput) NewPositionStore() (position_store.PositionCacheInterface, error) {
+func (plugin *dumpInput) NewPositionStore() (position_cache.PositionCacheInterface, error) {
 	return nil, nil
 }
 
-func (plugin *dumpInput) Start(emitter core.Emitter, router core.Router, positionCache position_store.PositionCacheInterface) error {
+func (plugin *dumpInput) Start(emitter core.Emitter, router core.Router, positionCache position_cache.PositionCacheInterface) error {
 	return nil
 }
 
@@ -48,8 +49,8 @@ func (plugin *dumpInput) SendDeadSignal() error {
 	return nil
 }
 
-func (plugin *dumpInput) Done(positionCache position_store.PositionCacheInterface) chan position_store.Position {
-	return make(chan position_store.Position)
+func (plugin *dumpInput) Done(positionCache position_cache.PositionCacheInterface) chan position_repos.Position {
+	return make(chan position_repos.Position)
 }
 
 func (plugin *dumpInput) Wait() {

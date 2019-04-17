@@ -1,8 +1,7 @@
 package tidb_kafka
 
 import (
-	"github.com/json-iterator/go"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 
 	"github.com/juju/errors"
 
@@ -15,7 +14,7 @@ var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
 
 type KafkaOffsetStoreFactory struct {
 	pipelineName  string
-	positionCache position_store.PositionCacheInterface
+	positionCache position_cache.PositionCacheInterface
 }
 
 type TopicOffset map[int32]int64
@@ -46,7 +45,7 @@ func (f *KafkaOffsetStoreFactory) GenOffsetStore(c *sarama_cluster.Consumer) sar
 	return &OffsetStore{positionCache: f.positionCache, pipelineName: f.pipelineName}
 }
 
-func NewKafkaOffsetStoreFactory(pipelineName string, positionCache position_store.PositionCacheInterface) *KafkaOffsetStoreFactory {
+func NewKafkaOffsetStoreFactory(pipelineName string, positionCache position_cache.PositionCacheInterface) *KafkaOffsetStoreFactory {
 	return &KafkaOffsetStoreFactory{
 		pipelineName:  pipelineName,
 		positionCache: positionCache,
@@ -55,7 +54,7 @@ func NewKafkaOffsetStoreFactory(pipelineName string, positionCache position_stor
 
 type OffsetStore struct {
 	pipelineName  string
-	positionCache position_store.PositionCacheInterface
+	positionCache position_cache.PositionCacheInterface
 }
 
 func (store *OffsetStore) CommitOffset(req *offsets.OffsetCommitRequest) (*offsets.OffsetCommitResponse, error) {

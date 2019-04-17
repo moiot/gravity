@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	"github.com/moiot/gravity/pkg/inputs/helper"
 
 	"github.com/juju/errors"
@@ -25,7 +27,7 @@ import (
 	"github.com/moiot/gravity/pkg/inputs/helper/binlog_checker"
 	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mysql_test"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/schema_store"
 	"github.com/moiot/gravity/pkg/utils"
 )
@@ -46,7 +48,7 @@ type BinlogTailer struct {
 
 	sourceTimeZone string
 
-	positionCache     position_store.PositionCacheInterface
+	positionCache     position_cache.PositionCacheInterface
 	sourceSchemaStore schema_store.SchemaStore
 	binlogChecker     binlog_checker.BinlogChecker
 
@@ -65,7 +67,7 @@ func NewBinlogTailer(
 	pipelineName string,
 	cfg *MySQLBinlogInputPluginConfig,
 	gravityServerID uint32,
-	positionCache position_store.PositionCacheInterface,
+	positionCache position_cache.PositionCacheInterface,
 	sourceSchemaStore schema_store.SchemaStore,
 	sourceDB *sql.DB,
 	emitter core.Emitter,
@@ -294,7 +296,7 @@ func (tailer *BinlogTailer) Start() error {
 				}
 
 				// skip binlog position event
-				if position_store.IsPositionStoreEvent(schemaName, tableName) {
+				if position_repos.IsPositionStoreEvent(schemaName, tableName) {
 					log.Debugf("[binlogTailer] skip position event")
 					continue
 				}

@@ -10,7 +10,7 @@ import (
 	"github.com/moiot/gravity/pkg/registry"
 )
 
-func NewFilters(filterConfigs []config.GenericConfig) ([]core.IFilter, error) {
+func NewFilters(filterConfigs []config.GenericPluginConfig) ([]core.IFilter, error) {
 	var retFilters []core.IFilter
 	for _, c := range filterConfigs {
 		if c.Type == "go-native-plugin" {

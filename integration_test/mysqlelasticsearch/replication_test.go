@@ -50,15 +50,15 @@ func TestMySQL2ElasticsearchReplication(t *testing.T) {
 		InputPlugin: config.InputConfig{
 			Type: inputs.Mysql,
 			Mode: config.Replication,
-			Config: utils.Struct2Map(
+			Config: utils.MustAny2Map(
 				mysqlbatch.PluginConfig{
 					Source: sourceDBConfig,
 				},
 			),
 		},
-		OutputPlugin: config.GenericConfig{
+		OutputPlugin: config.GenericPluginConfig{
 			Type: outputs.Elasticsearch,
-			Config: utils.Struct2Map(elasticsearch.ElasticsearchPluginConfig{
+			Config: utils.MustAny2Map(elasticsearch.ElasticsearchPluginConfig{
 				ServerConfig: &elasticsearch.ElasticsearchServerConfig{
 					URLs:  elasticsearch_test.TestURLs(),
 					Sniff: false,

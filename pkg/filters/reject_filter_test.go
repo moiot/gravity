@@ -13,7 +13,7 @@ import (
 func TestRejectFilter(t *testing.T) {
 	assert := assert.New(t)
 
-	data := []config.GenericConfig{
+	data := []config.GenericPluginConfig{
 		{
 			Type: "reject",
 			Config: map[string]interface{}{

@@ -220,7 +220,7 @@ func defaultMsgs() []*core.Msg {
 
 func defaultElasticsearchOutput() (*ElasticsearchOutput, error) {
 	output := &ElasticsearchOutput{}
-	err := output.Configure("mock", utils.Struct2Map(
+	err := output.Configure("mock", utils.MustAny2Map(
 		&ElasticsearchPluginConfig{
 			ServerConfig: &ElasticsearchServerConfig{
 				URLs:  []string{"http://127.0.0.1:9200"},

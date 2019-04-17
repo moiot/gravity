@@ -20,7 +20,7 @@ import (
 	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/utils"
 )
 
@@ -38,7 +38,7 @@ type OplogTailer struct {
 	gtmConfig     *config.GtmConfig
 	opCtx         *gtm.OpCtx
 	sourceHost    string
-	positionCache position_store.PositionCacheInterface
+	positionCache position_cache.PositionCacheInterface
 	stopped       bool
 }
 
@@ -282,7 +282,7 @@ type OplogTailerOpt struct {
 	session       *mgo.Session
 	oplogChecker  *OplogChecker
 	sourceHost    string
-	positionCache position_store.PositionCacheInterface
+	positionCache position_cache.PositionCacheInterface
 	emitter       core.Emitter
 	router        core.Router
 	logger        log.Logger

@@ -5,6 +5,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
@@ -15,7 +17,7 @@ import (
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 )
 
 var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
@@ -52,7 +54,7 @@ func Decode(s string) (interface{}, error) {
 	return v, nil
 }
 
-func SetupInitialPosition(cache position_store.PositionCacheInterface, session *mgo.Session, router core.Router, cfg Config) error {
+func SetupInitialPosition(cache position_cache.PositionCacheInterface, session *mgo.Session, router core.Router, cfg Config) error {
 	_, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)
@@ -91,7 +93,7 @@ func SetupInitialPosition(cache position_store.PositionCacheInterface, session *
 			Start:  startPos,
 			Chunks: chunks,
 		}
-		position := position_store.Position{}
+		position := position_repos.Position{}
 		position.Value = batchPositionValue
 		position.Stage = config.Batch
 		position.UpdateTime = time.Now()

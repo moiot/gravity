@@ -23,7 +23,7 @@ func (submitter *fakeMsgSubmitter) SubmitMsg(msg *core.Msg) error {
 
 func TestEmitterWithFilters(t *testing.T) {
 	assert := assert.New(t)
-	filtersConfigData := []config.GenericConfig{
+	filtersConfigData := []config.GenericPluginConfig{
 		{
 			Type: "reject",
 			Config: map[string]interface{}{

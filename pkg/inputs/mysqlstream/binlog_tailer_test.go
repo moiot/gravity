@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/inputs/helper"
-	"github.com/moiot/gravity/pkg/position_store"
 
 	"github.com/golang/mock/gomock"
 	"github.com/juju/errors"
@@ -114,8 +115,8 @@ func TestMsgEmit(t *testing.T) {
 		},
 	}
 
-	p := position_store.Position{
-		PositionMeta: position_store.PositionMeta{
+	p := position_repos.Position{
+		PositionMeta: position_repos.PositionMeta{
 			Name:  "test",
 			Stage: config.Stream,
 		},

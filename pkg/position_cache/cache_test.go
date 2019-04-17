@@ -1,6 +1,9 @@
-package position_store
+package position_cache
 
 import (
+	"fmt"
+	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/position_repos"
 	"testing"
 	"time"
 
@@ -8,11 +11,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+
+
+func StringEncoder(v interface{}) (string, error) {
+	return fmt.Sprintf("%s", v), nil
+}
+
+func StringDecoder(s string) (interface{}, error) {
+	return s, nil
+}
+
 func TestPositionCache_New(t *testing.T) {
 	r := require.New(t)
 
 	t.Run("when repo dont have any data", func(tt *testing.T) {
-		repo := NewMemoRepo()
+		repo := position_repos.NewMemoRepo()
 
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
@@ -23,8 +36,8 @@ func TestPositionCache_New(t *testing.T) {
 	})
 
 	t.Run("when repo has some data", func(tt *testing.T) {
-		repo := NewMemoRepo()
-		err := repo.Put(t.Name(), PositionMeta{Stage: config.Stream}, "test")
+		repo := position_repos.NewMemoRepo()
+		err := repo.Put(t.Name(), position_repos.PositionMeta{Stage: config.Stream}, "test")
 		r.NoError(err)
 
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
@@ -43,11 +56,11 @@ func TestPositionCache_GetPut(t *testing.T) {
 	r := require.New(t)
 
 	t.Run("when position is not valid", func(tt *testing.T) {
-		repo := NewMemoRepo()
+		repo := position_repos.NewMemoRepo()
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
 
-		err = cache.Put(Position{Value: ""})
+		err = cache.Put(position_repos.Position{Value: ""})
 		r.NotNil(err)
 
 		_, exists, err := cache.Get()
@@ -56,11 +69,11 @@ func TestPositionCache_GetPut(t *testing.T) {
 	})
 
 	t.Run("when position is valid", func(tt *testing.T) {
-		repo := NewMemoRepo()
+		repo := position_repos.NewMemoRepo()
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
-		p := Position{
-			PositionMeta: PositionMeta{
+		p := position_repos.Position{
+			PositionMeta: position_repos.PositionMeta{
 				Stage: config.Stream,
 			},
 			Value: "test2",
@@ -74,7 +87,7 @@ func TestPositionCache_GetPut(t *testing.T) {
 		r.True(exists)
 		r.NoError(err)
 
-		err = cache.Put(Position{Value: "test3", PositionMeta: PositionMeta{Stage: config.Stream}})
+		err = cache.Put(position_repos.Position{Value: "test3", PositionMeta: position_repos.PositionMeta{Stage: config.Stream}})
 		r.NoError(err)
 		p, exists, err = cache.Get()
 		r.NoError(err)
@@ -88,14 +101,14 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 	r := require.New(t)
 
 	t.Run("it does not flush when time has not come", func(tt *testing.T) {
-		repo := NewMemoRepo()
+		repo := position_repos.NewMemoRepo()
 
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, 5*time.Second)
 		r.NoError(err)
 
 		r.NoError(cache.Start())
 
-		err = cache.Put(Position{Value: "test", PositionMeta: PositionMeta{Stage: config.Stream}})
+		err = cache.Put(position_repos.Position{Value: "test", PositionMeta: position_repos.PositionMeta{Stage: config.Stream}})
 		r.NoError(err)
 
 		p, exists, err := cache.Get()
@@ -110,7 +123,7 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 		r.Equal("test", s)
 
 		// the second PUT will not flush data to repo until flush time comes
-		r.NoError(cache.Put(Position{Value: "test2", PositionMeta: PositionMeta{Stage: config.Stream}}))
+		r.NoError(cache.Put(position_repos.Position{Value: "test2", PositionMeta: position_repos.PositionMeta{Stage: config.Stream}}))
 		p, exists, err = cache.Get()
 		r.NoError(err)
 		r.True(exists)
@@ -124,13 +137,13 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 	})
 
 	t.Run("it flush to repo when time comes", func(tt *testing.T) {
-		repo := NewMemoRepo()
+		repo := position_repos.NewMemoRepo()
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, 1*time.Second)
 		r.NoError(err)
 
 		r.NoError(cache.Start())
 
-		err = cache.Put(Position{Value: "test", PositionMeta: PositionMeta{Stage: config.Stream}})
+		err = cache.Put(position_repos.Position{Value: "test", PositionMeta: position_repos.PositionMeta{Stage: config.Stream}})
 		r.NoError(err)
 
 		p, exists, err := cache.Get()
@@ -145,7 +158,7 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 		r.Equal("test", s)
 
 		// the second PUT will not flush data to repo until flush time comes
-		r.NoError(cache.Put(Position{Value: "test2", PositionMeta: PositionMeta{Stage: config.Stream}}))
+		r.NoError(cache.Put(position_repos.Position{Value: "test2", PositionMeta: position_repos.PositionMeta{Stage: config.Stream}}))
 		p, exists, err = cache.Get()
 		r.NoError(err)
 		r.True(exists)

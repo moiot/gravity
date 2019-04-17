@@ -1,6 +1,7 @@
-package position_store
+package position_cache
 
 import (
+	"github.com/moiot/gravity/pkg/position_repos"
 	"sync"
 	"time"
 
@@ -13,13 +14,13 @@ var DefaultFlushPeriod = 5 * time.Second
 type PositionCacheInterface interface {
 	Start() error
 	Close()
-	Put(position Position) error
+	Put(position position_repos.Position) error
 
 	// Get will get a value from cache, if there is no value inside the cache
 	// it will try to get it from position repo
-	Get() (position Position, exist bool, err error)
+	Get() (position position_repos.Position, exist bool, err error)
 
-	GetEncodedPersistentPosition() (position PositionMeta, v string, exist bool, err error)
+	GetEncodedPersistentPosition() (position position_repos.PositionMeta, v string, exist bool, err error)
 	Flush() error
 	Clear() error
 }
@@ -29,20 +30,20 @@ type defaultPositionCache struct {
 	pipelineName  string
 	exist         bool
 	dirty         bool
-	repo          PositionRepo
+	repo          position_repos.PositionRepo
 
 	closeMutex sync.Mutex
 	closed     bool
 
-	position            Position
+	position            position_repos.Position
 	positionValueString string
 	positionMutex       sync.Mutex
 
 	closeC chan struct{}
 	wg     sync.WaitGroup
 
-	valueEncoder PositionValueEncoder
-	valueDecoder PositionValueDecoder
+	valueEncoder position_repos.PositionValueEncoder
+	valueDecoder position_repos.PositionValueDecoder
 }
 
 func (cache *defaultPositionCache) Start() error {
@@ -89,7 +90,7 @@ func (cache *defaultPositionCache) Close() {
 	cache.closed = true
 }
 
-func (cache *defaultPositionCache) Put(position Position) error {
+func (cache *defaultPositionCache) Put(position position_repos.Position) error {
 	cache.positionMutex.Lock()
 	defer cache.positionMutex.Unlock()
 
@@ -116,41 +117,41 @@ func (cache *defaultPositionCache) Put(position Position) error {
 	return nil
 }
 
-func (cache *defaultPositionCache) Get() (Position, bool, error) {
+func (cache *defaultPositionCache) Get() (position_repos.Position, bool, error) {
 	cache.positionMutex.Lock()
 	defer cache.positionMutex.Unlock()
 
 	if !cache.exist {
 		loaded, err := cache.loadFromRepo()
 		if err != nil {
-			return Position{}, loaded, errors.Trace(err)
+			return position_repos.Position{}, loaded, errors.Trace(err)
 		}
 
 		if loaded {
 			return cache.position, true, nil
 		}
 
-		return Position{}, false, nil
+		return position_repos.Position{}, false, nil
 	}
 
 	return cache.position, true, nil
 }
 
-func (cache *defaultPositionCache) GetEncodedPersistentPosition() (PositionMeta, string, bool, error) {
+func (cache *defaultPositionCache) GetEncodedPersistentPosition() (position_repos.PositionMeta, string, bool, error) {
 	cache.positionMutex.Lock()
 	defer cache.positionMutex.Unlock()
 
 	if !cache.exist {
 		loaded, err := cache.loadFromRepo()
 		if err != nil {
-			return PositionMeta{}, "", loaded, errors.Trace(err)
+			return position_repos.PositionMeta{}, "", loaded, errors.Trace(err)
 		}
 
 		if loaded {
 			return cache.position.PositionMeta, cache.positionValueString, true, nil
 		}
 
-		return PositionMeta{}, "", false, nil
+		return position_repos.PositionMeta{}, "", false, nil
 	}
 
 	return cache.position.PositionMeta, cache.positionValueString, true, nil
@@ -208,7 +209,7 @@ func (cache *defaultPositionCache) loadFromRepo() (bool, error) {
 		return false, errors.Trace(err)
 	}
 
-	position := Position{PositionMeta: meta}
+	position := position_repos.Position{PositionMeta: meta}
 	if exists {
 		err := cache.decodePositionValueString(s, &position)
 		if err != nil {
@@ -223,7 +224,7 @@ func (cache *defaultPositionCache) loadFromRepo() (bool, error) {
 	}
 }
 
-func (cache *defaultPositionCache) encodePositionValueString(p *Position) (string, error) {
+func (cache *defaultPositionCache) encodePositionValueString(p *position_repos.Position) (string, error) {
 	s, err := cache.valueEncoder(p.Value)
 	if err != nil {
 		return "", errors.Trace(err)
@@ -231,7 +232,7 @@ func (cache *defaultPositionCache) encodePositionValueString(p *Position) (strin
 	return s, nil
 }
 
-func (cache *defaultPositionCache) decodePositionValueString(s string, p *Position) error {
+func (cache *defaultPositionCache) decodePositionValueString(s string, p *position_repos.Position) error {
 	v, err := cache.valueDecoder(s)
 	if err != nil {
 		return errors.Trace(err)
@@ -240,7 +241,7 @@ func (cache *defaultPositionCache) decodePositionValueString(s string, p *Positi
 	return nil
 }
 
-func NewPositionCache(pipelineName string, repo PositionRepo, encoder PositionValueEncoder, decoder PositionValueDecoder, flushDuration time.Duration) (PositionCacheInterface, error) {
+func NewPositionCache(pipelineName string, repo position_repos.PositionRepo, encoder position_repos.PositionValueEncoder, decoder position_repos.PositionValueDecoder, flushDuration time.Duration) (PositionCacheInterface, error) {
 	store := defaultPositionCache{
 		pipelineName:  pipelineName,
 		repo:          repo,
@@ -256,7 +257,7 @@ func NewPositionCache(pipelineName string, repo PositionRepo, encoder PositionVa
 	}
 
 	if exist {
-		position := Position{
+		position := position_repos.Position{
 			PositionMeta: positionMeta,
 		}
 		err := store.decodePositionValueString(s, &position)

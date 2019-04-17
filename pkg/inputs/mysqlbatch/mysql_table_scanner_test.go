@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	"github.com/juju/errors"
 
 	"github.com/moiot/gravity/pkg/utils"
@@ -20,7 +22,7 @@ import (
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/emitter"
 	"github.com/moiot/gravity/pkg/mysql_test"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/schema_store"
 )
 
@@ -176,7 +178,7 @@ func TestTableScanner_Start(t *testing.T) {
 		testDBName := utils.TestCaseMd5Name(tt)
 
 		dbCfg := mysql_test.SourceDBConfig()
-		positionRepo, err := position_store.NewMySQLRepo(dbCfg, "")
+		positionRepo, err := position_repos.NewMySQLRepo(dbCfg, "")
 		r.NoError(err)
 
 		testCases := []struct {
@@ -410,7 +412,7 @@ func TestTableScanner_Start(t *testing.T) {
 
 			throttle := time.NewTicker(100 * time.Millisecond)
 
-			positionCache, err := position_store.NewPositionCache(
+			positionCache, err := position_cache.NewPositionCache(
 				testDBName,
 				positionRepo,
 				EncodeBatchPositionValue,
@@ -470,7 +472,7 @@ func TestTableScanner_Start(t *testing.T) {
 			em, err = emitter.NewEmitter(nil, submitter)
 			r.NoError(err)
 
-			positionCache, err = position_store.NewPositionCache(
+			positionCache, err = position_cache.NewPositionCache(
 				testDBName,
 				positionRepo,
 				EncodeBatchPositionValue,
@@ -894,7 +896,7 @@ func TestNextBatchStartPoint(t *testing.T) {
 
 }
 
-func deleteMaxValueRandomly(db *sql.DB, fullTableName string, positionCache position_store.PositionCacheInterface) {
+func deleteMaxValueRandomly(db *sql.DB, fullTableName string, positionCache position_cache.PositionCacheInterface) {
 	p, exists, err := positionCache.Get()
 	if err != nil {
 		panic(err.Error())

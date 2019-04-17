@@ -1,8 +1,27 @@
-package position_store
+/*
+ *
+ * // Copyright 2019 , Beijing Mobike Technology Co., Ltd.
+ * //
+ * // Licensed under the Apache License, Version 2.0 (the "License");
+ * // you may not use this file except in compliance with the License.
+ * // You may obtain a copy of the License at
+ * //
+ * //     http://www.apache.org/licenses/LICENSE-2.0
+ * //
+ * // Unless required by applicable law or agreed to in writing, software
+ * // distributed under the License is distributed on an "AS IS" BASIS,
+ * // See the License for the specific language governing permissions and
+ * // limitations under the License.
+ */
+
+package position_repos
 
 import (
 	"database/sql"
 	"fmt"
+	"github.com/mitchellh/mapstructure"
+
+	"github.com/moiot/gravity/pkg/registry"
 	"time"
 
 	"github.com/juju/errors"
@@ -10,6 +29,8 @@ import (
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/utils"
 )
+
+const MySQLRepoName = "mysql-repo"
 
 var (
 	oldTable                     = `cluster_gravity_binlog_position`
@@ -33,9 +54,72 @@ func IsPositionStoreEvent(schemaName string, tableName string) bool {
 	return (schemaName == consts.GravityDBName || schemaName == "drc") && tableName == positionTableName
 }
 
+//
+// [input.config.position-repo]
+// type = "mongo-repo"
+// [input.config.position-repo.config]
+// annotation = ...
+// [input.config.position-repo.config.source]
+// host = ...
+// port = ...
+//
 type mysqlPositionRepo struct {
+	dbCfg utils.DBConfig
 	db         *sql.DB
 	annotation string
+}
+
+func MySQLPositionRepoConfigData(annotation string, source *utils.DBConfig) map[string]interface{} {
+	return map[string]interface{}{
+		"annotation": annotation,
+		"source": source,
+	}
+}
+
+func init() {
+	registry.RegisterPlugin(registry.PositionRepo, MySQLRepoName, &mysqlPositionRepo{}, true)
+}
+
+func (repo *mysqlPositionRepo) Configure(pipelineName string, data map[string]interface{}) error {
+	annotation, ok := data["annotation"]
+	if ok {
+		repo.annotation = annotation.(string)
+	}
+
+	source, ok := data["source"]
+	if !ok {
+		return errors.Errorf("no source configured")
+	}
+
+	if err := mapstructure.Decode(source, &repo.dbCfg); err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+func (repo *mysqlPositionRepo) Init() error {
+	db, err := utils.CreateDBConnection(&repo.dbCfg)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	_, err = db.Exec(fmt.Sprintf("%sCREATE DATABASE IF NOT EXISTS %s", repo.annotation, consts.GravityDBName))
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	_, err = db.Exec(fmt.Sprintf("%sDROP TABLE IF EXISTS %s.%s", repo.annotation, consts.GravityDBName, oldTable))
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	_, err = db.Exec(fmt.Sprintf("%s%s", repo.annotation, createPositionTableStatement))
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
 }
 
 func (repo *mysqlPositionRepo) Get(pipelineName string) (PositionMeta, string, bool, error) {

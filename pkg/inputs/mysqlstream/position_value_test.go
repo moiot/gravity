@@ -4,23 +4,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moiot/gravity/pkg/position_repos"
+
 	"github.com/juju/errors"
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/inputs/helper"
 	"github.com/moiot/gravity/pkg/mysql_test"
-	"github.com/moiot/gravity/pkg/position_store"
+	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/utils"
 	"github.com/stretchr/testify/require"
 )
 
-func initRepo(repo position_store.PositionRepo, pipelineName string, startGTID string, currentGTID string) error {
+func initRepo(repo position_repos.PositionRepo, pipelineName string, startGTID string, currentGTID string) error {
 
 	positionValue := &helper.BinlogPositionsValue{
 		CurrentPosition: &utils.MySQLBinlogPosition{BinlogGTID: currentGTID},
 		StartPosition:   &utils.MySQLBinlogPosition{BinlogGTID: startGTID},
 	}
 
-	m := position_store.PositionMeta{
+	m := position_repos.PositionMeta{
 		Name:  pipelineName,
 		Stage: config.Stream,
 	}
@@ -35,12 +37,12 @@ func initRepo(repo position_store.PositionRepo, pipelineName string, startGTID s
 func TestSetupInitialPosition(t *testing.T) {
 	r := require.New(t)
 
-	repo := position_store.NewMemoRepo()
+	repo := position_repos.NewMemoRepo()
 
 	t.Run("when there isn't any position in position repo", func(tt *testing.T) {
 		tt.Run("when start spec is nil", func(ttt *testing.T) {
 
-			cache, err := position_store.NewPositionCache(
+			cache, err := position_cache.NewPositionCache(
 				utils.TestCaseMd5Name(ttt),
 				repo,
 				helper.BinlogPositionValueEncoder,
@@ -70,7 +72,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			//
 			pipelineName := utils.TestCaseMd5Name(ttt)
 
-			cache, err := position_store.NewPositionCache(
+			cache, err := position_cache.NewPositionCache(
 				pipelineName,
 				repo,
 				helper.BinlogPositionValueEncoder,
@@ -110,7 +112,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			specStart := utils.MySQLBinlogPosition{BinlogGTID: startGTID}
 
 			db := mysql_test.MustSetupSourceDB(pipelineName)
-			cache, err := position_store.NewPositionCache(
+			cache, err := position_cache.NewPositionCache(
 				pipelineName,
 				repo,
 				helper.BinlogPositionValueEncoder,
@@ -141,7 +143,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			specStart := utils.MySQLBinlogPosition{BinlogGTID: newGTID}
 
 			db := mysql_test.MustSetupSourceDB(pipelineName)
-			cache, err := position_store.NewPositionCache(
+			cache, err := position_cache.NewPositionCache(
 				pipelineName,
 				repo,
 				helper.BinlogPositionValueEncoder,

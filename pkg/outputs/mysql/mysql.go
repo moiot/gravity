@@ -29,10 +29,10 @@ const (
 )
 
 type MySQLPluginConfig struct {
-	DBConfig     *utils.DBConfig          `mapstructure:"target"  json:"target"`
-	Routes       []map[string]interface{} `mapstructure:"routes"  json:"routes"`
-	EnableDDL    bool                     `mapstructure:"enable-ddl" json:"enable-ddl"`
-	EngineConfig *config.GenericConfig    `mapstructure:"sql-engine-config"  json:"sql-engine-config"`
+	DBConfig     *utils.DBConfig             `mapstructure:"target"  json:"target"`
+	Routes       []map[string]interface{}    `mapstructure:"routes"  json:"routes"`
+	EnableDDL    bool                        `mapstructure:"enable-ddl" json:"enable-ddl"`
+	EngineConfig *config.GenericPluginConfig `mapstructure:"sql-engine-config"  json:"sql-engine-config"`
 }
 
 type MySQLOutput struct {
@@ -66,7 +66,7 @@ func (output *MySQLOutput) Configure(pipelineName string, data map[string]interf
 	}
 
 	if pluginConfig.EngineConfig == nil {
-		pluginConfig.EngineConfig = &config.GenericConfig{
+		pluginConfig.EngineConfig = &config.GenericPluginConfig{
 			Type:   sql_execution_engine.MySQLReplaceEngine,
 			Config: sql_execution_engine.DefaultMySQLReplaceEngineConfig,
 		}
