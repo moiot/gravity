@@ -71,15 +71,19 @@ type mysqlPositionRepo struct {
 	annotation string
 }
 
-func MySQLPositionRepoConfigData(annotation string, source *utils.DBConfig) map[string]interface{} {
-	return map[string]interface{}{
-		"annotation": annotation,
-		"source":     source,
+func NewMySQLRepoConfig(annotation string, source *utils.DBConfig) *config.GenericPluginConfig {
+	cfg := config.GenericPluginConfig{
+		Type: MySQLRepoName,
+		Config: map[string]interface{}{
+			"annotation": annotation,
+			"source":     source,
+		},
 	}
+	return &cfg
 }
 
 func init() {
-	registry.RegisterPlugin(registry.PositionRepo, MySQLRepoName, &mysqlPositionRepo{}, true)
+	registry.RegisterPlugin(registry.PositionRepo, MySQLRepoName, &mysqlPositionRepo{}, false)
 }
 
 func (repo *mysqlPositionRepo) Configure(pipelineName string, data map[string]interface{}) error {
@@ -187,30 +191,4 @@ func (repo *mysqlPositionRepo) Delete(pipelineName string) error {
 
 func (repo *mysqlPositionRepo) Close() error {
 	return errors.Trace(repo.db.Close())
-}
-
-func NewMySQLRepo(dbConfig *utils.DBConfig, annotation string) (PositionRepo, error) {
-	db, err := utils.CreateDBConnection(dbConfig)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	repo := mysqlPositionRepo{db: db, annotation: annotation}
-
-	_, err = db.Exec(fmt.Sprintf("%sCREATE DATABASE IF NOT EXISTS %s", annotation, consts.GravityDBName))
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	_, err = db.Exec(fmt.Sprintf("%sDROP TABLE IF EXISTS %s.%s", annotation, consts.GravityDBName, oldTable))
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	_, err = db.Exec(fmt.Sprintf("%s%s", annotation, createPositionTableStatement))
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	return &repo, nil
 }

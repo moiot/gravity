@@ -53,10 +53,7 @@ func (c *Config) validateAndSetDefault() error {
 	}
 
 	if c.PositionRepo == nil {
-		cfgData := utils.MustAny2Map(c.Source)
-		c.PositionRepo = &config.GenericPluginConfig{}
-		c.PositionRepo.Type = position_repos.MongoRepoName
-		c.PositionRepo.Config = cfgData
+		c.PositionRepo = position_repos.NewMongoRepoConfig(c.Source)
 	}
 
 	return nil

@@ -96,10 +96,7 @@ func (plugin *mysqlStreamInputPlugin) Configure(pipelineName string, configInput
 	plugin.probeDBConfig, plugin.probeSQLAnnotation = helper.GetProbCfg(cfg.SourceProbeCfg, cfg.Source)
 
 	if cfg.PositionRepo == nil {
-		cfgData := position_repos.MySQLPositionRepoConfigData(plugin.probeSQLAnnotation, plugin.probeDBConfig)
-		cfg.PositionRepo = &config.GenericPluginConfig{}
-		cfg.PositionRepo.Type = position_repos.MySQLRepoName
-		cfg.PositionRepo.Config = cfgData
+		cfg.PositionRepo = position_repos.NewMySQLRepoConfig(plugin.probeSQLAnnotation, plugin.probeDBConfig)
 	}
 	positionRepo, err := registry.GetPlugin(registry.PositionRepo, cfg.PositionRepo.Type)
 	if err != nil {

@@ -17,16 +17,16 @@
 package position_repos
 
 import (
+	"time"
+
 	"github.com/mitchellh/mapstructure"
 	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/registry"
-	"time"
+	"github.com/moiot/gravity/pkg/utils"
 
-	"github.com/json-iterator/go"
 	"github.com/moiot/gravity/pkg/config"
 
 	"github.com/juju/errors"
-	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -34,7 +34,7 @@ const (
 	mongoPositionDB         = "_gravity"
 	mongoPositionCollection = "gravity_positions"
 	Version                 = "1.0"
-	MongoRepoName = "mongo-repo"
+	MongoRepoName           = "mongo-repo"
 )
 
 var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
@@ -74,7 +74,7 @@ type MongoPositionRet struct {
 //
 type mongoPositionRepo struct {
 	mongoConfig config.MongoConnConfig
-	session *mgo.Session
+	session     *mgo.Session
 }
 
 type PositionWrapper struct {
@@ -190,6 +190,13 @@ func (repo *mongoPositionRepo) Delete(pipelineName string) error {
 func (repo *mongoPositionRepo) Close() error {
 	repo.session.Close()
 	return nil
+}
+
+func NewMongoRepoConfig(source *config.MongoConnConfig) *config.GenericPluginConfig {
+	cfg := config.GenericPluginConfig{}
+	cfg.Type = MongoRepoName
+	cfg.Config = utils.MustAny2Map(source)
+	return &cfg
 }
 
 // func NewMongoPositionRepo(session *mgo.Session) (core.PositionRepo, error) {

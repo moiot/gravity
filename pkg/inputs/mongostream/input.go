@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/moiot/gravity/pkg/position_repos"
-	"github.com/moiot/gravity/pkg/utils"
 	mgo "gopkg.in/mgo.v2"
 
 	"github.com/juju/errors"
@@ -64,10 +63,7 @@ func (plugin *mongoStreamInputPlugin) Configure(pipelineName string, data map[st
 	}
 
 	if cfg.PositionRepo == nil {
-		cfgData := utils.MustAny2Map(cfg.Source)
-		cfg.PositionRepo = &config.GenericPluginConfig{}
-		cfg.PositionRepo.Type = position_repos.MongoRepoName
-		cfg.PositionRepo.Config = cfgData
+		cfg.PositionRepo = position_repos.NewMongoRepoConfig(cfg.Source)
 	}
 
 	positionRepo, err := registry.GetPlugin(registry.PositionRepo, cfg.PositionRepo.Type)

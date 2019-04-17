@@ -2,16 +2,15 @@ package position_cache
 
 import (
 	"fmt"
-	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/position_repos"
 	"testing"
 	"time"
+
+	"github.com/moiot/gravity/pkg/position_repos"
+	"github.com/moiot/gravity/pkg/registry"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/stretchr/testify/require"
 )
-
-
 
 func StringEncoder(v interface{}) (string, error) {
 	return fmt.Sprintf("%s", v), nil
@@ -21,11 +20,24 @@ func StringDecoder(s string) (interface{}, error) {
 	return s, nil
 }
 
+func NewMemRepo() position_repos.PositionRepo {
+	plugin, err := registry.GetPlugin(registry.PositionRepo, position_repos.MemRepoName)
+	if err != nil {
+		panic(err.Error())
+	}
+	plugin.Configure("test", nil)
+	repo := plugin.(position_repos.PositionRepo)
+	if err := repo.Init(); err != nil {
+		panic(err.Error())
+	}
+	return repo
+}
+
 func TestPositionCache_New(t *testing.T) {
 	r := require.New(t)
 
 	t.Run("when repo dont have any data", func(tt *testing.T) {
-		repo := position_repos.NewMemoRepo()
+		repo := NewMemRepo()
 
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
@@ -36,7 +48,7 @@ func TestPositionCache_New(t *testing.T) {
 	})
 
 	t.Run("when repo has some data", func(tt *testing.T) {
-		repo := position_repos.NewMemoRepo()
+		repo := NewMemRepo()
 		err := repo.Put(t.Name(), position_repos.PositionMeta{Stage: config.Stream}, "test")
 		r.NoError(err)
 
@@ -56,7 +68,7 @@ func TestPositionCache_GetPut(t *testing.T) {
 	r := require.New(t)
 
 	t.Run("when position is not valid", func(tt *testing.T) {
-		repo := position_repos.NewMemoRepo()
+		repo := NewMemRepo()
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
 
@@ -69,7 +81,7 @@ func TestPositionCache_GetPut(t *testing.T) {
 	})
 
 	t.Run("when position is valid", func(tt *testing.T) {
-		repo := position_repos.NewMemoRepo()
+		repo := NewMemRepo()
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
 		p := position_repos.Position{
@@ -101,7 +113,7 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 	r := require.New(t)
 
 	t.Run("it does not flush when time has not come", func(tt *testing.T) {
-		repo := position_repos.NewMemoRepo()
+		repo := NewMemRepo()
 
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, 5*time.Second)
 		r.NoError(err)
@@ -137,7 +149,7 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 	})
 
 	t.Run("it flush to repo when time comes", func(tt *testing.T) {
-		repo := position_repos.NewMemoRepo()
+		repo := NewMemRepo()
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, 1*time.Second)
 		r.NoError(err)
 

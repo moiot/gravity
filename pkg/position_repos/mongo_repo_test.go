@@ -17,11 +17,11 @@
 package position_repos
 
 import (
-	"github.com/moiot/gravity/pkg/core"
 	"testing"
 	"time"
 
-	"github.com/json-iterator/go"
+	"github.com/moiot/gravity/pkg/registry"
+
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo_test"
@@ -37,8 +37,12 @@ func TestMongoPositionRepo_Get(t *testing.T) {
 	mongoSession, err := mongo.CreateMongoSession(&mongoConfig)
 	r.NoError(err)
 
-	repo, err := NewMongoPositionRepo(mongoSession)
+	repoConfig := NewMongoRepoConfig(&mongoConfig)
+	plugin, err := registry.GetPlugin(registry.PositionRepo, repoConfig.Type)
 	r.NoError(err)
+	r.NoError(plugin.Configure(t.Name(), repoConfig.Config))
+	repo := plugin.(PositionRepo)
+	r.NoError(repo.Init())
 
 	t.Run("empty record", func(tt *testing.T) {
 		_, _, exist, err := repo.Get(tt.Name())

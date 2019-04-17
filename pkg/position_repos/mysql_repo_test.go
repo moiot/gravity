@@ -17,8 +17,9 @@
 package position_repos
 
 import (
-	"github.com/moiot/gravity/pkg/core"
 	"testing"
+
+	"github.com/moiot/gravity/pkg/registry"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/mysql_test"
@@ -30,8 +31,13 @@ func TestMysqlPositionRepo_GetPut(t *testing.T) {
 
 	dbCfg := mysql_test.SourceDBConfig()
 
-	repo, err := NewMySQLRepo(dbCfg, "")
+	repoConfig := NewMySQLRepoConfig("", dbCfg)
+	plugin, err := registry.GetPlugin(registry.PositionRepo, repoConfig.Type)
 	r.NoError(err)
+
+	r.NoError(plugin.Configure(t.Name(), repoConfig.Config))
+	repo := plugin.(PositionRepo)
+	r.NoError(repo.Init())
 
 	// delete it first
 	r.NoError(repo.Delete(t.Name()))

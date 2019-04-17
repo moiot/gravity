@@ -33,7 +33,7 @@ type memRepo struct {
 }
 
 func init() {
-	registry.RegisterPlugin(registry.PositionRepo, MemRepoName, &memRepo{}, true)
+	registry.RegisterPlugin(registry.PositionRepo, MemRepoName, &memRepo{}, false)
 }
 
 func (repo *memRepo) Configure(pipelineName string, data map[string]interface{}) error {
