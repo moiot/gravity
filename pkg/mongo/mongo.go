@@ -51,7 +51,7 @@ func CreateMongoSession(cfg *config.MongoConnConfig) (*mgo.Session, error) {
 
 	session, err := mgo.Dial(url)
 	if err != nil {
-		return nil, errors.Annotatef(err, "failed to open mongo session: %s", url)
+		return nil, errors.Annotatef(err, "failed to open mongo session: %s, err: %v", url, err.Error())
 	}
 
 	log.Infof("connected to %s:%d", host, port)
