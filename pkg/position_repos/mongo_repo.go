@@ -19,6 +19,8 @@ package position_repos
 import (
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
+
 	"github.com/mitchellh/mapstructure"
 	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/registry"
