@@ -87,7 +87,7 @@ type PositionWrapper struct {
 }
 
 func init() {
-	registry.RegisterPlugin(registry.PositionRepo, MongoRepoName, &mongoPositionRepo{}, true)
+	registry.RegisterPlugin(registry.PositionRepo, MongoRepoName, &mongoPositionRepo{}, false)
 }
 
 func (repo *mongoPositionRepo) Configure(pipelineName string, data map[string]interface{}) error {
