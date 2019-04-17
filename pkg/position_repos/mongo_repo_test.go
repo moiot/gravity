@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
+
 	"github.com/moiot/gravity/pkg/registry"
 
 	"github.com/moiot/gravity/pkg/config"

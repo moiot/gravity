@@ -15,7 +15,7 @@ import (
 )
 
 func TestSetupInitialPosition(t *testing.T) {
-	repo := position_repos.NewMemoRepo()
+	repo := position_repos.NewMemRepo("test")
 	r := require.New(t)
 
 	t.Run("when the initial position is empty", func(tt *testing.T) {

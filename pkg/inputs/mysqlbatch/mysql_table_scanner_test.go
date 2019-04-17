@@ -178,8 +178,7 @@ func TestTableScanner_Start(t *testing.T) {
 		testDBName := utils.TestCaseMd5Name(tt)
 
 		dbCfg := mysql_test.SourceDBConfig()
-		positionRepo, err := position_repos.NewMySQLRepo(dbCfg, "")
-		r.NoError(err)
+		positionRepo := position_repos.NewMySQLRepo(tt.Name(), "", dbCfg)
 
 		testCases := []struct {
 			name        string

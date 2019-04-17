@@ -71,17 +71,6 @@ type mysqlPositionRepo struct {
 	annotation string
 }
 
-func NewMySQLRepoConfig(annotation string, source *utils.DBConfig) *config.GenericPluginConfig {
-	cfg := config.GenericPluginConfig{
-		Type: MySQLRepoName,
-		Config: map[string]interface{}{
-			"annotation": annotation,
-			"source":     source,
-		},
-	}
-	return &cfg
-}
-
 func init() {
 	registry.RegisterPlugin(registry.PositionRepo, MySQLRepoName, &mysqlPositionRepo{}, false)
 }
@@ -191,4 +180,30 @@ func (repo *mysqlPositionRepo) Delete(pipelineName string) error {
 
 func (repo *mysqlPositionRepo) Close() error {
 	return errors.Trace(repo.db.Close())
+}
+
+func NewMySQLRepoConfig(annotation string, source *utils.DBConfig) *config.GenericPluginConfig {
+	cfg := config.GenericPluginConfig{
+		Type: MySQLRepoName,
+		Config: map[string]interface{}{
+			"annotation": annotation,
+			"source":     source,
+		},
+	}
+	return &cfg
+}
+func NewMySQLRepo(pipelineName string, annotation string, source *utils.DBConfig) PositionRepo {
+	cfg := NewMySQLRepoConfig(annotation, source)
+	plugin, err := registry.GetPlugin(registry.PositionRepo, MySQLRepoName)
+	if err != nil {
+		panic(err.Error())
+	}
+	if err := plugin.Configure(pipelineName, cfg.Config); err != nil {
+		panic(err.Error())
+	}
+	repo := plugin.(PositionRepo)
+	if err := repo.Init(); err != nil {
+		panic(err.Error())
+	}
+	return repo
 }

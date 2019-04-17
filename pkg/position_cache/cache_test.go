@@ -54,7 +54,7 @@ func TestPositionCache_GetPut(t *testing.T) {
 	r := require.New(t)
 
 	t.Run("when position is not valid", func(tt *testing.T) {
-		repo := NewMemRepo()
+		repo := position_repos.NewMemRepo("test")
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
 
@@ -67,7 +67,7 @@ func TestPositionCache_GetPut(t *testing.T) {
 	})
 
 	t.Run("when position is valid", func(tt *testing.T) {
-		repo := NewMemRepo()
+		repo := position_repos.NewMemRepo("test")
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, DefaultFlushPeriod)
 		r.NoError(err)
 		p := position_repos.Position{
@@ -99,7 +99,7 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 	r := require.New(t)
 
 	t.Run("it does not flush when time has not come", func(tt *testing.T) {
-		repo := NewMemRepo()
+		repo := position_repos.NewMemRepo("test")
 
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, 5*time.Second)
 		r.NoError(err)
@@ -135,7 +135,7 @@ func TestDefaultPositionCache_Flush(t *testing.T) {
 	})
 
 	t.Run("it flush to repo when time comes", func(tt *testing.T) {
-		repo := NewMemRepo()
+		repo := position_repos.NewMemRepo("test")
 		cache, err := NewPositionCache(t.Name(), repo, StringEncoder, StringDecoder, 1*time.Second)
 		r.NoError(err)
 
