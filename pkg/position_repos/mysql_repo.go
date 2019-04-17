@@ -19,10 +19,12 @@ package position_repos
 import (
 	"database/sql"
 	"fmt"
+
 	"github.com/mitchellh/mapstructure"
 
-	"github.com/moiot/gravity/pkg/registry"
 	"time"
+
+	"github.com/moiot/gravity/pkg/registry"
 
 	"github.com/juju/errors"
 	"github.com/moiot/gravity/pkg/config"
@@ -64,7 +66,7 @@ func IsPositionStoreEvent(schemaName string, tableName string) bool {
 // port = ...
 //
 type mysqlPositionRepo struct {
-	dbCfg utils.DBConfig
+	dbCfg      utils.DBConfig
 	db         *sql.DB
 	annotation string
 }
@@ -72,7 +74,7 @@ type mysqlPositionRepo struct {
 func MySQLPositionRepoConfigData(annotation string, source *utils.DBConfig) map[string]interface{} {
 	return map[string]interface{}{
 		"annotation": annotation,
-		"source": source,
+		"source":     source,
 	}
 }
 
@@ -118,7 +120,7 @@ func (repo *mysqlPositionRepo) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-
+	repo.db = db
 	return nil
 }
 

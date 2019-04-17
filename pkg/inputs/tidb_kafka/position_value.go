@@ -1,6 +1,7 @@
 package tidb_kafka
 
 import (
+	jsoniter "github.com/json-iterator/go"
 	"github.com/moiot/gravity/pkg/position_cache"
 
 	"github.com/juju/errors"

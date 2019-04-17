@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
+
 	"github.com/moiot/gravity/pkg/position_repos"
 
 	"github.com/moiot/gravity/pkg/config"
