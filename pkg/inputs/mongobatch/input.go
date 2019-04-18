@@ -32,7 +32,7 @@ type Config struct {
 	ChunkThreshold int                         `mapstructure:"chunk-threshold"  toml:"chunk-threshold"  json:"chunk-threshold"`
 	// IgnoreOplogError ignores error with oplog.
 	// Some mongo cluster setup may not support oplog.
-	IgnoreOplogError bool `mapstructure: "ignore-oplog-error" toml:"ignore-oplog-error" json:"ignore-oplog-error"`
+	IgnoreOplogError bool `mapstructure:"ignore-oplog-error" toml:"ignore-oplog-error" json:"ignore-oplog-error"`
 }
 
 func (c *Config) validateAndSetDefault() error {
