@@ -83,13 +83,10 @@ func ListAllUserCollections(session *mgo.Session) map[string][]string {
 		log.Fatalf("[mongoBatchInput] error list database. %s", errors.ErrorStack(err))
 	}
 	for _, db := range dbs {
-		if db == "admin" || db == "local" {
-			continue
-		}
-
 		colls, err := session.DB(db).CollectionNames()
 		if err != nil {
-			log.Fatalf("[mongoBatchInput] error list collections for %s. err: %s", db, errors.ErrorStack(err))
+			log.Errorf("[mongoBatchInput] error list collections for %s. err: %s", db, errors.ErrorStack(err))
+			continue
 		}
 		for _, coll := range colls {
 			collections[db] = append(collections[db], coll)
