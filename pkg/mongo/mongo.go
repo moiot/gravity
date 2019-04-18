@@ -2,6 +2,8 @@ package mongo
 
 import (
 	"fmt"
+	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/juju/errors"
@@ -121,6 +123,55 @@ func Count(session *mgo.Session, db string, collection string) int64 {
 type MinMax struct {
 	Min bson.ObjectId
 	Max bson.ObjectId
+}
+
+func ToObjectId(i interface{}) bson.ObjectId {
+	switch i := i.(type) {
+	case bson.ObjectId:
+		return i
+	case int8:
+		return bson.ObjectId(strconv.FormatInt(int64(i), 10))
+	case int16:
+		return bson.ObjectId(strconv.FormatInt(int64(i), 10))
+	case int32:
+		return bson.ObjectId(strconv.FormatInt(int64(i), 10))
+	case int64:
+		return bson.ObjectId(strconv.FormatInt(int64(i), 10))
+	case int:
+		return bson.ObjectId(strconv.FormatInt(int64(i), 10))
+	case uint8:
+		return bson.ObjectId(strconv.FormatUint(uint64(i), 10))
+	case uint16:
+		return bson.ObjectId(strconv.FormatUint(uint64(i), 10))
+	case uint32:
+		return bson.ObjectId(strconv.FormatUint(uint64(i), 10))
+	case uint64:
+		return bson.ObjectId(strconv.FormatUint(uint64(i), 10))
+	case uint:
+		return bson.ObjectId(strconv.FormatUint(uint64(i), 10))
+	case string:
+		return bson.ObjectId(i)
+	default:
+		panic(fmt.Sprintf("not supported yet: %v", reflect.TypeOf(i)))
+	}
+}
+
+func GetMinMax(session *mgo.Session, db string, collection string) (MinMax, error) {
+	var min bson.M
+	var max bson.M
+	var ret MinMax
+
+	if err := session.DB(db).C(collection).Find(nil).Sort("_id").One(&min); err != nil {
+		return ret, errors.Trace(err)
+	}
+
+	if err := session.DB(db).C(collection).Find(nil).Sort("-_id").One(&max); err != nil {
+		return ret, errors.Trace(err)
+	}
+
+	ret.Min = ToObjectId(min["_id"])
+	ret.Max = ToObjectId(max["_id"])
+	return ret, nil
 }
 
 func BucketAuto(session *mgo.Session, db string, collection string, sampleCnt int, bucketCnt int) ([]MinMax, error) {

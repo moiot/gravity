@@ -262,7 +262,8 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 				} else {
 					log.Debugf("[mongoBatchInput] %d records returned from query %v", actualCount, query)
 				}
-				id := results[len(results)-1]["_id"].(bson.ObjectId)
+
+				id := mongo.ToObjectId(results[len(results)-1]["_id"])
 				task.Current = &id
 				task.Scanned += len(results)
 				now := time.Now()

@@ -162,11 +162,15 @@ func calculateChunks(
 					Seq:        seq,
 				})
 			} else {
+				mm, err := mongo.GetMinMax(session, db, coll)
+				if err != nil {
+					return ret, errors.Trace(err)
+				}
 				ret = append(ret, chunk{
 					Database:   db,
 					Collection: coll,
-					Min:        nil,
-					Max:        nil,
+					Min:        &mm.Min,
+					Max:        &mm.Max,
 				})
 			}
 		}
