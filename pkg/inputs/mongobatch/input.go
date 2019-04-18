@@ -25,14 +25,16 @@ import (
 )
 
 type Config struct {
-	Source         *config.MongoConnConfig     `mapstructure:"source" toml:"source" json:"source"`
-	PositionRepo   *config.GenericPluginConfig `mapstructure:"position-repo" toml:"position-repo" json:"position-repo"`
-	BatchSize      int                         `mapstructure:"batch-size"  toml:"batch-size" json:"batch-size"`
-	WorkerCnt      int                         `mapstructure:"worker-cnt" toml:"worker-cnt" json:"worker-cnt"`
-	ChunkThreshold int                         `mapstructure:"chunk-threshold"  toml:"chunk-threshold"  json:"chunk-threshold"`
+	Source              *config.MongoConnConfig     `mapstructure:"source" toml:"source" json:"source"`
+	PositionRepo        *config.GenericPluginConfig `mapstructure:"position-repo" toml:"position-repo" json:"position-repo"`
+	BatchSize           int                         `mapstructure:"batch-size"  toml:"batch-size" json:"batch-size"`
+	WorkerCnt           int                         `mapstructure:"worker-cnt" toml:"worker-cnt" json:"worker-cnt"`
+	ChunkThreshold      int                         `mapstructure:"chunk-threshold"  toml:"chunk-threshold"  json:"chunk-threshold"`
+	BatchPerSecondLimit int                         `mapstructure:"batch-per-second-limit" toml:"batch-per-second-limit" json:"batch-per-second-limit"`
+
 	// IgnoreOplogError ignores error with oplog.
 	// Some mongo cluster setup may not support oplog.
-	IgnoreOplogError bool `mapstructure: "ignore-oplog-error" toml:"ignore-oplog-error" json:"ignore-oplog-error"`
+	IgnoreOplogError bool `mapstructure:"ignore-oplog-error" toml:"ignore-oplog-error" json:"ignore-oplog-error"`
 }
 
 func (c *Config) validateAndSetDefault() error {
@@ -54,6 +56,10 @@ func (c *Config) validateAndSetDefault() error {
 
 	if c.PositionRepo == nil {
 		c.PositionRepo = position_repos.NewMongoRepoConfig(c.Source)
+	}
+
+	if c.BatchPerSecondLimit <= 0 {
+		c.BatchPerSecondLimit = 1
 	}
 
 	return nil
@@ -83,6 +89,8 @@ type mongoBatchInput struct {
 	pos      PositionValue
 	posMeta  position_repos.PositionMeta
 	posLock  sync.Mutex
+
+	throttle *time.Ticker
 }
 
 func (plugin *mongoBatchInput) Configure(pipelineName string, data map[string]interface{}) error {
@@ -120,6 +128,10 @@ func (plugin *mongoBatchInput) Start(emitter core.Emitter, router core.Router, p
 	plugin.emitter = emitter
 	plugin.router = router
 	plugin.positionCache = positionCache
+
+	rate := time.Second / time.Duration(plugin.cfg.BatchPerSecondLimit)
+	throttle := time.NewTicker(rate)
+	plugin.throttle = throttle
 
 	if err := SetupInitialPosition(positionCache, session, router, plugin.cfg); err != nil {
 		return errors.Trace(err)
@@ -163,6 +175,7 @@ func (plugin *mongoBatchInput) Close() {
 	close(plugin.closeC)
 	plugin.wg.Wait()
 	plugin.session.Close()
+	plugin.throttle.Stop()
 	log.Infof("[mongoBatchInput] closed")
 }
 
@@ -240,15 +253,23 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 				task.Current = task.Min
 			}
 			var actualCount int
+			first := true
 			for {
+				<-plugin.throttle.C
 				c := plugin.session.DB(task.Database).C(task.Collection)
 				var query bson.D
 				if task.Current != nil {
-					query = append(query, bson.DocElem{Name: "_id", Value: bson.D{{Name: "$gt", Value: task.Current}}})
+					if first {
+						query = append(query, bson.DocElem{Name: "_id", Value: bson.D{{Name: "$gte", Value: task.Current.Value}}})
+					} else {
+						query = append(query, bson.DocElem{Name: "_id", Value: bson.D{{Name: "$gt", Value: task.Current.Value}}})
+					}
 				}
 				if task.Max != nil {
-					query = append(query, bson.DocElem{Name: "_id", Value: bson.D{{Name: "$lte", Value: task.Max}}})
+					query = append(query, bson.DocElem{Name: "_id", Value: bson.D{{Name: "$lte", Value: task.Max.Value}}})
 				}
+
+				first = false
 				var results []map[string]interface{}
 				err := c.Find(query).Sort("_id").Limit(plugin.cfg.BatchSize).Hint("_id").All(&results)
 				if err != nil {
@@ -260,10 +281,11 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 					plugin.finishChunk(task)
 					break
 				} else {
-					log.Debugf("[mongoBatchInput] %d records returned from query %v", actualCount, query)
+					log.Infof("[mongoBatchInput] %d records returned from query %v", actualCount, query)
 				}
-				id := results[len(results)-1]["_id"].(bson.ObjectId)
-				task.Current = &id
+
+				id := results[len(results)-1]["_id"]
+				task.Current = &IDValue{Value: id}
 				task.Scanned += len(results)
 				now := time.Now()
 				metrics.InputCounter.WithLabelValues(plugin.pipelineName, task.Database, task.Collection, string(core.MsgDML), string(core.Insert)).Add(float64(len(results)))

@@ -76,7 +76,7 @@ func IsDeadSignal(op *gtm.Op, pipeline string) bool {
 	return false
 }
 
-func ListAllCollections(session *mgo.Session) map[string][]string {
+func ListAllUserCollections(session *mgo.Session) map[string][]string {
 	collections := make(map[string][]string)
 	dbs, err := session.DatabaseNames()
 	if err != nil {
@@ -85,7 +85,8 @@ func ListAllCollections(session *mgo.Session) map[string][]string {
 	for _, db := range dbs {
 		colls, err := session.DB(db).CollectionNames()
 		if err != nil {
-			log.Fatalf("[mongoBatchInput] error list collections for %s. err: %s", db, errors.ErrorStack(err))
+			log.Errorf("[mongoBatchInput] error list collections for %s. err: %s", db, errors.ErrorStack(err))
+			continue
 		}
 		for _, coll := range colls {
 			collections[db] = append(collections[db], coll)
@@ -100,20 +101,44 @@ func IsEmpty(session *mgo.Session, db string, collection string) bool {
 	return err == mgo.ErrNotFound
 }
 
-func Count(session *mgo.Session, db string, collection string) int {
+type collStats struct {
+	Count int64 `json:"count"`
+}
+
+func Count(session *mgo.Session, db string, collection string) int64 {
 	if IsEmpty(session, db, collection) {
 		return 0
 	}
-	var ret bson.M
+
+	var ret collStats
 	if err := session.DB(db).Run(bson.M{"collStats": collection}, &ret); err != nil {
 		log.Fatalf("fail to query collStats for %s.%s. err: %s", db, collection, errors.ErrorStack(err))
 	}
-	return ret["count"].(int)
+
+	return ret.Count
 }
 
 type MinMax struct {
-	Min bson.ObjectId
-	Max bson.ObjectId
+	Min interface{}
+	Max interface{}
+}
+
+func GetMinMax(session *mgo.Session, db string, collection string) (MinMax, error) {
+	var min bson.M
+	var max bson.M
+	var ret MinMax
+
+	if err := session.DB(db).C(collection).Find(nil).Sort("_id").One(&min); err != nil {
+		return ret, errors.Trace(err)
+	}
+
+	if err := session.DB(db).C(collection).Find(nil).Sort("-_id").One(&max); err != nil {
+		return ret, errors.Trace(err)
+	}
+
+	ret.Min = min["_id"]
+	ret.Max = max["_id"]
+	return ret, nil
 }
 
 func BucketAuto(session *mgo.Session, db string, collection string, sampleCnt int, bucketCnt int) ([]MinMax, error) {
@@ -137,8 +162,8 @@ func BucketAuto(session *mgo.Session, db string, collection string, sampleCnt in
 	for iter.Next(&record) {
 		t := record["_id"].(bson.M)
 		ret = append(ret, MinMax{
-			Min: t["min"].(bson.ObjectId),
-			Max: t["max"].(bson.ObjectId),
+			Min: t["min"],
+			Max: t["max"],
 		})
 	}
 

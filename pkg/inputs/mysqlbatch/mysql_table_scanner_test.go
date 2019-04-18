@@ -68,7 +68,7 @@ func TestFindMaxMinValueCompositePks(t *testing.T) {
 
 func TestFindMaxMinValueInt(t *testing.T) {
 	r := require.New(t)
-	testDBName := "mysql_table_scanner_test_1"
+	testDBName := utils.TestCaseMd5Name(t)
 
 	db := mysql_test.MustSetupSourceDB(testDBName)
 	defer db.Close()
@@ -98,7 +98,7 @@ func TestFindMaxMinValueInt(t *testing.T) {
 
 func TestFindMaxMinValueString(t *testing.T) {
 	r := require.New(t)
-	testDBName := "mysql_table_scanner_test_2"
+	testDBName := utils.TestCaseMd5Name(t)
 
 	db := mysql_test.MustSetupSourceDB(testDBName)
 	defer db.Close()
@@ -132,7 +132,7 @@ func TestFindMaxMinValueString(t *testing.T) {
 
 func TestFindMaxMinValueTime(t *testing.T) {
 	r := require.New(t)
-	testDBName := "mysql_table_scanner_test_3"
+	testDBName := utils.TestCaseMd5Name(t)
 
 	db := mysql_test.MustSetupSourceDB(testDBName)
 	startTime := time.Now()

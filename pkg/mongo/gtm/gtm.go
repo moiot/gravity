@@ -333,7 +333,7 @@ func (this *Op) ParseLogEntry(entry *OpLog, options *Options) (include bool) {
 	return
 }
 
-func OpLogCollectionName(session *mgo.Session, options *Options) string {
+func OpLogCollectionName(session *mgo.Session, options *Options) (string, error) {
 	localDB := session.DB(*options.OpLogDatabaseName)
 	col_names, err := localDB.CollectionNames()
 	if err == nil {
@@ -348,14 +348,14 @@ func OpLogCollectionName(session *mgo.Session, options *Options) string {
 			msg := fmt.Sprintf(`
 				Unable to find oplog collection 
 				in database %v`, *options.OpLogDatabaseName)
-			panic(msg)
+			return "", errors.Annotate(err, msg)
 		} else {
-			return *col_name
+			return *col_name, nil
 		}
 	} else {
 		msg := fmt.Sprintf(`Unable to get collection names 
 		for database %v: %s, sourceHost: %s`, *options.OpLogDatabaseName, err, options.SourceName)
-		panic(msg)
+		return "", errors.Annotate(err, msg)
 	}
 }
 
@@ -390,7 +390,11 @@ func TailOps(ctx *OpCtx, session *mgo.Session, channels []OpChan, options *Optio
 	defer ctx.allWg.Done()
 	s := session.Copy()
 	defer s.Close()
-	options.Fill(s, options.SourceName)
+
+	if err := options.Fill(s, options.SourceName); err != nil {
+		return errors.Trace(err)
+	}
+
 	duration, err := time.ParseDuration(*options.CursorTimeout)
 	if err != nil {
 		panic(fmt.Sprintf("Invalid value <%s> for CursorTimeout", *options.CursorTimeout))
@@ -644,7 +648,7 @@ func DefaultOptions() *Options {
 	}
 }
 
-func (this *Options) Fill(session *mgo.Session, sourceHost string) {
+func (this *Options) Fill(session *mgo.Session, sourceHost string) error {
 	if this.After == nil {
 		this.After = LastOpTimestamp
 	}
@@ -653,13 +657,17 @@ func (this *Options) Fill(session *mgo.Session, sourceHost string) {
 		this.OpLogDatabaseName = &defaultOpLogDatabaseName
 	}
 	if this.OpLogCollectionName == nil {
-		defaultOpLogCollectionName := OpLogCollectionName(session, this)
+		defaultOpLogCollectionName, err := OpLogCollectionName(session, this)
+		if err != nil {
+			return errors.Trace(err)
+		}
 		this.OpLogCollectionName = &defaultOpLogCollectionName
 	}
 	if this.CursorTimeout == nil {
 		defaultCursorTimeout := "100s"
 		this.CursorTimeout = &defaultCursorTimeout
 	}
+	return nil
 }
 
 func (this *Options) SetDefaults() {
