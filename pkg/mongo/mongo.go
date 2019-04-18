@@ -101,7 +101,7 @@ func IsEmpty(session *mgo.Session, db string, collection string) bool {
 	return err == mgo.ErrNotFound
 }
 
-func Count(session *mgo.Session, db string, collection string) int {
+func Count(session *mgo.Session, db string, collection string) int64 {
 	if IsEmpty(session, db, collection) {
 		return 0
 	}
@@ -109,7 +109,7 @@ func Count(session *mgo.Session, db string, collection string) int {
 	if err := session.DB(db).Run(bson.M{"collStats": collection}, &ret); err != nil {
 		log.Fatalf("fail to query collStats for %s.%s. err: %s", db, collection, errors.ErrorStack(err))
 	}
-	return ret["count"].(int)
+	return ret["count"].(int64)
 }
 
 type MinMax struct {

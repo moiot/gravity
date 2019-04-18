@@ -120,7 +120,7 @@ func calculateChunks(
 			count := mongo.Count(session, db, coll)
 			if count == 0 {
 				continue
-			} else if count > chunkThreshold {
+			} else if count > int64(chunkThreshold) {
 				seq := 0
 				// If all the following conditions are met, $sample uses a pseudo-random cursor to select documents:
 				//
