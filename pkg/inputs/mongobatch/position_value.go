@@ -188,7 +188,7 @@ func SetupInitialPosition(
 		if err != nil {
 			return errors.Trace(err)
 		}
-
+		log.Infof("[SetupInitialPosition] chunks: %v", chunks)
 		batchPositionValue := PositionValue{
 			Start:  startPos,
 			Chunks: chunks,
