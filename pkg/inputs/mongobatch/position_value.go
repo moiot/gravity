@@ -69,7 +69,7 @@ func SetupInitialPosition(cache position_cache.PositionCacheInterface, session *
 		}
 
 		collections := make(map[string][]string)
-		for db, colls := range mongo.ListAllCollections(session) {
+		for db, colls := range mongo.ListAllUserCollections(session) {
 			for _, coll := range colls {
 				msg := core.Msg{
 					Database: db,
