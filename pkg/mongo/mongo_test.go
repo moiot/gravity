@@ -57,3 +57,19 @@ func TestBucketAuto(t *testing.T) {
 
 	BucketAuto(session, db.Name, t.Name(), 10, 2)
 }
+
+func TestGetMinMax(t *testing.T) {
+	r := require.New(t)
+	coll := db.C(t.Name())
+
+	cnt := 100
+
+	for i := 0; i < cnt; i++ {
+		r.NoError(coll.Insert(bson.M{"_id": i}))
+	}
+
+	mm, err := GetMinMax(session, db.Name, coll.Name)
+	r.NoError(err)
+	r.EqualValues(0, mm.Min)
+	r.EqualValues(99, mm.Max)
+}

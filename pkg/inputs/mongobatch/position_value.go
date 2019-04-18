@@ -151,7 +151,12 @@ func Decode(s string) (interface{}, error) {
 	return v, nil
 }
 
-func SetupInitialPosition(cache position_cache.PositionCacheInterface, session *mgo.Session, router core.Router, cfg Config) error {
+func SetupInitialPosition(
+	cache position_cache.PositionCacheInterface,
+	session *mgo.Session,
+	router core.Router,
+	cfg Config) error {
+
 	_, exist, err := cache.Get()
 	if err != nil {
 		return errors.Trace(err)
