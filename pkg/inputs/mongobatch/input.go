@@ -263,8 +263,8 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 					log.Debugf("[mongoBatchInput] %d records returned from query %v", actualCount, query)
 				}
 
-				id := mongo.ToObjectId(results[len(results)-1]["_id"])
-				task.Current = &id
+				id := results[len(results)-1]["_id"]
+				task.Current = &IDValue{Value: id}
 				task.Scanned += len(results)
 				now := time.Now()
 				metrics.InputCounter.WithLabelValues(plugin.pipelineName, task.Database, task.Collection, string(core.MsgDML), string(core.Insert)).Add(float64(len(results)))
