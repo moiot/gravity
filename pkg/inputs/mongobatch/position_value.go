@@ -62,7 +62,13 @@ func SetupInitialPosition(cache position_cache.PositionCacheInterface, session *
 
 	if !exist {
 		options := gtm.DefaultOptions()
-		options.Fill(session, "")
+		err := options.Fill(session, "")
+		if err != nil {
+			if !cfg.IgnoreOplogError {
+				return errors.Trace(err)
+			}
+		}
+
 		startPos, err := gtm.LastOpTimestamp(session, options)
 		if err != nil {
 			if !cfg.IgnoreOplogError {
