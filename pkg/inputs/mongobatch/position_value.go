@@ -61,15 +61,7 @@ func SetupInitialPosition(cache position_cache.PositionCacheInterface, session *
 	}
 
 	if !exist {
-		options := gtm.DefaultOptions()
-		err := options.Fill(session, "")
-		if err != nil {
-			if !cfg.IgnoreOplogError {
-				return errors.Trace(err)
-			}
-		}
-
-		startPos, err := gtm.LastOpTimestamp(session, options)
+		startPos, err := getStartPosition(session)
 		if err != nil {
 			if !cfg.IgnoreOplogError {
 				return errors.Trace(err)
@@ -180,4 +172,18 @@ func calculateChunks(
 		}
 	}
 	return ret, nil
+}
+
+func getStartPosition(session *mgo.Session) (bson.MongoTimestamp, error) {
+	options := gtm.DefaultOptions()
+	err := options.Fill(session, "")
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+
+	startPos, err := gtm.LastOpTimestamp(session, options)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	return startPos, nil
 }
