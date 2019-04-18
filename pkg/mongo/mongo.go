@@ -101,15 +101,21 @@ func IsEmpty(session *mgo.Session, db string, collection string) bool {
 	return err == mgo.ErrNotFound
 }
 
+type collStats struct {
+	Count int64 `json:"count"`
+}
+
 func Count(session *mgo.Session, db string, collection string) int64 {
 	if IsEmpty(session, db, collection) {
 		return 0
 	}
-	var ret bson.M
+
+	var ret collStats
 	if err := session.DB(db).Run(bson.M{"collStats": collection}, &ret); err != nil {
 		log.Fatalf("fail to query collStats for %s.%s. err: %s", db, collection, errors.ErrorStack(err))
 	}
-	return ret["count"].(int64)
+
+	return ret.Count
 }
 
 type MinMax struct {

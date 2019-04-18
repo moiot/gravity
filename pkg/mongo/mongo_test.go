@@ -41,9 +41,9 @@ func TestCount(t *testing.T) {
 		r.NoError(coll.Insert(bson.M{"foo": i}))
 	}
 
-	r.Equal(cnt, Count(session, db.Name, t.Name()))
+	r.EqualValues(cnt, Count(session, db.Name, t.Name()))
 	r.NoError(coll.DropCollection())
-	r.Equal(0, Count(session, db.Name, t.Name()))
+	r.EqualValues(0, Count(session, db.Name, t.Name()))
 }
 
 func TestBucketAuto(t *testing.T) {
