@@ -261,7 +261,6 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 				if task.Current != nil {
 					if first {
 						idQuery["$gte"] = task.Current.Value
-
 					} else {
 						idQuery["$gt"] = task.Current.Value
 					}
@@ -287,6 +286,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 					break
 				} else {
 					log.Infof("[mongoBatchInput] %d records returned from query %v", actualCount, idQuery)
+
 				}
 
 				id := results[len(results)-1]["_id"]
