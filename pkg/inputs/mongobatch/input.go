@@ -257,21 +257,25 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 			for {
 				<-plugin.throttle.C
 				c := plugin.session.DB(task.Database).C(task.Collection)
-				var query bson.D
+				idQuery := make(map[string]interface{})
 				if task.Current != nil {
 					if first {
-						query = append(query, bson.DocElem{Name: "_id", Value: bson.D{{Name: "$gte", Value: task.Current.Value}}})
+						idQuery["$gte"] = task.Current.Value
 					} else {
-						query = append(query, bson.DocElem{Name: "_id", Value: bson.D{{Name: "$gt", Value: task.Current.Value}}})
+						idQuery["$gt"] = task.Current.Value
 					}
 				}
 				if task.Max != nil {
-					query = append(query, bson.DocElem{Name: "_id", Value: bson.D{{Name: "$lte", Value: task.Max.Value}}})
+					idQuery["$lte"] = task.Max.Value
+				}
+
+				if len(idQuery) == 0 {
+					log.Fatalf("id query empty")
 				}
 
 				first = false
 				var results []map[string]interface{}
-				err := c.Find(query).Sort("_id").Limit(plugin.cfg.BatchSize).Hint("_id").All(&results)
+				err := c.Find(bson.M{"_id": idQuery}).Sort("_id").Limit(plugin.cfg.BatchSize).Hint("_id").All(&results)
 				if err != nil {
 					log.Fatalf("[mongoBatchInput] error query for task. %s", errors.ErrorStack(err))
 				}
@@ -281,7 +285,8 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 					plugin.finishChunk(task)
 					break
 				} else {
-					log.Infof("[mongoBatchInput] %d records returned from query %v", actualCount, query)
+					log.Infof("[mongoBatchInput] %d records returned from query %v", actualCount, idQuery)
+
 				}
 
 				id := results[len(results)-1]["_id"]
