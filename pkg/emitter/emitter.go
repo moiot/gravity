@@ -49,18 +49,19 @@ func (e *defaultEmitter) Emit(msg *core.Msg) error {
 		return errors.Errorf("[emitter] InputSequence not nil: %v", *msg.InputSequence)
 	}
 
-	// use fs to modify messages
-	for _, filter := range e.fs {
-		continueNext, err := filter.Filter(msg)
-		if err != nil {
-			return errors.Trace(err)
-		}
+	if msg.Type != core.MsgCtl {
+		// use fs to modify messages
+		for _, filter := range e.fs {
+			continueNext, err := filter.Filter(msg)
+			if err != nil {
+				return errors.Trace(err)
+			}
 
-		if !continueNext {
-			close(msg.Done)
-			return nil
+			if !continueNext {
+				close(msg.Done)
+				return nil
+			}
 		}
-
 	}
 
 	// generate sequence number and submit it to scheduler
