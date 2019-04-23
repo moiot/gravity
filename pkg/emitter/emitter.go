@@ -49,7 +49,7 @@ func (e *defaultEmitter) Emit(msg *core.Msg) error {
 		return errors.Errorf("[emitter] InputSequence not nil: %v", *msg.InputSequence)
 	}
 
-	if msg.Type != core.MsgCtl {
+	if msg.Type != core.MsgCtl && msg.Type != core.MsgCloseInputStream {
 		// use fs to modify messages
 		for _, filter := range e.fs {
 			continueNext, err := filter.Filter(msg)
