@@ -309,12 +309,12 @@ func (tailer *BinlogTailer) Start() error {
 
 				schema, err := tailer.sourceSchemaStore.GetSchema(schemaName)
 				if err != nil {
-					log.Fatalf("[binlogTailer] failed GetSchema %v. err: %v.", schemaName, errors.ErrorStack(err))
+					log.Errorf("[binlogTailer] failed GetSchema %v. err: %v.", schemaName, errors.ErrorStack(err))
 				}
 
 				tableDef := schema[tableName]
 				if tableDef == nil {
-					log.Fatalf("[binlogTailer] failed to get table def, schemaName: %v, tableName: %v", schemaName, tableName)
+					log.Errorf("[binlogTailer] failed to get table def, schemaName: %v, tableName: %v", schemaName, tableName)
 				}
 
 				switch e.Header.EventType {
