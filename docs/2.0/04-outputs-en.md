@@ -155,7 +155,7 @@ In the above configuration, if `use-bidirection` is set to "true" as follows, DR
 use-bidirection = true
 ```
 
-### Elasticsearch
+## `elasticsearch` configuration
 
 Important notices:
 
@@ -179,6 +179,8 @@ ignore-bad-request = true
 [output.config.server]
 urls = ["http://127.0.0.1:9200"]
 sniff = false
+# http timeout, default is 1000ms
+timeout = 500
 
 #
 # The basic auth configuration

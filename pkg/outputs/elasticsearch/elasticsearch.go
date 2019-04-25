@@ -3,6 +3,7 @@ package elasticsearch
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
@@ -24,9 +25,10 @@ type ElasticsearchServerAuth struct {
 }
 
 type ElasticsearchServerConfig struct {
-	URLs  []string                 `mapstructure:"urls" toml:"urls" json:"urls"`
-	Sniff bool                     `mapstructure:"sniff" toml:"sniff" json:"sniff"`
-	Auth  *ElasticsearchServerAuth `mapstructure:"auth" toml:"auth" json:"auth"`
+	URLs    []string                 `mapstructure:"urls" toml:"urls" json:"urls"`
+	Sniff   bool                     `mapstructure:"sniff" toml:"sniff" json:"sniff"`
+	Auth    *ElasticsearchServerAuth `mapstructure:"auth" toml:"auth" json:"auth"`
+	Timeout int                      `mapstructure:"timeout" toml:"timeout" json:"timeout"`
 }
 
 type ElasticsearchPluginConfig struct {
@@ -89,6 +91,15 @@ func (output *ElasticsearchOutput) Start() error {
 	if auth := serverConfig.Auth; auth != nil {
 		options = append(options, elastic.SetBasicAuth(auth.Username, auth.Password))
 	}
+
+	timeout := serverConfig.Timeout
+
+	if timeout == 0 {
+		timeout = 1000
+	}
+	options = append(options, elastic.SetHttpClient(&http.Client{
+		Timeout: time.Duration(timeout) * time.Millisecond,
+	}))
 
 	client, err := elastic.NewClient(options...)
 	if err != nil {

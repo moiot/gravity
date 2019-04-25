@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/utils"
@@ -75,6 +76,32 @@ const ResponseOK = `
 	]
 }
 `
+
+func TestTimeout(t *testing.T) {
+	r := require.New(t)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/_bulk", func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(time.Second)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(ResponseOK))
+	})
+	mux.HandleFunc("/", staticHandler(http.StatusOK, ""))
+
+	srv := &http.Server{Addr: ":9200", Handler: mux}
+	defer srv.Shutdown(context.TODO())
+	go srv.ListenAndServe()
+
+	output, err := defaultElasticsearchOutput()
+	r.NoError(err)
+	output.config.ServerConfig.Timeout = 100
+
+	r.NoError(output.Start())
+
+	msgs := defaultMsgs()
+
+	r.Error(output.Execute(msgs))
+}
 
 func TestNoPrimaryKey(t *testing.T) {
 	r := require.New(t)
