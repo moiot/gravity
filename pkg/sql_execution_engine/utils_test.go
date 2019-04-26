@@ -9,6 +9,48 @@ import (
 	"github.com/moiot/gravity/pkg/schema_store"
 )
 
+func TestGenerateInsertOnDuplicateKeyUpdate(t *testing.T) {
+	r := require.New(t)
+	columns := []schema_store.Column{
+		{
+			Idx:  1,
+			Name: "v1",
+		},
+		{
+			Idx:  0,
+			Name: "v2",
+		},
+	}
+
+	tableDef := schema_store.Table{
+		Schema:            "test_db",
+		Name:              "test_table",
+		Columns:           columns,
+		PrimaryKeyColumns: []schema_store.Column{{Idx: 1, Name: "v1"}},
+	}
+
+	data := map[string]interface{}{
+		"v1": "v1_value_1",
+		"v2": "v2_value_1",
+	}
+
+	msg := &core.Msg{
+		DmlMsg: &core.DMLMsg{
+			Operation: core.Insert,
+			Data:      data,
+			Pks: map[string]interface{}{
+				"v1": "v1_value_1",
+			},
+		},
+	}
+	sql, args, err := GenerateInsertOnDuplicateKeyUpdate([]*core.Msg{msg}, &tableDef)
+	r.NoError(err)
+	r.Equal("INSERT INTO `test_db`.`test_table` (`v2`,`v1`) VALUES (?,?) ON DUPLICATE KEY UPDATE `v2` = ?", sql)
+	r.Equal("v2_value_1", args[0])
+	r.Equal("v1_value_1", args[1])
+	r.Equal("v2_value_1", args[2])
+}
+
 func TestGenerateInsertIgnoreSQL(t *testing.T) {
 	r := require.New(t)
 
