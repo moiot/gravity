@@ -19,6 +19,8 @@ package sql_execution_engine
 import (
 	"database/sql"
 
+	"github.com/juju/errors"
+
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/schema_store"
@@ -49,5 +51,11 @@ func (engine *mysqlInsertOnDuplicateKeyUpdateEngine) Execute(msgBatch []*core.Ms
 	if len(msgBatch) == 0 {
 		return nil
 	}
-	return nil
+
+	query, args, err := GenerateInsertOnDuplicateKeyUpdate(msgBatch, targetTableDef)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	_, err = engine.db.Exec(query, args...)
+	return errors.Trace(err)
 }
