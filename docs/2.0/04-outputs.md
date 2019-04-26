@@ -184,6 +184,8 @@ ignore-bad-request = true
 urls = ["http://127.0.0.1:9200"]
 # 是否进行节点嗅探，默认为 false
 sniff = false
+# 超时时间，默认为 1000ms
+timeout = 500
 
 #
 # 目标端鉴权配置
