@@ -131,6 +131,66 @@ func GenerateInsertIgnoreSQL(msgBatch []*core.Msg, tableDef *schema_store.Table)
 	return strings.Join(s, " "), args, nil
 }
 
+func GenerateInsertOnDuplicateKeyUpdate(msgBatch []*core.Msg, tableDef *schema_store.Table) (string, []interface{}, error) {
+	if len(msgBatch) > 1 {
+		return "", nil, errors.Errorf("batch size > 1 not supported")
+	}
+	msg := msgBatch[0]
+
+	if err := ValidateSchema(msg, tableDef); err != nil {
+		return "", nil, errors.Trace(err)
+	}
+
+	// we only allow operations that:
+	// 1. has primary key, and dont have primary key change
+	// 2. insert/update. (DELETE is not supported)
+	if msg.DmlMsg.Operation != core.Insert && msg.DmlMsg.Operation != core.Update {
+		return "", nil, errors.Errorf("only support insert/update: operation: %v", msg.DmlMsg.Operation)
+	}
+
+	if len(msg.DmlMsg.Pks) <= 0 {
+		return "", nil, errors.Errorf("only support data has primary key")
+	}
+
+	if len(msg.OutputDepHashes) > 1 {
+		return "", nil, errors.Errorf("do not support unique key change")
+	}
+
+	allColumnNamesInSQL := make([]string, len(tableDef.Columns))
+	allColumnPlaceHolder := make([]string, len(tableDef.Columns))
+	args := make([]interface{}, len(tableDef.Columns))
+	for i := range allColumnPlaceHolder {
+		allColumnPlaceHolder[i] = "?"
+	}
+	// update columns
+	updateColumnsIdx := 0
+	columnNamesAssignWithoutPks := make([]string, len(tableDef.Columns)-len(tableDef.PrimaryKeyColumns))
+	argsWithoutPks := make([]interface{}, len(tableDef.Columns)-len(tableDef.PrimaryKeyColumns))
+	for _, column := range tableDef.Columns {
+		columnName := column.Name
+		columnNameInSQL := fmt.Sprintf("`%s`", columnName)
+		allColumnNamesInSQL[column.Idx] = columnNameInSQL
+		columnData := msg.DmlMsg.Data[columnName]
+		args[column.Idx] = adjustArgs(columnData, tableDef.MustColumn(columnName))
+		_, ok := msg.DmlMsg.Pks[columnName]
+		if !ok {
+			columnNamesAssignWithoutPks[updateColumnsIdx] = fmt.Sprintf("%s = ?", columnNameInSQL)
+			columnData := msg.DmlMsg.Data[columnName]
+			argsWithoutPks[updateColumnsIdx] = adjustArgs(columnData, tableDef.MustColumn(columnName))
+			updateColumnsIdx++
+		}
+	}
+
+	sqlInsert := fmt.Sprintf("INSERT INTO `%s`.`%s` (%s) VALUES (%s)",
+		tableDef.Schema,
+		tableDef.Name,
+		strings.Join(allColumnNamesInSQL, ","),
+		strings.Join(allColumnPlaceHolder, ","))
+	sqlUpdate := fmt.Sprintf("ON DUPLICATE KEY UPDATE %s", strings.Join(columnNamesAssignWithoutPks, ","))
+
+	return fmt.Sprintf("%s %s", sqlInsert, sqlUpdate), append(args, argsWithoutPks...), nil
+}
+
 func ValidateSchema(msg *core.Msg, tableDef *schema_store.Table) error {
 	columnLenInMsg := len(msg.DmlMsg.Data)
 	columnLenInTarget := len(tableDef.Columns)
