@@ -84,11 +84,11 @@ func (engine *mysqlInsertOnDuplicateKeyUpdateEngine) Execute(msgBatch []*core.Ms
 		if err != nil {
 			return errors.Trace(err)
 		}
-	}
-
-	query, args, err = GenerateInsertOnDuplicateKeyUpdate(msgBatch, targetTableDef)
-	if err != nil {
-		return errors.Trace(err)
+	} else {
+		query, args, err = GenerateInsertOnDuplicateKeyUpdate(msgBatch, targetTableDef)
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	return errors.Trace(ExecWithInternalTxnTag(engine.pipelineName, &engine.cfg.InternalTxnTaggerCfg, engine.db, query, args))
