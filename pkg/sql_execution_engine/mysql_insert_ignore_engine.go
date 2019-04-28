@@ -59,6 +59,9 @@ func (engine *mysqlInsertIgnoreEngine) Execute(msgBatch []*core.Msg, targetTable
 	var err error
 
 	if msgBatch[0].DmlMsg.Operation == core.Delete {
+		if len(msgBatch) > 1 {
+			return errors.Errorf("batch size > 1 for delete")
+		}
 		query, args, err = GenerateSingleDeleteSQL(msgBatch[0], targetTableDef)
 		if err != nil {
 			return errors.Trace(err)
