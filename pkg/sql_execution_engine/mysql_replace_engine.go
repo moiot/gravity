@@ -9,7 +9,6 @@ import (
 	"github.com/moiot/gravity/pkg/utils"
 
 	"github.com/juju/errors"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/core"
 
@@ -17,8 +16,7 @@ import (
 )
 
 type MysqlReplaceEngineConfig struct {
-	TagInternalTxn bool   `mapstructure:"tag-internal-txn" json:"tag-internal-txn"`
-	SQLAnnotation  string `mapstructure:"sql-annotation" json:"sql-annotation"`
+	InternalTxnTaggerCfg `mapstructure:",squash"`
 }
 
 type mysqlReplaceEngine struct {
@@ -30,10 +28,7 @@ type mysqlReplaceEngine struct {
 const MySQLReplaceEngine = "mysql-replace-engine"
 
 var DefaultMySQLReplaceEngineConfig = map[string]interface{}{
-	MySQLReplaceEngine: map[string]interface{}{
-		"tag-internal-txn": false,
-		"sql-annotation":   "",
-	},
+	MySQLReplaceEngine: DefaultInternalTxnTaggerCfg,
 }
 
 func init() {
@@ -47,6 +42,7 @@ func (engine *mysqlReplaceEngine) Configure(pipelineName string, data map[string
 	}
 
 	engine.cfg = &cfg
+	engine.pipelineName = pipelineName
 	return nil
 }
 
@@ -88,62 +84,5 @@ func (engine *mysqlReplaceEngine) Execute(msgBatch []*core.Msg, targetTableDef *
 		}
 	}
 
-	if engine.cfg.SQLAnnotation != "" {
-		query = SQLWithAnnotation(query, engine.cfg.SQLAnnotation)
-	}
-
-	//
-	// Do not open a txn explicitly when TagInternalExn is false
-	//
-	if !engine.cfg.TagInternalTxn {
-		result, err := engine.db.Exec(query, args...)
-		if err != nil {
-			return errors.Annotatef(err, "query: %v, args: %v", query, args)
-		}
-
-		logOperation(msgBatch, query, args, result)
-		return nil
-	}
-
-	//
-	// TagInternalTxn is ON
-	//
-	txn, err := engine.db.Begin()
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	result, err := txn.Exec(utils.GenerateTxnTagSQL(engine.pipelineName))
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	result, err = txn.Exec(query, args...)
-	if err != nil {
-		txn.Rollback()
-		return errors.Annotatef(err, "query: %v, args: %+v", query, args)
-	}
-
-	// log all the delete information
-	logOperation(msgBatch, query, args, result)
-
-	return errors.Trace(txn.Commit())
-}
-
-// Only log delete operation for now.
-func logOperation(batch []*core.Msg, query string, args []interface{}, result sql.Result) {
-	if len(batch) == 0 {
-		return
-	}
-
-	if batch[0].DmlMsg.Operation != core.Delete {
-		return
-	}
-
-	nrDeleted, err := result.RowsAffected()
-	if err != nil {
-		log.Warnf("[mysqlReplaceEngine]: %v", err.Error())
-	}
-
-	log.Debugf("[mysqlReplaceEngine] singleDelete %s. args: %+v. rows affected: %d", query, args, nrDeleted)
+	return errors.Trace(ExecWithInternalTxnTag(engine.pipelineName, &engine.cfg.InternalTxnTaggerCfg, engine.db, query, args))
 }

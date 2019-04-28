@@ -979,9 +979,9 @@ func TestMySQLToMyBidirection(t *testing.T) {
 				},
 				EngineConfig: &config.GenericPluginConfig{
 					Type: sql_execution_engine.MySQLReplaceEngine,
-					Config: utils.MustAny2Map(sql_execution_engine.MysqlReplaceEngineConfig{
-						TagInternalTxn: true,
-					}),
+					Config: map[string]interface{}{
+						"tag-internal-txn": true,
+					},
 				},
 			}),
 		},

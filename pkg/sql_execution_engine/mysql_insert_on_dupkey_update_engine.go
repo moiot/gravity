@@ -19,6 +19,9 @@ package sql_execution_engine
 import (
 	"database/sql"
 
+	"github.com/mitchellh/mapstructure"
+	"github.com/moiot/gravity/pkg/utils"
+
 	"github.com/juju/errors"
 
 	"github.com/moiot/gravity/pkg/core"
@@ -28,8 +31,13 @@ import (
 
 const MySQLInsertOnDuplicateKeyUpdate = "mysql-insert-on-duplicate-key-update"
 
+type mysqlInsertOnDuplicateKeyUpdateEngineConfig struct {
+	InternalTxnTaggerCfg `mapstructure:",squash"`
+}
+
 type mysqlInsertOnDuplicateKeyUpdateEngine struct {
 	pipelineName string
+	cfg          *mysqlInsertOnDuplicateKeyUpdateEngineConfig
 	db           *sql.DB
 }
 
@@ -38,12 +46,23 @@ func init() {
 }
 
 func (engine *mysqlInsertOnDuplicateKeyUpdateEngine) Configure(pipelineName string, data map[string]interface{}) error {
+	cfg := mysqlInsertOnDuplicateKeyUpdateEngineConfig{}
+	if err := mapstructure.Decode(data, &cfg); err != nil {
+		return errors.Trace(err)
+	}
+
+	engine.cfg = &cfg
 	engine.pipelineName = pipelineName
 	return nil
 }
 
 func (engine *mysqlInsertOnDuplicateKeyUpdateEngine) Init(db *sql.DB) error {
 	engine.db = db
+
+	if engine.cfg.TagInternalTxn {
+		return errors.Trace(utils.InitInternalTxnTags(db))
+	}
+
 	return nil
 }
 
@@ -52,10 +71,25 @@ func (engine *mysqlInsertOnDuplicateKeyUpdateEngine) Execute(msgBatch []*core.Ms
 		return nil
 	}
 
-	query, args, err := GenerateInsertOnDuplicateKeyUpdate(msgBatch, targetTableDef)
-	if err != nil {
-		return errors.Trace(err)
+	if len(msgBatch) > 1 {
+		return errors.Errorf("batch size > 1 not supported")
 	}
-	_, err = engine.db.Exec(query, args...)
-	return errors.Trace(err)
+
+	var query string
+	var args []interface{}
+	var err error
+
+	if msgBatch[0].DmlMsg.Operation == core.Delete {
+		query, args, err = GenerateSingleDeleteSQL(msgBatch[0], targetTableDef)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	} else {
+		query, args, err = GenerateInsertOnDuplicateKeyUpdate(msgBatch, targetTableDef)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	return errors.Trace(ExecWithInternalTxnTag(engine.pipelineName, &engine.cfg.InternalTxnTaggerCfg, engine.db, query, args))
 }
