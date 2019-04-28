@@ -40,7 +40,7 @@ func ExecWithInternalTxnTag(
 	query string,
 	args []interface{}) error {
 
-	var newQuery string
+	newQuery := query
 	if internalTxnTaggerCfg.SQLAnnotation != "" {
 		newQuery = SQLWithAnnotation(query, internalTxnTaggerCfg.SQLAnnotation)
 	}
