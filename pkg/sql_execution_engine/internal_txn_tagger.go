@@ -40,12 +40,13 @@ func ExecWithInternalTxnTag(
 	query string,
 	args []interface{}) error {
 
+	var newQuery string
 	if internalTxnTaggerCfg.SQLAnnotation != "" {
-		query = SQLWithAnnotation(query, internalTxnTaggerCfg.SQLAnnotation)
+		newQuery = SQLWithAnnotation(query, internalTxnTaggerCfg.SQLAnnotation)
 	}
 
 	if !internalTxnTaggerCfg.TagInternalTxn {
-		result, err := db.Exec(query, args...)
+		result, err := db.Exec(newQuery, args...)
 		if err != nil {
 			return errors.Annotatef(err, "query: %v, args: %v", query, args)
 		}
