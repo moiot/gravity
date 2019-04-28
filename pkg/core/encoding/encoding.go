@@ -89,9 +89,15 @@ func EncodeMsgToPB(msg *core.Msg) (*msgpb.Msg, error) {
 		return nil, errors.Trace(err)
 	}
 
+	pks, err := DataMapToPB(msg.DmlMsg.Pks)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
 	pb.DmlMsg = &msgpb.DMLMsg{
 		Op:   string(msg.DmlMsg.Operation),
 		Data: data,
+		Pks:  pks,
 	}
 
 	return pb, nil
@@ -106,6 +112,7 @@ func DecodeMsgFromPB(pbmsg *msgpb.Msg) (*core.Msg, error) {
 	msg.DmlMsg = &core.DMLMsg{
 		Operation: core.DMLOp(pbmsg.DmlMsg.Op),
 		Data:      make(map[string]interface{}),
+		Pks:       make(map[string]interface{}),
 	}
 
 	data, err := PBToDataMap(pbmsg.DmlMsg.Data)
@@ -113,6 +120,12 @@ func DecodeMsgFromPB(pbmsg *msgpb.Msg) (*core.Msg, error) {
 		return nil, errors.Trace(err)
 	}
 
+	pks, err := PBToDataMap(pbmsg.DmlMsg.Pks)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
 	msg.DmlMsg.Data = data
+	msg.DmlMsg.Pks = pks
 	return msg, nil
 }
