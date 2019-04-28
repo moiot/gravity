@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/moiot/gravity/pkg/mysql_test"
+	sqlmock "gopkg.in/DATA-DOG/go-sqlmock.v1"
 
 	"github.com/stretchr/testify/require"
-	"gopkg.in/DATA-DOG/go-sqlmock.v1"
 
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/registry"
@@ -22,10 +22,17 @@ func TestMySQLReplaceEngineConfigure(t *testing.T) {
 	p, err := registry.GetPlugin(registry.SQLExecutionEnginePlugin, MySQLReplaceEngine)
 	r.NoError(err)
 
-	e := p.Configure("test", make(map[string]interface{}))
+	configData := map[string]interface{}{
+		"sql-annotation": "annotation-test",
+	}
+	e := p.Configure("test", configData)
 	r.NoError(e)
 
-	_, ok := p.(EngineInitializer)
+	engine, ok := p.(*mysqlReplaceEngine)
+	r.True(ok)
+	r.Equal("annotation-test", engine.cfg.SQLAnnotation)
+
+	_, ok = p.(EngineInitializer)
 	r.True(ok)
 
 	_, ok = p.(EngineExecutor)

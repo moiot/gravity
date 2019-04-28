@@ -3,6 +3,9 @@ package sql_execution_engine
 import (
 	"database/sql"
 
+	"github.com/mitchellh/mapstructure"
+	"github.com/moiot/gravity/pkg/utils"
+
 	"github.com/juju/errors"
 
 	"github.com/moiot/gravity/pkg/core"
@@ -12,8 +15,13 @@ import (
 
 const MySQLInsertIgnore = "mysql-insert-ignore"
 
+type mysqlInsertIgnoreEngineConfig struct {
+	InternalTxnTaggerCfg `mapstructure:",squash"`
+}
+
 type mysqlInsertIgnoreEngine struct {
 	pipelineName string
+	cfg          *mysqlInsertIgnoreEngineConfig
 	db           *sql.DB
 }
 
@@ -22,12 +30,22 @@ func init() {
 }
 
 func (engine *mysqlInsertIgnoreEngine) Configure(pipelineName string, data map[string]interface{}) error {
+	cfg := mysqlInsertIgnoreEngineConfig{}
+	if err := mapstructure.Decode(data, &cfg); err != nil {
+		return errors.Trace(err)
+	}
+	engine.cfg = &cfg
 	engine.pipelineName = pipelineName
 	return nil
 }
 
 func (engine *mysqlInsertIgnoreEngine) Init(db *sql.DB) error {
 	engine.db = db
+
+	if engine.cfg.TagInternalTxn {
+		return errors.Trace(utils.InitInternalTxnTags(db))
+	}
+
 	return nil
 }
 
@@ -36,11 +54,21 @@ func (engine *mysqlInsertIgnoreEngine) Execute(msgBatch []*core.Msg, targetTable
 		return nil
 	}
 
-	query, args, err := GenerateInsertIgnoreSQL(msgBatch, targetTableDef)
-	if err != nil {
-		return errors.Trace(err)
+	var query string
+	var args []interface{}
+	var err error
+
+	if msgBatch[0].DmlMsg.Operation == core.Delete {
+		query, args, err = GenerateSingleDeleteSQL(msgBatch[0], targetTableDef)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	} else {
+		query, args, err = GenerateInsertIgnoreSQL(msgBatch, targetTableDef)
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 
-	_, err = engine.db.Exec(query, args...)
-	return errors.Trace(err)
+	return errors.Trace(ExecWithInternalTxnTag(engine.pipelineName, &engine.cfg.InternalTxnTaggerCfg, engine.db, query, args))
 }

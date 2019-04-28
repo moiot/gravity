@@ -132,9 +132,7 @@ func GenerateInsertIgnoreSQL(msgBatch []*core.Msg, tableDef *schema_store.Table)
 }
 
 func GenerateInsertOnDuplicateKeyUpdate(msgBatch []*core.Msg, tableDef *schema_store.Table) (string, []interface{}, error) {
-	if len(msgBatch) > 1 {
-		return "", nil, errors.Errorf("batch size > 1 not supported")
-	}
+
 	msg := msgBatch[0]
 
 	if err := ValidateSchema(msg, tableDef); err != nil {
@@ -268,4 +266,18 @@ func NewEngineExecutor(pipelineName string, engineName string, db *sql.DB, data 
 	}
 
 	return executor
+}
+
+// Only log delete operation for now.
+func logOperation(query string, args []interface{}, result sql.Result) {
+	if !strings.HasPrefix(query, "DELETE") {
+		return
+	}
+
+	nrDeleted, err := result.RowsAffected()
+	if err != nil {
+		logrus.Warnf("[logOperation]: %v", err.Error())
+	}
+
+	logrus.Debugf("[logOperation] singleDelete %s. args: %+v. rows affected: %d", query, args, nrDeleted)
 }
