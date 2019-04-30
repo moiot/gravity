@@ -1,6 +1,8 @@
 package types
 
 import (
+	"encoding/json"
+	"fmt"
 	"math/rand"
 	"unicode"
 )
@@ -54,6 +56,32 @@ func (c *blobCol) Generate(r *rand.Rand) interface{} {
 	ret := make([]byte, length)
 	r.Read(ret)
 	return ret
+}
+
+type jsonCol struct {
+	col string
+}
+
+// JSON column is not used right now. MySQL 5.7 has bug
+// on checksum for json column.
+func NewJSONCol(colType string) *jsonCol {
+	return &jsonCol{colType}
+}
+
+func (c *jsonCol) ColType() string {
+	return c.col
+}
+
+func (c *jsonCol) Generate(r *rand.Rand) interface{} {
+	i := rand.Int()
+	m := map[string]string{
+		"id": fmt.Sprintf("%v", i),
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		panic(err.Error())
+	}
+	return string(b)
 }
 
 func getItemInRangeTable(n int) int {
