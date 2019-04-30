@@ -59,6 +59,7 @@ tte TINYTEXT CHARACTER SET utf8mb4,
 ch  CHAR(5) CHARACTER SET utf8mb4,
 va varchar(31) CHARACTER SET utf8mb4,
 lva varchar(5000) CHARACTER SET utf8mb4,
+j json DEFAULT NULL,
 PRIMARY KEY (id),
 UNIQUE KEY (i, ui),
 UNIQUE KEY (ii)

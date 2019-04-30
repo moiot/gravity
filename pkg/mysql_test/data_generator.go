@@ -210,6 +210,8 @@ func newColValGenerator(colType string) types.ColumnValGenerator {
 		return types.NewBlobCol(colType, 1<<8-1)
 	} else if strings.HasPrefix(colType, "blob") {
 		return types.NewBlobCol(colType, 1<<16-1)
+	} else if strings.HasPrefix(colType, "json") {
+		return types.NewJSONCol(colType)
 	}
 
 	log.Fatalf("newColDataGenerator unknown column type %s", colType)
