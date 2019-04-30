@@ -119,7 +119,6 @@ func EstimateRowsCount(db *sql.DB, schemaName string, tableName string) (int64, 
 }
 
 func IsColumnString(columnType *sql.ColumnType) bool {
-	log.Infof("IsColumnString: columnType: %v", columnType.DatabaseTypeName())
 	return strings.Contains(columnType.DatabaseTypeName(), "TEXT") ||
 		strings.Contains(columnType.DatabaseTypeName(), "CHAR") ||
 		strings.Contains(columnType.DatabaseTypeName(), "JSON")
