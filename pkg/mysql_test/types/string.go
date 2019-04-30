@@ -62,6 +62,8 @@ type jsonCol struct {
 	col string
 }
 
+// JSON column is not used right now. MySQL 5.7 has bug
+// on checksum for json column.
 func NewJSONCol(colType string) *jsonCol {
 	return &jsonCol{colType}
 }
