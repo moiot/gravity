@@ -59,7 +59,7 @@ tte TINYTEXT CHARACTER SET utf8mb4,
 ch  CHAR(5) CHARACTER SET utf8mb4,
 va varchar(31) CHARACTER SET utf8mb4,
 lva varchar(5000) CHARACTER SET utf8mb4,
-// Mysql Table checksum has bugs on json column, so disable it right now.
+# Mysql Table checksum has bugs on json column, so disable it right now.
 # https://bugs.mysql.com/bug.php?id=87847
 #j json DEFAULT NULL,
 PRIMARY KEY (id),
