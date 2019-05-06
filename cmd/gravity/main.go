@@ -118,6 +118,10 @@ func main() {
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
 
+	// When deploying with k8s cluster,
+	// batch mode won't continue if the return code of this process is 0.
+	// This process exit with 0 only when the input is done in batch mode.
+	// For all the other cases, this process exit with 1.
 	if cfg.PipelineConfig.InputPlugin.Mode == config.Batch {
 		go func(server *app.Server) {
 			<-server.Input.Done()
@@ -131,7 +135,7 @@ func main() {
 		case sig := <-sc:
 			log.Infof("[gravity] stop with signal %v", sig)
 			server.Close()
-			return
+			os.Exit(1)
 
 		case event, ok := <-watcher.Events:
 			if !ok {
@@ -156,10 +160,7 @@ func main() {
 
 			log.Info("config file updated, quit...")
 			server.Close()
-			// We should exit with a return code not equal to 0.
-			// When deploying with k8s cluster,
-			// batch mode won't continue after configure file changed if the return code of this process is 0.
-			os.Exit(2)
+			os.Exit(1)
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
@@ -167,6 +168,7 @@ func main() {
 			}
 			log.Println("error:", err)
 			server.Close()
+			os.Exit(1)
 		}
 	}
 }
