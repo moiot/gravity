@@ -280,15 +280,13 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 					log.Fatalf("[mongoBatchInput] error query for task. %s", errors.ErrorStack(err))
 				}
 				actualCount = len(results)
+				log.Infof("[mongoBatchInput] %d records returned from query %v", actualCount, idQuery)
 				if actualCount == 0 {
-					log.Infof("[mongoBatchInput] done chunk %#v", task)
+					log.Infof("[mongoBatchInput] done chunk.max %#v, chunk.min %v, chunk.current: %v",
+						*task.Max, *task.Min, *task.Current)
 					plugin.finishChunk(task)
 					break
-				} else {
-					log.Infof("[mongoBatchInput] %d records returned from query %v", actualCount, idQuery)
-
 				}
-
 				id := results[len(results)-1]["_id"]
 				task.Current = &IDValue{Value: id}
 				task.Scanned += len(results)
