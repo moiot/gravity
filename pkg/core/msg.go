@@ -76,6 +76,23 @@ type Msg struct {
 	AfterAckCallback    MsgCallbackFunc
 }
 
+func (msg *Msg) String() string {
+	b := strings.Builder{}
+	b.WriteString("core.Msg{ ")
+	b.WriteString(string(msg.Type))
+	if msg.Type == MsgDDL {
+		b.WriteString(" ")
+		b.WriteString(msg.DdlMsg.Statement)
+	} else if msg.Type == MsgDML {
+		b.WriteString(" ")
+		b.WriteString(string(msg.DmlMsg.Operation))
+		b.WriteString(" ")
+		b.WriteString(fmt.Sprint(msg.DmlMsg.Pks))
+	}
+	b.WriteString(" }")
+	return b.String()
+}
+
 func (msg *Msg) SequenceNumber() int64 {
 	return *msg.InputSequence
 }

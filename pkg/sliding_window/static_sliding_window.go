@@ -117,7 +117,7 @@ func (w *staticSlidingWindow) removeItemFromSequence() (WindowItem, bool) {
 		case <-ticker.C:
 			delay := w.reportWatermarkDelay()
 			if delay > 30 {
-				log.Warn("[sliding_window] no item add after %f seconds.", delay)
+				log.Warnf("[sliding_window] no item add after %f seconds.", delay)
 			}
 		}
 	}
@@ -135,7 +135,7 @@ func (w *staticSlidingWindow) start() {
 		return
 	} else {
 		w.nextItemToCommit = nextItemToCommit
-		log.Infof("[staticSlidingWindow] init nextItemToCommit: %v", w.nextItemToCommit.SequenceNumber())
+		log.Infof("[staticSlidingWindow] init nextItemToCommit: %s", w.nextItemToCommit.SequenceNumber())
 	}
 
 	ticker := time.NewTicker(10 * time.Second)
@@ -184,7 +184,7 @@ func (w *staticSlidingWindow) start() {
 		case <-ticker.C:
 			delay := w.reportWatermarkDelay()
 			if delay > 30 {
-				log.Warn("[sliding_window] item not ack after %f seconds. %#v", delay, w.nextItemToCommit)
+				log.Warnf("[sliding_window] item not ack after %f seconds. %s", delay, w.nextItemToCommit)
 			}
 		}
 	}
