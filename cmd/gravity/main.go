@@ -156,7 +156,10 @@ func main() {
 
 			log.Info("config file updated, quit...")
 			server.Close()
-			return
+			// We should exit with a return code not equal to 0.
+			// When deploying with k8s cluster,
+			// batch mode won't continue after configure file changed if the return code of this process is 0.
+			os.Exit(2)
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
