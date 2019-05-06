@@ -135,7 +135,7 @@ func (w *staticSlidingWindow) start() {
 		return
 	} else {
 		w.nextItemToCommit = nextItemToCommit
-		log.Infof("[staticSlidingWindow] init nextItemToCommit: %s", w.nextItemToCommit.SequenceNumber())
+		log.Infof("[staticSlidingWindow] init nextItemToCommit: %s", w.nextItemToCommit)
 	}
 
 	ticker := time.NewTicker(10 * time.Second)
