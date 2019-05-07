@@ -253,44 +253,54 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 				task.Current = task.Min
 			}
 
+			batchResult := make([]map[string]interface{}, plugin.cfg.BatchSize+1)
+			for i := range batchResult {
+				batchResult[i] = make(map[string]interface{})
+			}
 			first := true
-			batchResult := make([]map[string]interface{}, plugin.cfg.BatchSize)
+			collection := plugin.session.DB(task.Database).C(task.Collection)
+
 			for {
 				<-plugin.throttle.C
-				c := plugin.session.DB(task.Database).C(task.Collection)
-				idQuery := make(map[string]interface{})
+				idCond := make(map[string]interface{})
 				if task.Current != nil {
 					if first {
-						idQuery["$gte"] = task.Current.Value
+						idCond["$gte"] = task.Current.Value
 					} else {
-						idQuery["$gt"] = task.Current.Value
+						idCond["$gt"] = task.Current.Value
 					}
 				}
 				if task.Max != nil {
-					idQuery["$lte"] = task.Max.Value
+					idCond["$lte"] = task.Max.Value
 				}
 
-				if len(idQuery) == 0 {
+				if len(idCond) == 0 {
 					log.Fatalf("id query empty")
 				}
 
 				first = false
-				query := c.Find(bson.M{"_id": idQuery}).
+				idQuery := map[string]interface{}{"_id": idCond}
+				iter := collection.Find(idQuery).
 					Sort("_id").
 					Limit(plugin.cfg.BatchSize).
-					Hint("_id")
+					Hint("_id").
+					Iter()
 
 				resultCount := 0
-				iter := query.Iter()
-				for iter.Next(&batchResult[resultCount]) {
+				for iter.Next(batchResult[resultCount]) {
 					resultCount++
 				}
 
-				if err := iter.Close(); err != nil {
-					log.Fatalf("[mongoBatchInput] error query: %v", err.Error())
+				if err := iter.Err(); err != nil {
+					log.Fatalf("[mongoBatchInput] error iter: %v", err.Error())
 				}
 
-				log.Infof("[mongoBatchInput] %d records returned from query %v", resultCount, idQuery)
+				if err := iter.Close(); err != nil {
+					log.Fatalf("[mongoBatchInput] close error: %v", err.Error())
+				}
+
+				log.Infof("[mongoBatchInput] %d records returned from query %v limit %v",
+					resultCount, idCond, plugin.cfg.BatchSize)
 
 				if resultCount == 0 {
 					log.Infof("[mongoBatchInput] done chunk.max %#v, chunk.min %#v, chunk.current: %#v",

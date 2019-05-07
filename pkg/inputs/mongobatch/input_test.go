@@ -24,6 +24,7 @@ import (
 	"github.com/moiot/gravity/pkg/mongo_test"
 	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/utils"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -35,6 +36,7 @@ type fakeEmitter struct {
 func (e *fakeEmitter) Emit(msg *core.Msg) error {
 	if msg.DmlMsg != nil {
 		e.count++
+		log.Infof("msg.DmlMsg.Data: %v", msg.DmlMsg.Data)
 	}
 	close(msg.Done)
 	return nil
@@ -90,6 +92,33 @@ func TestMongoInput(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		r.NoError(db.C("test").Insert(bson.M{"_id": i}))
 	}
+
+	c := db.C("test")
+	query := map[string]interface{}{
+		"_id": map[string]interface{}{
+			"$gte": 0,
+			"$lte": 99,
+		},
+	}
+	iter := c.Find(query).
+		Sort("_id").
+		Limit(100).
+		Hint("_id").
+		Iter()
+
+	results := make([]map[string]interface{}, 101)
+	for i := range results {
+		results[i] = make(map[string]interface{})
+	}
+
+	count := 0
+	for iter.Next(results[count]) {
+		count++
+	}
+
+	r.NoError(iter.Err())
+
+	r.Equal(100, count)
 
 	r.NoError(positionCache.Start())
 	r.NoError(mongoInput.Start(em, router, positionCache))
