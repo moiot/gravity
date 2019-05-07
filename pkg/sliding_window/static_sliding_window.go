@@ -12,6 +12,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const ProcessDelayWarningThreshold = 30
+
 type staticSlidingWindow struct {
 	cap int
 
@@ -115,7 +117,10 @@ func (w *staticSlidingWindow) removeItemFromSequence() (WindowItem, bool) {
 			return nextItem, ok
 
 		case <-ticker.C:
-			w.reportWatermarkDelay()
+			delay := w.reportWatermarkDelay()
+			if delay > ProcessDelayWarningThreshold {
+				log.Warnf("[sliding_window] no item add after %f seconds.", delay)
+			}
 		}
 	}
 }
@@ -132,7 +137,7 @@ func (w *staticSlidingWindow) start() {
 		return
 	} else {
 		w.nextItemToCommit = nextItemToCommit
-		log.Infof("[staticSlidingWindow] init nextItemToCommit: %v", w.nextItemToCommit.SequenceNumber())
+		log.Infof("[staticSlidingWindow] init nextItemToCommit: %s", w.nextItemToCommit)
 	}
 
 	ticker := time.NewTicker(10 * time.Second)
@@ -179,19 +184,25 @@ func (w *staticSlidingWindow) start() {
 			}
 
 		case <-ticker.C:
-			w.reportWatermarkDelay()
+			delay := w.reportWatermarkDelay()
+			if delay > ProcessDelayWarningThreshold {
+				log.Warnf("[sliding_window] item not ack after %f seconds. %s", delay, w.nextItemToCommit)
+			}
 		}
 	}
 }
 
-func (w *staticSlidingWindow) reportWatermarkDelay() {
+func (w *staticSlidingWindow) reportWatermarkDelay() float64 {
 	watermark := w.Watermark()
 
 	// ProcessTime can be seen as the duration that event are in the queue.
 	metrics.End2EndProcessTimeHistogram.WithLabelValues(core.PipelineName).Observe(time.Since(watermark.ProcessTime).Seconds())
 
 	// EventTime can be seen as the end to end duration of event process time.
-	metrics.End2EndEventTimeHistogram.WithLabelValues(core.PipelineName).Observe(time.Since(watermark.EventTime).Seconds())
+	seconds := time.Since(watermark.EventTime).Seconds()
+	metrics.End2EndEventTimeHistogram.WithLabelValues(core.PipelineName).Observe(seconds)
+
+	return seconds
 }
 
 func NewStaticSlidingWindow(windowSize int) Window {

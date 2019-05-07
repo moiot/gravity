@@ -195,14 +195,26 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 			workerName := fmt.Sprintf("%d", workerIndex)
 
 			for msgBatch := range q {
-
 				metrics.QueueLength.WithLabelValues(scheduler.pipelineName, "worker", workerName).Set(float64(len(q)))
 				WorkerPoolJobBatchSizeGauge.WithLabelValues(scheduler.pipelineName, workerName).Set(float64(len(msgBatch)))
 				metrics.Scheduler2OutputCounter.WithLabelValues(core.PipelineName).Add(float64(len(msgBatch)))
 				now := time.Now()
+				hasCtl := false
 				for _, m := range msgBatch {
-					m.EnterOutput = now
+					if m.Type == core.MsgCtl {
+						if err := scheduler.AckMsg(m); err != nil {
+							log.Fatalf("[batchScheduler] err: %v", errors.ErrorStack(err))
+						}
+						hasCtl = true
+					} else {
+						m.EnterOutput = now
+					}
 				}
+
+				if hasCtl {
+					continue
+				}
+
 				if scheduler.syncOutput != nil {
 					err := retry.Do(func() error {
 						return scheduler.syncOutput.Execute(msgBatch)
@@ -271,7 +283,7 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 	var err error
 	if msg.Type == core.MsgCtl {
 		msg.LeaveSubmitter = time.Now()
-		err = scheduler.AckMsg(msg)
+		scheduler.workerQueues[msg.SequenceNumber()%int64(scheduler.cfg.NrWorker)] <- []*core.Msg{msg}
 	} else {
 		err = scheduler.dispatchMsg(msg)
 		msg.LeaveSubmitter = time.Now()
@@ -281,8 +293,8 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 }
 
 func (scheduler *batchScheduler) AckMsg(msg *core.Msg) error {
-	msg.EnterAcker = time.Now()
 	if msg.Type != core.MsgCtl { // control msg doesn't enter output
+		msg.EnterAcker = time.Now()
 		metrics.OutputHistogram.WithLabelValues(core.PipelineName).Observe(msg.EnterAcker.Sub(msg.EnterOutput).Seconds())
 	}
 
@@ -305,9 +317,11 @@ func (scheduler *batchScheduler) AckMsg(msg *core.Msg) error {
 		WorkerPoolSlidingWindowRatio.WithLabelValues(scheduler.pipelineName, *msg.InputStreamKey).Set(float64(window.WaitingQueueLen() / window.Size()))
 	}
 
-	msg.LeaveScheduler = time.Now()
-	metrics.SchedulerTotalHistogram.WithLabelValues(core.PipelineName).Observe(msg.LeaveScheduler.Sub(msg.EnterScheduler).Seconds())
-	metrics.SchedulerAckHistogram.WithLabelValues(core.PipelineName).Observe(msg.LeaveScheduler.Sub(msg.EnterAcker).Seconds())
+	if msg.Type != core.MsgCtl {
+		msg.LeaveScheduler = time.Now()
+		metrics.SchedulerTotalHistogram.WithLabelValues(core.PipelineName).Observe(msg.LeaveScheduler.Sub(msg.EnterScheduler).Seconds())
+		metrics.SchedulerAckHistogram.WithLabelValues(core.PipelineName).Observe(msg.LeaveScheduler.Sub(msg.EnterAcker).Seconds())
+	}
 	return nil
 }
 

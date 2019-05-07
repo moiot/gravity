@@ -8,15 +8,15 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"github.com/fsnotify/fsnotify"
+	hplugin "github.com/hashicorp/go-plugin"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
-
-	hplugin "github.com/hashicorp/go-plugin"
 
 	"github.com/moiot/gravity/pkg/app"
 	"github.com/moiot/gravity/pkg/config"
@@ -42,6 +42,9 @@ func main() {
 	default:
 		log.Fatalf("parse cmd flags errors: %s\n", err)
 	}
+
+	runtime.SetBlockProfileRate(cfg.BlockProfileRate)
+	runtime.SetMutexProfileFraction(cfg.MutexProfileFraction)
 
 	if cfg.Version {
 		utils.PrintRawInfo("gravity")
