@@ -29,7 +29,7 @@ type Config struct {
 	PositionRepo        *config.GenericPluginConfig `mapstructure:"position-repo" toml:"position-repo" json:"position-repo"`
 	BatchSize           int                         `mapstructure:"batch-size"  toml:"batch-size" json:"batch-size"`
 	WorkerCnt           int                         `mapstructure:"worker-cnt" toml:"worker-cnt" json:"worker-cnt"`
-	ChunkThreshold      int                         `mapstructure:"chunk-threshold"  toml:"chunk-threshold"  json:"chunk-threshold"`
+	ChunkThreshold      int                         `mapstructure:"Chunk-threshold"  toml:"Chunk-threshold"  json:"Chunk-threshold"`
 	BatchPerSecondLimit int                         `mapstructure:"batch-per-second-limit" toml:"batch-per-second-limit" json:"batch-per-second-limit"`
 
 	// IgnoreOplogError ignores error with oplog.
@@ -155,7 +155,7 @@ func (plugin *mongoBatchInput) Start(emitter core.Emitter, router core.Router, p
 
 	log.Debugf("[mongoBatchInput] chunks: %v", pos.Chunks)
 
-	taskC := make(chan chunk, len(plugin.pos.Chunks))
+	taskC := make(chan Chunk, len(plugin.pos.Chunks))
 	for _, c := range plugin.pos.Chunks {
 		if !c.Done {
 			taskC <- c
@@ -239,14 +239,14 @@ func (plugin *mongoBatchInput) Wait() {
 	plugin.wg.Wait()
 }
 
-func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
+func (plugin *mongoBatchInput) runWorker(ch chan Chunk) {
 	defer plugin.wg.Done()
 
 	for {
 		select {
 		case task, ok := <-ch:
 			if !ok {
-				log.Infof("[mongoBatchInput] no more chunk, exit worker.")
+				log.Infof("[mongoBatchInput] no more Chunk, exit worker.")
 				return
 			}
 			if task.Current == nil {
@@ -262,7 +262,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 
 			for {
 				<-plugin.throttle.C
-				idCond := make(map[string]interface{})
+				idCond := bson.M{}
 				if task.Current != nil {
 					if first {
 						idCond["$gte"] = task.Current.Value
@@ -303,7 +303,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 					resultCount, idCond, plugin.cfg.BatchSize)
 
 				if resultCount == 0 {
-					log.Infof("[mongoBatchInput] done chunk.max %#v, chunk.min %#v, chunk.current: %#v",
+					log.Infof("[mongoBatchInput] done Chunk.max %#v, Chunk.min %#v, Chunk.current: %#v",
 						*task.Max, *task.Min, *task.Current)
 					plugin.finishChunk(task)
 					break
@@ -311,7 +311,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 
 				id := batchResult[resultCount-1]["_id"]
 				task.Current = &IDValue{Value: id}
-				task.Scanned += resultCount
+				task.Scanned += int64(resultCount)
 				now := time.Now()
 				for i := 0; i < resultCount; i++ {
 					op := gtm.Op{
@@ -373,7 +373,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 	}
 }
 
-func (plugin *mongoBatchInput) finishChunk(c chunk) {
+func (plugin *mongoBatchInput) finishChunk(c Chunk) {
 	c.Done = true
 	msg := &core.Msg{
 		Phase: core.Phase{
@@ -401,7 +401,7 @@ func (plugin *mongoBatchInput) finishChunk(c chunk) {
 	}
 	<-msg.Done
 	if err := plugin.saveChunk(c); err != nil {
-		log.Fatalf("failed to save chunk: %v", errors.ErrorStack(err))
+		log.Fatalf("failed to save Chunk: %v", errors.ErrorStack(err))
 	}
 	if err := plugin.positionCache.Flush(); err != nil {
 		log.Fatalf("failed to flush position: %v", errors.ErrorStack(err))
@@ -409,11 +409,11 @@ func (plugin *mongoBatchInput) finishChunk(c chunk) {
 }
 
 func (plugin *mongoBatchInput) AfterMsgCommit(msg *core.Msg) error {
-	c := msg.InputContext.(chunk)
+	c := msg.InputContext.(Chunk)
 	return plugin.saveChunk(c)
 }
 
-func (plugin *mongoBatchInput) saveChunk(c chunk) error {
+func (plugin *mongoBatchInput) saveChunk(c Chunk) error {
 	plugin.pos.Chunks[plugin.chunkMap[c.key()]] = c
 
 	plugin.posLock.Lock()

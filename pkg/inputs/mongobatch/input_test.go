@@ -92,21 +92,23 @@ func TestMongoInput(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		r.NoError(db.C("test").Insert(bson.M{"_id": i}))
 	}
+	r.NoError(db.C("test").Insert(bson.M{"_id": 375455482866952192}))
+	r.NoError(db.C("test").Insert(bson.M{"_id": 409587622938192896}))
 
 	c := db.C("test")
 	query := map[string]interface{}{
 		"_id": map[string]interface{}{
 			"$gte": 0,
-			"$lte": 99,
+			"$lte": 409587622938192896,
 		},
 	}
 	iter := c.Find(query).
 		Sort("_id").
-		Limit(100).
+		Limit(102).
 		Hint("_id").
 		Iter()
 
-	results := make([]map[string]interface{}, 101)
+	results := make([]map[string]interface{}, 103)
 	for i := range results {
 		results[i] = make(map[string]interface{})
 	}
@@ -118,11 +120,11 @@ func TestMongoInput(t *testing.T) {
 
 	r.NoError(iter.Err())
 
-	r.Equal(100, count)
+	r.Equal(102, count)
 
 	r.NoError(positionCache.Start())
 	r.NoError(mongoInput.Start(em, router, positionCache))
 
 	mongoInput.Wait()
-	r.Equal(100, em.count)
+	r.Equal(102, em.count)
 }

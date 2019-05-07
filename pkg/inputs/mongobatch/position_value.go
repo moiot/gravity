@@ -119,7 +119,7 @@ func (idValue *IDValue) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-type chunk struct {
+type Chunk struct {
 	Database   string   `json:"database" bson:"database"`
 	Collection string   `json:"collection" bson:"collection"`
 	Seq        int      `json:"seq" bson:"seq"`
@@ -127,16 +127,16 @@ type chunk struct {
 	Min        *IDValue `json:"min,omitempty" bson:"min,omitempty"`
 	Max        *IDValue `json:"max,omitempty" bson:"max,omitempty"`
 	Current    *IDValue `json:"current,omitempty" bson:"current,omitempty"`
-	Scanned    int      `json:"scanned" bson:"scanned"`
+	Scanned    int64    `json:"scanned" bson:"scanned"`
 }
 
-func (c *chunk) key() string {
+func (c *Chunk) key() string {
 	return fmt.Sprintf("%s-%s-%d", c.Database, c.Collection, c.Seq)
 }
 
 type PositionValue struct {
 	Start  bson.MongoTimestamp `bson:"start" json:"start"`
-	Chunks []chunk             `bson:"chunks"  json:"chunks"`
+	Chunks []Chunk             `bson:"chunks"  json:"chunks"`
 }
 
 func Encode(v interface{}) (string, error) {
@@ -214,9 +214,9 @@ func calculateChunks(
 	session *mgo.Session,
 	collections map[string][]string,
 	chunkThreshold int,
-	chunkCnt int) ([]chunk, error) {
+	chunkCnt int) ([]Chunk, error) {
 
-	var ret []chunk
+	var ret []Chunk
 	for db, colls := range collections {
 		for _, coll := range colls {
 			count := mongo.Count(session, db, coll)
@@ -234,11 +234,11 @@ func calculateChunks(
 				sampleCnt := int(math.Min(maxSampleSize, float64(count)*0.05))
 				buckets, err := mongo.BucketAuto(session, db, coll, sampleCnt, chunkCnt)
 				if err != nil {
-					return []chunk{}, errors.Trace(err)
+					return []Chunk{}, errors.Trace(err)
 				}
 				for i, mm := range buckets {
 					if i == 0 {
-						ret = append(ret, chunk{
+						ret = append(ret, Chunk{
 							Database:   db,
 							Collection: coll,
 							Min:        nil,
@@ -247,7 +247,7 @@ func calculateChunks(
 						})
 						seq++
 					}
-					ret = append(ret, chunk{
+					ret = append(ret, Chunk{
 						Database:   db,
 						Collection: coll,
 						Min:        &IDValue{Value: mm.Min},
@@ -256,7 +256,7 @@ func calculateChunks(
 					})
 					seq++
 				}
-				ret = append(ret, chunk{
+				ret = append(ret, Chunk{
 					Database:   db,
 					Collection: coll,
 					Min:        ret[len(ret)-1].Max,
@@ -268,7 +268,7 @@ func calculateChunks(
 				if err != nil {
 					return ret, errors.Trace(err)
 				}
-				ret = append(ret, chunk{
+				ret = append(ret, Chunk{
 					Database:   db,
 					Collection: coll,
 					Min:        &IDValue{Value: mm.Min},
