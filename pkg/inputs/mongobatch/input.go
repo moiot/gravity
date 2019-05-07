@@ -253,10 +253,6 @@ func (plugin *mongoBatchInput) runWorker(ch chan Chunk) {
 				task.Current = task.Min
 			}
 
-			batchResult := make([]map[string]interface{}, plugin.cfg.BatchSize+1)
-			for i := range batchResult {
-				batchResult[i] = make(map[string]interface{})
-			}
 			first := true
 			collection := plugin.session.DB(task.Database).C(task.Collection)
 
@@ -280,24 +276,16 @@ func (plugin *mongoBatchInput) runWorker(ch chan Chunk) {
 
 				first = false
 				idQuery := map[string]interface{}{"_id": idCond}
-				iter := collection.Find(idQuery).
+				q := collection.Find(idQuery).
 					Sort("_id").
 					Limit(plugin.cfg.BatchSize).
-					Hint("_id").
-					Iter()
+					Hint("_id")
 
-				resultCount := 0
-				for iter.Next(batchResult[resultCount]) {
-					resultCount++
+				var batchResult []map[string]interface{}
+				if err := q.All(&batchResult); err != nil {
+					log.Fatalf("failed to get result: %v", err.Error())
 				}
-
-				if err := iter.Err(); err != nil {
-					log.Fatalf("[mongoBatchInput] error iter: %v", err.Error())
-				}
-
-				if err := iter.Close(); err != nil {
-					log.Fatalf("[mongoBatchInput] close error: %v", err.Error())
-				}
+				resultCount := len(batchResult)
 
 				log.Infof("[mongoBatchInput] %d records returned from query %v limit %v",
 					resultCount, idCond, plugin.cfg.BatchSize)

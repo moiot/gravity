@@ -17,6 +17,7 @@
 package mongobatch
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/moiot/gravity/pkg/core"
@@ -90,9 +91,9 @@ func TestMongoInput(t *testing.T) {
 	db.DropDatabase()
 
 	for i := 0; i < 100; i++ {
-		r.NoError(db.C("test").Insert(bson.M{"_id": i}))
+		r.NoError(db.C("test").Insert(bson.M{"_id": rand.Int63n(409587622938192896)}))
 	}
-	r.NoError(db.C("test").Insert(bson.M{"_id": 375455482866952192}))
+
 	r.NoError(db.C("test").Insert(bson.M{"_id": 409587622938192896}))
 
 	c := db.C("test")
@@ -120,11 +121,11 @@ func TestMongoInput(t *testing.T) {
 
 	r.NoError(iter.Err())
 
-	r.Equal(102, count)
+	r.Equal(101, count)
 
 	r.NoError(positionCache.Start())
 	r.NoError(mongoInput.Start(em, router, positionCache))
 
 	mongoInput.Wait()
-	r.Equal(102, em.count)
+	r.Equal(101, em.count)
 }
