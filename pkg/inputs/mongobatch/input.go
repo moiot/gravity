@@ -350,14 +350,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 					if err := plugin.emitter.Emit(&msg); err != nil {
 						log.Fatalf("failed to emit: %v", errors.ErrorStack(err))
 					}
-					metrics.InputCounter.
-						WithLabelValues(
-							plugin.pipelineName,
-							task.Database,
-							task.Collection,
-							string(core.MsgDML),
-							string(core.Insert)).
-						Add(float64(resultCount))
+
 					select {
 					case <-plugin.closeC:
 						log.Infof("[mongoBatchInput] canceled")
@@ -365,6 +358,14 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 					default:
 					}
 				}
+				metrics.InputCounter.
+					WithLabelValues(
+						plugin.pipelineName,
+						task.Database,
+						task.Collection,
+						string(core.MsgDML),
+						string(core.Insert)).
+					Add(float64(resultCount))
 			}
 		case <-plugin.closeC:
 			return
