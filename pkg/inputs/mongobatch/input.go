@@ -32,7 +32,7 @@ type Config struct {
 	PositionRepo        *config.GenericPluginConfig `mapstructure:"position-repo" toml:"position-repo" json:"position-repo"`
 	BatchSize           int                         `mapstructure:"batch-size"  toml:"batch-size" json:"batch-size"`
 	WorkerCnt           int                         `mapstructure:"worker-cnt" toml:"worker-cnt" json:"worker-cnt"`
-	ChunkThreshold      int                         `mapstructure:"Chunk-threshold"  toml:"Chunk-threshold"  json:"Chunk-threshold"`
+	ChunkThreshold      int                         `mapstructure:"chunk-threshold"  toml:"chunk-threshold"  json:"chunk-threshold"`
 	BatchPerSecondLimit int                         `mapstructure:"batch-per-second-limit" toml:"batch-per-second-limit" json:"batch-per-second-limit"`
 
 	// IgnoreOplogError ignores error with oplog.
