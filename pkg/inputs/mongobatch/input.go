@@ -303,14 +303,6 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 				task.Current = &IDValue{Value: id}
 				task.Scanned += resultCount
 				now := time.Now()
-				metrics.InputCounter.
-					WithLabelValues(
-						plugin.pipelineName,
-						task.Database,
-						task.Collection,
-						string(core.MsgDML),
-						string(core.Insert)).
-					Add(float64(resultCount))
 				for i := 0; i < resultCount; i++ {
 					op := gtm.Op{
 						Id:        batchResult[i]["_id"],
@@ -348,7 +340,14 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 					if err := plugin.emitter.Emit(&msg); err != nil {
 						log.Fatalf("failed to emit: %v", errors.ErrorStack(err))
 					}
-
+					metrics.InputCounter.
+						WithLabelValues(
+							plugin.pipelineName,
+							task.Database,
+							task.Collection,
+							string(core.MsgDML),
+							string(core.Insert)).
+						Add(float64(resultCount))
 					select {
 					case <-plugin.closeC:
 						log.Infof("[mongoBatchInput] canceled")
