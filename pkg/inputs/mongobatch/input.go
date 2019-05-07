@@ -252,7 +252,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 			if task.Current == nil {
 				task.Current = task.Min
 			}
-			var actualCount int
+
 			first := true
 			batchResult := make([]map[string]interface{}, plugin.cfg.BatchSize)
 			for {
@@ -290,7 +290,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 					log.Fatalf("[mongoBatchInput] error query: %v", err.Error())
 				}
 
-				log.Infof("[mongoBatchInput] %d records returned from query %v", actualCount, idQuery)
+				log.Infof("[mongoBatchInput] %d records returned from query %v", resultCount, idQuery)
 
 				if resultCount == 0 {
 					log.Infof("[mongoBatchInput] done chunk.max %#v, chunk.min %#v, chunk.current: %#v",
