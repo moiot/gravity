@@ -254,6 +254,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 			}
 			var actualCount int
 			first := true
+			batchResult := make([]map[string]interface{}, plugin.cfg.BatchSize)
 			for {
 				<-plugin.throttle.C
 				c := plugin.session.DB(task.Database).C(task.Collection)
@@ -274,30 +275,48 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 				}
 
 				first = false
-				var results []map[string]interface{}
-				err := c.Find(bson.M{"_id": idQuery}).Sort("_id").Limit(plugin.cfg.BatchSize).Hint("_id").All(&results)
-				if err != nil {
-					log.Fatalf("[mongoBatchInput] error query for task. %s", errors.ErrorStack(err))
+				query := c.Find(bson.M{"_id": idQuery}).
+					Sort("_id").
+					Limit(plugin.cfg.BatchSize).
+					Hint("_id")
+
+				resultCount := 0
+				iter := query.Iter()
+				for iter.Next(&batchResult[resultCount]) {
+					resultCount++
 				}
-				actualCount = len(results)
+
+				if err := iter.Close(); err != nil {
+					log.Fatalf("[mongoBatchInput] error query: %v", err.Error())
+				}
+
 				log.Infof("[mongoBatchInput] %d records returned from query %v", actualCount, idQuery)
-				if actualCount == 0 {
-					log.Infof("[mongoBatchInput] done chunk.max %#v, chunk.min %v, chunk.current: %v",
+
+				if resultCount == 0 {
+					log.Infof("[mongoBatchInput] done chunk.max %#v, chunk.min %#v, chunk.current: %#v",
 						*task.Max, *task.Min, *task.Current)
 					plugin.finishChunk(task)
 					break
 				}
-				id := results[len(results)-1]["_id"]
+
+				id := batchResult[resultCount-1]["_id"]
 				task.Current = &IDValue{Value: id}
-				task.Scanned += len(results)
+				task.Scanned += resultCount
 				now := time.Now()
-				metrics.InputCounter.WithLabelValues(plugin.pipelineName, task.Database, task.Collection, string(core.MsgDML), string(core.Insert)).Add(float64(len(results)))
-				for _, result := range results {
+				metrics.InputCounter.
+					WithLabelValues(
+						plugin.pipelineName,
+						task.Database,
+						task.Collection,
+						string(core.MsgDML),
+						string(core.Insert)).
+					Add(float64(resultCount))
+				for i := 0; i < resultCount; i++ {
 					op := gtm.Op{
-						Id:        result["_id"],
+						Id:        batchResult[i]["_id"],
 						Operation: "i",
 						Namespace: fmt.Sprintf("%s.%s", task.Database, task.Collection),
-						Data:      result,
+						Data:      batchResult[i],
 						Row:       nil,
 						Timestamp: bson.MongoTimestamp(now.Unix() << 32),
 						Source:    gtm.DirectQuerySource,
@@ -313,7 +332,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 						Table:    task.Collection,
 						DmlMsg: &core.DMLMsg{
 							Operation: core.Insert,
-							Data:      result,
+							Data:      batchResult[i],
 							Old:       make(map[string]interface{}),
 							Pks: map[string]interface{}{
 								"_id": op.Id,
