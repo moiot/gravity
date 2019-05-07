@@ -12,6 +12,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const ProcessDelayWarningThreshold = 30
+
 type staticSlidingWindow struct {
 	cap int
 
@@ -116,7 +118,7 @@ func (w *staticSlidingWindow) removeItemFromSequence() (WindowItem, bool) {
 
 		case <-ticker.C:
 			delay := w.reportWatermarkDelay()
-			if delay > 30 {
+			if delay > ProcessDelayWarningThreshold {
 				log.Warnf("[sliding_window] no item add after %f seconds.", delay)
 			}
 		}
@@ -183,7 +185,7 @@ func (w *staticSlidingWindow) start() {
 
 		case <-ticker.C:
 			delay := w.reportWatermarkDelay()
-			if delay > 30 {
+			if delay > ProcessDelayWarningThreshold {
 				log.Warnf("[sliding_window] item not ack after %f seconds. %s", delay, w.nextItemToCommit)
 			}
 		}
