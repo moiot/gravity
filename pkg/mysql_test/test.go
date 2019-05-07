@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/moiot/gravity/pkg/config"
+
 	"github.com/moiot/gravity/pkg/consts"
 
 	"github.com/juju/errors"
@@ -160,8 +162,8 @@ func createDBStatement(tesetDBName string) string {
 	return fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", tesetDBName)
 }
 
-func dbConfig(configStr string) *utils.DBConfig {
-	dbConfig := utils.DBConfig{}
+func dbConfig(configStr string) *config.DBConfig {
+	dbConfig := config.DBConfig{}
 	_, err := toml.Decode(configStr, &dbConfig)
 	if err != nil {
 		log.Fatalf("failed to decode srcDBConfigStr")
@@ -173,8 +175,8 @@ func dbConfig(configStr string) *utils.DBConfig {
 
 }
 
-func SourceDBConfig() *utils.DBConfig {
-	cfg := utils.DBConfig{}
+func SourceDBConfig() *config.DBConfig {
+	cfg := config.DBConfig{}
 
 	sourceDBHost, ok := os.LookupEnv("SOURCE_DB_HOST")
 	if !ok {
@@ -210,8 +212,8 @@ func SourceDBConfig() *utils.DBConfig {
 	return &cfg
 }
 
-func TargetDBConfig() *utils.DBConfig {
-	cfg := utils.DBConfig{}
+func TargetDBConfig() *config.DBConfig {
+	cfg := config.DBConfig{}
 
 	targetDBHost, ok := os.LookupEnv("TARGET_DB_HOST")
 	if !ok {

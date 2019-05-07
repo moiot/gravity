@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moiot/gravity/pkg/config"
+
 	"github.com/mitchellh/hashstructure"
 
 	"github.com/pingcap/parser/ast"
@@ -35,7 +37,7 @@ const (
 
 type inputContext struct {
 	op       binlogOp
-	position utils.MySQLBinlogPosition
+	position config.MySQLBinlogPosition
 }
 
 func NewInsertMsgs(
@@ -329,7 +331,7 @@ func NewDDLMsg(
 	ddlSQL string,
 	ts int64,
 	received time.Time,
-	position utils.MySQLBinlogPosition) *core.Msg {
+	position config.MySQLBinlogPosition) *core.Msg {
 
 	return &core.Msg{
 		Phase: core.Phase{
@@ -361,7 +363,7 @@ func NewBarrierMsg(callback core.MsgCallbackFunc) *core.Msg {
 	}
 }
 
-func NewXIDMsg(ts int64, received time.Time, callback core.MsgCallbackFunc, position utils.MySQLBinlogPosition) *core.Msg {
+func NewXIDMsg(ts int64, received time.Time, callback core.MsgCallbackFunc, position config.MySQLBinlogPosition) *core.Msg {
 	return &core.Msg{
 		Phase: core.Phase{
 			EnterInput: received,

@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo_test"
 	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/utils"
@@ -80,7 +79,7 @@ func TestMongoInput(t *testing.T) {
 
 	em := &fakeEmitter{}
 	router := &fakeRouter{db: "test", col: "test"}
-	session, err := mongo.CreateMongoSession(&source)
+	session, err := utils.CreateMongoSession(&source)
 	session.DB("_gravity").C("gravity_positions").Remove(bson.M{"name": t.Name()})
 
 	positionCache, err := mongoInput.NewPositionCache()

@@ -33,8 +33,8 @@ type TableConfig struct {
 }
 
 type PluginConfig struct {
-	Source      *utils.DBConfig `mapstructure:"source" toml:"source" json:"source"` // keep same with mysql binlog config to make most cases simple
-	SourceSlave *utils.DBConfig `mapstructure:"source-slave" toml:"source-slave" json:"source-slave"`
+	Source      *config.DBConfig `mapstructure:"source" toml:"source" json:"source"` // keep same with mysql binlog config to make most cases simple
+	SourceSlave *config.DBConfig `mapstructure:"source-slave" toml:"source-slave" json:"source-slave"`
 
 	SourceProbeCfg *helper.SourceProbeCfg `mapstructure:"source-probe-config"json:"source-probe-config"`
 
@@ -82,7 +82,7 @@ type mysqlBatchInputPlugin struct {
 	sourceDB *sql.DB
 	scanDB   *sql.DB
 
-	probeDBConfig      *utils.DBConfig
+	probeDBConfig      *config.DBConfig
 	probeSQLAnnotation string
 
 	sourceSchemaStore schema_store.SchemaStore

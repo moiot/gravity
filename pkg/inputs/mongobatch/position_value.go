@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/moiot/gravity/pkg/utils"
+
 	"github.com/moiot/gravity/pkg/position_repos"
 
 	jsoniter "github.com/json-iterator/go"
@@ -17,7 +19,6 @@ import (
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
 	"github.com/moiot/gravity/pkg/position_cache"
 )
@@ -171,7 +172,7 @@ func SetupInitialPosition(
 		}
 
 		collections := make(map[string][]string)
-		for db, colls := range mongo.ListAllUserCollections(session) {
+		for db, colls := range utils.ListAllUserCollections(session) {
 			for _, coll := range colls {
 				msg := core.Msg{
 					Database: db,
@@ -219,7 +220,7 @@ func calculateChunks(
 	var ret []Chunk
 	for db, colls := range collections {
 		for _, coll := range colls {
-			count := mongo.Count(session, db, coll)
+			count := utils.Count(session, db, coll)
 			if count == 0 {
 				continue
 			} else if count > int64(chunkThreshold) {
@@ -232,7 +233,7 @@ func calculateChunks(
 				//
 				// Reference: https://docs.mongodb.com/manual/reference/operator/aggregation/sample/#pipe._S_sample
 				sampleCnt := int(math.Min(maxSampleSize, float64(count)*0.05))
-				buckets, err := mongo.BucketAuto(session, db, coll, sampleCnt, chunkCnt)
+				buckets, err := utils.BucketAuto(session, db, coll, sampleCnt, chunkCnt)
 				if err != nil {
 					return []Chunk{}, errors.Trace(err)
 				}
@@ -264,7 +265,7 @@ func calculateChunks(
 					Seq:        seq,
 				})
 			} else {
-				mm, err := mongo.GetMinMax(session, db, coll)
+				mm, err := utils.GetMinMax(session, db, coll)
 				if err != nil {
 					return ret, errors.Trace(err)
 				}

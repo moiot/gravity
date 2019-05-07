@@ -1,9 +1,14 @@
 package mongobatch
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/moiot/gravity/pkg/position_repos"
 
@@ -11,13 +16,11 @@ import (
 	"github.com/mitchellh/mapstructure"
 	log "github.com/sirupsen/logrus"
 	mgo "gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/inputs/mongostream"
 	"github.com/moiot/gravity/pkg/metrics"
-	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
 	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/registry"
@@ -79,6 +82,8 @@ type mongoBatchInput struct {
 	router  core.Router
 	session *mgo.Session
 
+	client *mongo.Client
+
 	wg     sync.WaitGroup
 	closeC chan struct{}
 
@@ -120,7 +125,14 @@ func (plugin *mongoBatchInput) Configure(pipelineName string, data map[string]in
 }
 
 func (plugin *mongoBatchInput) Start(emitter core.Emitter, router core.Router, positionCache position_cache.PositionCacheInterface) error {
-	session, err := mongo.CreateMongoSession(plugin.cfg.Source)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(plugin.cfg.Source.URI()))
+	if err != nil {
+		return errors.Trace(err)
+	}
+	plugin.client = client
+
+	session, err := utils.CreateMongoSession(plugin.cfg.Source)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -175,6 +187,7 @@ func (plugin *mongoBatchInput) Close() {
 	close(plugin.closeC)
 	plugin.wg.Wait()
 	plugin.session.Close()
+	plugin.client.Disconnect(context.Background())
 	plugin.throttle.Stop()
 	log.Infof("[mongoBatchInput] closed")
 }
@@ -254,17 +267,20 @@ func (plugin *mongoBatchInput) runWorker(ch chan Chunk) {
 			}
 
 			first := true
-			collection := plugin.session.DB(task.Database).C(task.Collection)
-
+			collection := plugin.client.Database(task.Database).Collection(task.Collection)
 			for {
 				<-plugin.throttle.C
+
+				var batchResult []map[string]interface{}
 				idCond := bson.M{}
+
 				if task.Current != nil {
 					if first {
 						idCond["$gte"] = task.Current.Value
 					} else {
 						idCond["$gt"] = task.Current.Value
 					}
+					first = false
 				}
 				if task.Max != nil {
 					idCond["$lte"] = task.Max.Value
@@ -274,20 +290,31 @@ func (plugin *mongoBatchInput) runWorker(ch chan Chunk) {
 					log.Fatalf("id query empty")
 				}
 
-				first = false
-				idQuery := map[string]interface{}{"_id": idCond}
-				q := collection.Find(idQuery).
-					Sort("_id").
-					Limit(plugin.cfg.BatchSize).
-					Hint("_id")
+				findOptions := options.Find()
+				findOptions.SetLimit(int64(plugin.cfg.BatchSize))
+				findOptions.SetSort(map[string]interface{}{"_id": 1})
 
-				var batchResult []map[string]interface{}
-				if err := q.All(&batchResult); err != nil {
-					log.Fatalf("failed to get result: %v", err.Error())
+				cursor, err := collection.Find(context.Background(), bson.D{{"_id", idCond}}, findOptions)
+				if err != nil {
+					log.Fatalf("failed to get cursor: %v", err.Error())
 				}
+
+				for cursor.Next(context.Background()) {
+					result := make(map[string]interface{})
+					if err := cursor.Decode(&result); err != nil {
+						log.Fatalf("cursor decode error: %v", err.Error())
+					}
+
+					batchResult = append(batchResult, result)
+				}
+				if err := cursor.Err(); err != nil {
+					log.Fatalf("cursor error: %v", err.Error())
+				}
+				cursor.Close(context.Background())
+
 				resultCount := len(batchResult)
 
-				log.Infof("[mongoBatchInput] %d records returned from query %v limit %v",
+				log.Infof("[mongoBatchInput] %d records returned from query: %v, limit %v",
 					resultCount, idCond, plugin.cfg.BatchSize)
 
 				if resultCount == 0 {
@@ -308,8 +335,8 @@ func (plugin *mongoBatchInput) runWorker(ch chan Chunk) {
 						Namespace: fmt.Sprintf("%s.%s", task.Database, task.Collection),
 						Data:      batchResult[i],
 						Row:       nil,
-						Timestamp: bson.MongoTimestamp(now.Unix() << 32),
-						Source:    gtm.DirectQuerySource,
+						// Timestamp: bson.MongoTimestamp(now.Unix() << 32),
+						Source: gtm.DirectQuerySource,
 					}
 
 					msg := core.Msg{

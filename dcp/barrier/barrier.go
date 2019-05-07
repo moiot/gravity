@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/moiot/gravity/pkg/config"
+
 	"github.com/moiot/gravity/pkg/utils"
 	log "github.com/sirupsen/logrus"
 )
@@ -17,7 +19,7 @@ const (
 )
 
 type Config struct {
-	Db            utils.DBConfig
+	Db            config.DBConfig
 	TickerSeconds int
 	TestDB        *sql.DB
 }

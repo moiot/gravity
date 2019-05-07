@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/moiot/gravity/pkg/utils"
+	"github.com/moiot/gravity/pkg/config"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,7 +15,7 @@ func TestSerializeBinlogPositions(t *testing.T) {
 	gtidBig := "23456:1-20"
 
 	position := BinlogPositionsValue{
-		CurrentPosition: &utils.MySQLBinlogPosition{BinlogGTID: fmt.Sprintf("%s,%s", gtidBig, gtidSmall)},
+		CurrentPosition: &config.MySQLBinlogPosition{BinlogGTID: fmt.Sprintf("%s,%s", gtidBig, gtidSmall)},
 	}
 
 	v, err := SerializeBinlogPositionValue(position)

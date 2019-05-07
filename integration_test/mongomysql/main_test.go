@@ -4,11 +4,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/moiot/gravity/pkg/utils"
+
 	mgo "gopkg.in/mgo.v2"
 
 	"github.com/moiot/gravity/pkg/consts"
 
-	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo_test"
 )
 
@@ -17,7 +18,7 @@ var db *mgo.Database
 
 func TestMain(m *testing.M) {
 	mongoCfg := mongo_test.TestConfig()
-	s, err := mongo.CreateMongoSession(&mongoCfg)
+	s, err := utils.CreateMongoSession(&mongoCfg)
 	if err != nil {
 		panic(err)
 	}

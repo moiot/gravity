@@ -3,6 +3,8 @@ package mongostream
 import (
 	"context"
 
+	"github.com/moiot/gravity/pkg/utils"
+
 	"sync"
 
 	"github.com/moiot/gravity/pkg/position_repos"
@@ -14,7 +16,6 @@ import (
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/registry"
 )
@@ -106,7 +107,7 @@ func (plugin *mongoStreamInputPlugin) Start(emitter core.Emitter, router core.Ro
 	plugin.positionCache = positionCache
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
 
-	session, err := mongo.CreateMongoSession(plugin.cfg.Source)
+	session, err := utils.CreateMongoSession(plugin.cfg.Source)
 	if err != nil {
 		return errors.Trace(err)
 	}

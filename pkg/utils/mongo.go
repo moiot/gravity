@@ -1,7 +1,22 @@
-package mongo
+/*
+ *
+ * // Copyright 2019 , Beijing Mobike Technology Co., Ltd.
+ * //
+ * // Licensed under the Apache License, Version 2.0 (the "License");
+ * // you may not use this file except in compliance with the License.
+ * // You may obtain a copy of the License at
+ * //
+ * //     http://www.apache.org/licenses/LICENSE-2.0
+ * //
+ * // Unless required by applicable law or agreed to in writing, software
+ * // distributed under the License is distributed on an "AS IS" BASIS,
+ * // See the License for the specific language governing permissions and
+ * // limitations under the License.
+ */
+
+package utils
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/juju/errors"
@@ -15,39 +30,7 @@ import (
 )
 
 func CreateMongoSession(cfg *config.MongoConnConfig) (*mgo.Session, error) {
-	username := ""
-	if cfg.Username != "" {
-		username = cfg.Username
-	}
-
-	password := ""
-	if cfg.Password != "" {
-		password = cfg.Password
-	}
-
-	host := "localhost"
-	if cfg.Host != "" {
-		host = cfg.Host
-	}
-
-	port := 27017
-	if cfg.Port != 0 {
-		port = cfg.Port
-	}
-
-	db := cfg.Database
-
-	var url string
-	if username == "" || password == "" {
-		url = fmt.Sprintf("mongodb://%s:%d/%s", host, port, db)
-	} else {
-		url = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s", username, password, host, port, db)
-	}
-
-	//If not specified, the connection will timeout, probably because the replica set has not been initialized yet.
-	if cfg.Direct {
-		url += "?connect=direct"
-	}
+	url := cfg.URI()
 
 	session, err := mgo.Dial(url)
 	if err != nil {

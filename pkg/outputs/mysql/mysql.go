@@ -29,7 +29,7 @@ const (
 )
 
 type MySQLPluginConfig struct {
-	DBConfig     *utils.DBConfig             `mapstructure:"target"  json:"target"`
+	DBConfig     *config.DBConfig            `mapstructure:"target"  json:"target"`
 	Routes       []map[string]interface{}    `mapstructure:"routes"  json:"routes"`
 	EnableDDL    bool                        `mapstructure:"enable-ddl" json:"enable-ddl"`
 	EngineConfig *config.GenericPluginConfig `mapstructure:"sql-engine-config"  json:"sql-engine-config"`

@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/moiot/gravity/pkg/config"
+
 	_ "github.com/go-sql-driver/mysql"
 
 	"sort"
@@ -31,17 +33,17 @@ import (
 )
 
 type Config struct {
-	Source      *utils.DBConfig `toml:"source"`
-	Target      *utils.DBConfig `toml:"target"`
-	SourceTable string          `toml:"source-table"`
-	TargetTable string          `toml:"target-table"`
-	Shading     bool            `toml:"shading"`
-	ColName     string          `toml:"col-name"`
-	ColType     string          `toml:"col-type"`
-	MinString   string          `toml:"min-string"`
-	MaxString   string          `toml:"max-string"`
-	ValPrefix   string          `toml:"prefix"`
-	Parallel    int             `toml:"parallel"`
+	Source      *config.DBConfig `toml:"source"`
+	Target      *config.DBConfig `toml:"target"`
+	SourceTable string           `toml:"source-table"`
+	TargetTable string           `toml:"target-table"`
+	Shading     bool             `toml:"shading"`
+	ColName     string           `toml:"col-name"`
+	ColType     string           `toml:"col-type"`
+	MinString   string           `toml:"min-string"`
+	MaxString   string           `toml:"max-string"`
+	ValPrefix   string           `toml:"prefix"`
+	Parallel    int              `toml:"parallel"`
 }
 
 func main() {

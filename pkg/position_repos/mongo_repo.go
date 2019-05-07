@@ -24,7 +24,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/mitchellh/mapstructure"
-	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/utils"
 
@@ -98,7 +97,7 @@ func (repo *mongoPositionRepo) Configure(pipelineName string, data map[string]in
 }
 
 func (repo *mongoPositionRepo) Init() error {
-	session, err := mongo.CreateMongoSession(&repo.mongoConfig)
+	session, err := utils.CreateMongoSession(&repo.mongoConfig)
 	if err != nil {
 		return errors.Trace(err)
 	}
