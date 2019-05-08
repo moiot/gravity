@@ -19,6 +19,7 @@ package encoding
 import (
 	"github.com/gogo/protobuf/types"
 	"github.com/juju/errors"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"reflect"
 	"time"
 )
@@ -77,6 +78,14 @@ func InterfaceValueToPB(v interface{}) (*types.Any, error) {
 			return nil, errors.Trace(err)
 		}
 		return types.MarshalAny(t)
+	case primitive.DateTime:
+		// bson primitive DateTime
+		t := time.Unix(int64(v)/1000, int64(v)%1000*1000000)
+		pbt, err := types.TimestampProto(t)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return types.MarshalAny(pbt)
 	case float32:
 		return types.MarshalAny(&types.FloatValue{Value: v})
 	case float64:
