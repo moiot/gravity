@@ -641,51 +641,90 @@ func TestGreaterThanMax(t *testing.T) {
 
 	dbName := utils.TestCaseMd5Name(t)
 	db := mysql_test.MustSetupSourceDB(dbName)
+	fullTableName := utils.TableIdentity(dbName, "test")
+
+	createTableDDL := fmt.Sprintf(`
+CREATE TABLE %s (
+	a int,
+	b int,
+    c int,
+    PRIMARY KEY (a, b, c)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+`, fullTableName)
+
+	_, err := db.Exec(createTableDDL)
+	r.NoError(err)
 
 	tcs := []struct {
 		scanValues []interface{}
 		maxValues  []interface{}
+		insertMax  bool
 		expected   bool
 	}{
 		{
 			[]interface{}{1, 2, 3},
 			[]interface{}{1, 2, 4},
+			true,
 			false,
 		},
 		{
 			[]interface{}{1, 2, 3},
 			[]interface{}{1, 3, 1},
+			true,
 			false,
 		},
 		{
 			[]interface{}{1, 2, 3},
 			[]interface{}{2, 1, 1},
+			true,
 			false,
 		},
 		{
 			[]interface{}{1, 2, 3},
 			[]interface{}{1, 2, 3},
+			false,
 			false,
 		},
 		{
 			[]interface{}{1, 2, 4},
 			[]interface{}{1, 2, 3},
 			true,
+			true,
 		},
 		{
 			[]interface{}{1, 3, 1},
 			[]interface{}{1, 2, 3},
+			true,
 			true,
 		},
 		{
 			[]interface{}{2, 1, 1},
 			[]interface{}{1, 2, 3},
 			true,
+			true,
 		},
 	}
 
 	for _, c := range tcs {
-		b, err := GreaterThanMax(db, c.scanValues, c.maxValues)
+		_, err := db.Exec(fmt.Sprintf("TRUNCATE TABLE %s", fullTableName))
+		r.NoError(err)
+		_, err = db.Exec(
+			fmt.Sprintf("INSERT INTO %s (a, b, c) VALUES (?, ?, ?)", fullTableName),
+			c.scanValues[0],
+			c.scanValues[1],
+			c.scanValues[2])
+		r.NoError(err)
+
+		if c.insertMax {
+			_, err = db.Exec(
+				fmt.Sprintf("INSERT INTO %s (a, b, c) VALUES (?, ?, ?)", fullTableName),
+				c.maxValues[0],
+				c.maxValues[1],
+				c.maxValues[2])
+			r.NoError(err)
+		}
+
+		b, err := GreaterThanMax(db, fullTableName, []string{"a", "b", "c"}, c.scanValues, c.maxValues)
 		r.NoError(err)
 		r.Equalf(c.expected, b, fmt.Sprintf("scanValue: %+v, maxValue: %+v", c.scanValues, c.maxValues))
 	}
@@ -792,6 +831,76 @@ func TestNextScanElementForChunk(t *testing.T) {
 	}
 }
 
+func TestNextBatchStartPointWithUTF8Char(t *testing.T) {
+	r := require.New(t)
+	dbName := utils.TestCaseMd5Name(t)
+	db := mysql_test.MustSetupSourceDB(dbName)
+
+	tableDDL := fmt.Sprintf(`
+CREATE TABLE %s.%s (
+	id varchar(35) COLLATE utf8_bin NOT NULL,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+`, dbName, "test")
+	_, err := db.Exec(tableDDL)
+	r.NoError(err)
+
+	for i := 1; i < 10; i++ {
+		_, err := db.Exec(fmt.Sprintf("insert into %s.%s (id) values (?)", dbName, "test"), fmt.Sprintf("A00%d", i))
+		r.NoError(err)
+	}
+
+	// _, err = db.Exec(fmt.Sprintf("insert into %s.%s (id) values (?)", dbName, "test"), "A006")
+	// r.NoError(err)
+
+	_, err = db.Exec(fmt.Sprintf("insert into %s.%s (id) values (?)", dbName, "test"), "À001")
+	r.NoError(err)
+
+	fullTableName := utils.TableIdentity(dbName, "test")
+	columnTypes, err := GetTableColumnTypes(db, dbName, "test")
+	r.NoError(err)
+
+	tcs := []struct {
+		currentMinValues []interface{}
+		maxValues        []interface{}
+		retNextMinValues []interface{}
+		retContinue      bool
+	}{
+		{
+			[]interface{}{"A007"},
+			[]interface{}{"A009"},
+			[]interface{}{"A008"},
+			true,
+		},
+		{
+			[]interface{}{"A007"},
+			[]interface{}{"À001"},
+			[]interface{}{"A008"},
+			true,
+		},
+	}
+
+	for _, c := range tcs {
+		nextMinValues, continueNext, _, err := NextBatchStartPoint(
+			db,
+			fullTableName,
+			[]string{"id"},
+			columnTypes,
+			[]int{0},
+			c.currentMinValues,
+			c.maxValues)
+		r.NoError(err)
+		r.Equal(c.retContinue, continueNext)
+
+		if c.retContinue {
+			for i := range nextMinValues {
+				v := nextMinValues[i].(sql.NullString)
+				r.EqualValues(c.retNextMinValues[i], v.String)
+			}
+		}
+	}
+}
+
 func TestNextBatchStartPoint(t *testing.T) {
 	r := require.New(t)
 	dbName := utils.TestCaseMd5Name(t)
@@ -802,7 +911,8 @@ func TestNextBatchStartPoint(t *testing.T) {
 		dbName,
 		mysql_test.TestScanColumnTableCompositePrimaryInt)
 
-	columnTypes, err := GetTableColumnTypes(db, dbName, mysql_test.TestScanColumnTableCompositePrimaryInt)
+	columnTypes, err := GetTableColumnTypes(
+		db, dbName, mysql_test.TestScanColumnTableCompositePrimaryInt)
 	r.NoError(err)
 
 	tcs := []struct {
