@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 	session = s
 	mongo_test.InitReplica(session)
 
-	db = s.DB("test")
+	db = s.DB("test_connection")
 	db.DropDatabase()
 
 	ret := m.Run()
