@@ -13,8 +13,9 @@ import (
 
 func TestConfig() config.MongoConnConfig {
 	cfg := config.MongoConnConfig{
-		Host: "127.0.0.1",
-		Port: 27017,
+		Host:   "127.0.0.1",
+		Port:   27017,
+		Direct: true,
 	}
 
 	sourceHost, ok := os.LookupEnv("MONGO_HOST")
