@@ -32,12 +32,13 @@ import (
 func CreateMongoSession(cfg *config.MongoConnConfig) (*mgo.Session, error) {
 	url := cfg.URI()
 
+	log.Infof("connecting to %s", url)
+
 	session, err := mgo.Dial(url)
 	if err != nil {
 		return nil, errors.Annotatef(err, "failed to open mongo session: %s, err: %v", url, err.Error())
 	}
 
-	log.Infof("connected to %s", url)
 	return session, nil
 }
 
