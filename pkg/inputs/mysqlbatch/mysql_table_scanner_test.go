@@ -43,7 +43,7 @@ func TestFindMaxMinValueCompositePks(t *testing.T) {
 		r.NoError(err)
 	}
 
-	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestScanColumnTableCompositePrimaryOutOfOrder, []string{"email", "name"})
+	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestScanColumnTableCompositePrimaryOutOfOrder, []string{"email", "name"}, "")
 
 	maxEmail, ok := max[0].(sql.NullString)
 
@@ -84,7 +84,7 @@ func TestFindMaxMinValueInt(t *testing.T) {
 	r.NoError(mysql_test.InsertIntoTestTable(db, testDBName, mysql_test.TestTableName, map[string]interface{}{"id": 5000}))
 	r.NoError(mysql_test.InsertIntoTestTable(db, testDBName, mysql_test.TestTableName, map[string]interface{}{"id": 1410812506}))
 
-	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestTableName, []string{"id"})
+	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestTableName, []string{"id"}, "")
 
 	maxVal, ok := max[0].(int64)
 	r.True(ok)
@@ -119,7 +119,7 @@ func TestFindMaxMinValueString(t *testing.T) {
 	r.NoError(err)
 	r.EqualValues(2, count)
 
-	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestTableName, []string{"name"})
+	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestTableName, []string{"name"}, "")
 
 	maxV, ok1 := max[0].(sql.NullString)
 	r.True(ok1)
@@ -145,7 +145,7 @@ func TestFindMaxMinValueTime(t *testing.T) {
 		r.Nil(err)
 	}
 
-	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestTableName, []string{"ts"})
+	max, min := FindMaxMinValueFromDB(db, testDBName, mysql_test.TestTableName, []string{"ts"}, "")
 	maxT := max[0].(mysql.NullTime)
 	minT := min[0].(mysql.NullTime)
 	// assert.True(t, reflect.DeepEqual(mysql.NullTime{Time: startTime.Add(99 * time.Second), Valid: true}, maxT))
@@ -428,7 +428,7 @@ func TestTableScanner_Start(t *testing.T) {
 					r.Equal(0, len(tableDefs))
 				} else {
 					cnt := int64(100)
-					_, err := InitTablePosition(db, positionCache, tableDefs[i], c.scanColumns, &cnt)
+					_, err := InitTablePosition(db, positionCache, tableDefs[i], c.scanColumns, tableConfigs[i], &cnt)
 					r.NoError(err)
 				}
 			}
@@ -554,7 +554,7 @@ func TestGenerateNextScanQueryAndArgs(t *testing.T) {
 			c.scanColumns,
 			c.minArgs,
 			c.pivotIndex,
-			100)
+			100, "")
 		r.Equal(c.retSQL, sql)
 		for i := 0; i <= c.pivotIndex; i++ {
 			r.EqualValues(c.minArgs[i], args[i])
@@ -615,7 +615,7 @@ func TestGenerateScanQueryAndArgs(t *testing.T) {
 			c.scanColumns,
 			c.minArgs,
 			10,
-			c.pivotIndex)
+			c.pivotIndex, "")
 		r.Equal(c.retSQL, sql)
 		// excluding batch
 		r.Equal(c.pivotIndex, len(args)-1-1)
@@ -781,7 +781,7 @@ func TestNextScanElementForChunk(t *testing.T) {
 			columnTypes,
 			[]string{"a", "b", "c"},
 			c.currentScanValues,
-			c.pivotIndex)
+			c.pivotIndex, "")
 		r.NoError(err)
 		r.Equalf(c.exists, exists, "scanValues: %+v, nextRowValues:%+v", c.currentScanValues, c.nextRowValues)
 		if exists {
@@ -881,6 +881,7 @@ func TestNextBatchStartPoint(t *testing.T) {
 			[]int{0, 1, 2},
 			c.currentMinValues,
 			c.maxValues,
+			"",
 		)
 		r.NoError(err)
 		r.Equalf(c.retContinue, continueNext, "currentMinValues: %+v, maxValues: %+v", c.currentMinValues, c.maxValues)

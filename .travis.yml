@@ -16,7 +16,7 @@ jobs:
         - make build-linux
         - docker build -t moiot/gravity:${TRAVIS_COMMIT::8} -f Dockerfile.gravity .
     - name: "test"
-      script: travis_wait make test
+      script: make test
       after_script: make test-down
     - stage: "publish"
       if: tag IS present

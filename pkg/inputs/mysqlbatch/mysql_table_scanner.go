@@ -112,7 +112,7 @@ func (tableScanner *TableScanner) Wait() {
 	tableScanner.wg.Wait()
 }
 
-func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColumns []string) ([]interface{}, []interface{}) {
+func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColumns []string, condition string) ([]interface{}, []interface{}) {
 	retMax := make([]interface{}, len(scanColumns))
 	retMin := make([]interface{}, len(scanColumns))
 
@@ -130,7 +130,12 @@ func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColu
 	descOrderString = strings.Join(descOrderStrings, ",")
 	ascOrderString = strings.Join(ascOderStrings, ",")
 
-	maxStatement := fmt.Sprintf("SELECT %s FROM `%s`.`%s` ORDER BY %s LIMIT 1", columnsString, dbName, tableName, descOrderString)
+	where := ""
+	if condition != "" {
+		where = "WHERE " + condition
+	}
+
+	maxStatement := fmt.Sprintf("SELECT %s FROM `%s`.`%s` %s ORDER BY %s LIMIT 1", columnsString, dbName, tableName, where, descOrderString)
 	log.Infof("[FindMaxMinValueFromDB] statement: %s", maxStatement)
 
 	maxRowPtrs, err := utils.QueryGeneralRowsDataWithSQL(db, maxStatement)
@@ -142,7 +147,7 @@ func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColu
 		retMax[i] = reflect.ValueOf(maxRowPtrs[0][i]).Elem().Interface()
 	}
 
-	minStatement := fmt.Sprintf("SELECT %s FROM `%s`.`%s` ORDER BY %s LIMIT 1", columnsString, dbName, tableName, ascOrderString)
+	minStatement := fmt.Sprintf("SELECT %s FROM `%s`.`%s` %s ORDER BY %s LIMIT 1", columnsString, dbName, tableName, where, ascOrderString)
 	log.Infof("[FindMaxMinValueFromDB] statement: %s", minStatement)
 	minRowPtrs, err := utils.QueryGeneralRowsDataWithSQL(db, minStatement)
 	if err != nil {
@@ -227,7 +232,8 @@ func (tableScanner *TableScanner) LoopInBatch(
 			scanColumns,
 			currentMinValues,
 			batch,
-			pivotIndex)
+			pivotIndex,
+			tableConfig.Condition)
 
 		<-tableScanner.throttle.C
 
@@ -296,7 +302,8 @@ func (tableScanner *TableScanner) LoopInBatch(
 			columnTypes,
 			scanIndexes,
 			currentMinValues,
-			maxValues)
+			maxValues,
+			tableConfig.Condition)
 		if err != nil {
 			log.Fatalf("[LoopInBatch] failed to find next start point: %v", errors.ErrorStack(err))
 		}
@@ -357,6 +364,9 @@ func (tableScanner *TableScanner) FindAll(db *sql.DB, tableDef *schema_store.Tab
 	}
 
 	statement := fmt.Sprintf("SELECT * FROM `%s`.`%s`", tableDef.Schema, tableDef.Name)
+	if tableConfig.Condition != "" {
+		statement = fmt.Sprintf("%s WHERE %s", statement, tableConfig.Condition)
+	}
 
 	queryStartTime := time.Now()
 	allData, err := utils.QueryGeneralRowsDataWithSQL(db, statement)
@@ -538,12 +548,17 @@ func GenerateNextScanQueryAndArgs(
 	scanColumns []string,
 	currentMinValues []interface{},
 	pivotIndex int,
-	batch int) (string, []interface{}) {
+	batch int,
+	condition string) (string, []interface{}) {
 
 	prefix := fmt.Sprintf("SELECT * FROM %s WHERE ", fullTableName)
 
 	var where []string
 	var args []interface{}
+
+	if condition != "" {
+		where = append(where, condition)
+	}
 
 	for i := 0; i <= pivotIndex-1; i++ {
 		where = append(where, fmt.Sprintf("%s = ?", scanColumns[i]))
@@ -566,12 +581,17 @@ func GenerateScanQueryAndArgs(
 	scanColumns []string,
 	currentMinValues []interface{},
 	batch int,
-	pivotIndex int) (string, []interface{}) {
+	pivotIndex int,
+	condition string) (string, []interface{}) {
 
 	prefix := fmt.Sprintf("SELECT * FROM %s WHERE ", fullTableName)
 
 	var where []string
 	var args []interface{}
+
+	if condition != "" {
+		where = append(where, condition)
+	}
 
 	for i := 0; i <= pivotIndex-1; i++ {
 		where = append(where, fmt.Sprintf("%s = ?", scanColumns[i]))
@@ -596,7 +616,8 @@ func NextBatchStartPoint(
 	columnTypes []*sql.ColumnType,
 	scanIndexes []int,
 	currentMinValues []interface{},
-	maxValues []interface{}) (nextMinValues []interface{}, continueNext bool, pivotIndex int, err error) {
+	maxValues []interface{},
+	condition string) (nextMinValues []interface{}, continueNext bool, pivotIndex int, err error) {
 
 	// 	Detect the pivotIndex
 	for i := len(scanColumns) - 1; i >= 0; i-- {
@@ -606,7 +627,8 @@ func NextBatchStartPoint(
 			columnTypes,
 			scanColumns,
 			currentMinValues,
-			i)
+			i,
+			condition)
 		if err != nil {
 			return nil, false, 0, errors.Trace(err)
 		}
@@ -630,16 +652,17 @@ func NextScanElementForChunk(
 	columnTypes []*sql.ColumnType,
 	scanColumns []string,
 	currentScanValues []interface{},
-	pivotIndex int) (nextRowValues []interface{}, exists bool, err error) {
+	pivotIndex int,
+	condition string) (nextRowValues []interface{}, exists bool, err error) {
 
 	retNextValues := make([]interface{}, len(columnTypes))
 	rowsPositionDataPtrs := newBatchDataPtrs(columnTypes, 1)
 
-	sql, args := GenerateNextScanQueryAndArgs(fullTableName, scanColumns, currentScanValues, pivotIndex, 1)
+	stmt, args := GenerateNextScanQueryAndArgs(fullTableName, scanColumns, currentScanValues, pivotIndex, 1, condition)
 
-	log.Infof("NextScanElementForChunk sql: %v, args: %+v", sql, args)
+	log.Infof("NextScanElementForChunk sql: %v, args: %+v", stmt, args)
 
-	rows, err := db.Query(sql, args...)
+	rows, err := db.Query(stmt, args...)
 	if err != nil {
 		return nil, false, errors.Trace(err)
 	}
