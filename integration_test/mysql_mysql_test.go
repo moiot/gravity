@@ -158,8 +158,9 @@ func TestMySQLBatch(t *testing.T) {
 
 	tableConfigs := []map[string]interface{}{
 		{
-			"schema": sourceDBName,
-			"table":  tables,
+			"schema":    sourceDBName,
+			"table":     tables,
+			"condition": "1=1",
 		},
 	}
 
@@ -214,6 +215,98 @@ func TestMySQLBatch(t *testing.T) {
 	server.Close()
 
 	r.NoError(generator.TestChecksum())
+}
+
+func TestMySQLConditionBatch(t *testing.T) {
+	r := require.New(t)
+
+	sourceDBName := strings.ToLower(t.Name()) + "_source"
+	targetDBName := strings.ToLower(t.Name()) + "_target"
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	generator := mysql_test.Generator{
+		SourceDB:     sourceDB,
+		SourceSchema: sourceDBName,
+		TargetDB:     targetDB,
+		TargetSchema: targetDBName,
+		GeneratorConfig: mysql_test.GeneratorConfig{
+			NrTables:    2,
+			NrSeedRows:  50,
+			DeleteRatio: 0.2,
+			InsertRatio: 0.1,
+			Concurrency: 5,
+		},
+	}
+	tables := generator.SetupTestTables(false)
+	generator.SeedRows()
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	tableConfigs := []map[string]interface{}{
+		{
+			"schema":    sourceDBName,
+			"table":     tables,
+			"condition": "1=2",
+		},
+	}
+
+	pipelineConfig := config.PipelineConfigV2{
+		PipelineName: t.Name(),
+		InputPlugins: map[string]interface{}{
+			"mysql": map[string]interface{}{
+				"source": map[string]interface{}{
+					"host":     sourceDBConfig.Host,
+					"username": sourceDBConfig.Username,
+					"password": sourceDBConfig.Password,
+					"port":     sourceDBConfig.Port,
+				},
+				"table-configs": tableConfigs,
+				"mode":          "batch",
+			},
+		},
+		OutputPlugins: map[string]interface{}{
+			"mysql": map[string]interface{}{
+				"target": map[string]interface{}{
+					"host":     targetDBConfig.Host,
+					"username": targetDBConfig.Username,
+					"password": targetDBConfig.Password,
+					"port":     targetDBConfig.Port,
+				},
+
+				"routes": []map[string]interface{}{
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "*",
+						"target-schema": targetDBName,
+					},
+				},
+				"enable-ddl": true,
+			},
+		},
+	}
+
+	server, err := app.NewServer(pipelineConfig.ToV3())
+	r.NoError(err)
+
+	r.NoError(server.Start())
+
+	<-server.Input.Done()
+
+	r.True(server.Scheduler.Healthy())
+
+	server.Close()
+
+	for i := range tables {
+		row := targetDB.QueryRow(fmt.Sprintf("select count(*) from `%s`.`%s`", targetDBName, tables[i]))
+		i := 0
+		r.NoError(row.Scan(&i))
+		r.Equal(i, 0)
+	}
 }
 
 func TestMySQLBatchWithCompositePkBasic(t *testing.T) {
