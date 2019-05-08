@@ -24,19 +24,19 @@ import (
 	"github.com/moiot/gravity/pkg/mongo_test"
 	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/utils"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
 )
 
 type fakeEmitter struct {
 	count int
+	msgs  []*core.Msg
 }
 
 func (e *fakeEmitter) Emit(msg *core.Msg) error {
 	if msg.DmlMsg != nil {
 		e.count++
-		log.Infof("msg.DmlMsg.Data: %v", msg.DmlMsg.Data)
+		e.msgs = append(e.msgs, msg)
 	}
 	close(msg.Done)
 	return nil
@@ -127,4 +127,11 @@ func TestMongoInput(t *testing.T) {
 
 	mongoInput.Wait()
 	r.Equal(101, em.count)
+	for i := range em.msgs {
+		if i != len(em.msgs)-1 {
+			cur := em.msgs[i].DmlMsg.Data["_id"].(int64)
+			next := em.msgs[i+1].DmlMsg.Data["_id"].(int64)
+			r.True(cur < next)
+		}
+	}
 }
