@@ -103,8 +103,6 @@ func (repo *mongoPositionRepo) Init() error {
 	}
 
 	repo.session = session
-
-	session.SetMode(mgo.Primary, true)
 	collection := session.DB(mongoPositionDB).C(mongoPositionCollection)
 	err = collection.EnsureIndex(mgo.Index{
 		Key:    []string{"name"},
