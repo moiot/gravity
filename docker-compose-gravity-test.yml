@@ -38,6 +38,12 @@ services:
     logging:
       driver: none
 
+  mongo-setup:
+    image: mongo:4.1
+    entrypoint: ["mongo","--host","mongo","--port","27017","--eval", 'rs.initiate( { _id : "rs1",members: [{ _id: 0, host: "mongo:27017" }]})']
+    depends_on:
+      - mongo
+
   kafka:
     image: confluentinc/cp-kafka:5.1.0
     container_name: kafka
@@ -66,9 +72,14 @@ services:
       context: ./
       dockerfile: Dockerfile.test.gravity
     depends_on:
-      - mongo
+      - mongo-setup
     environment:
       - MONGO_HOST=mongo
       - KAFKA_BROKER=kafka:9092
       - ELASTICSEARCH_URLS=http://elasticsearch:9200
-    command: ["bash", "./wait-for-it.sh", "source-db:3306","-t", "0",  "--", "./wait-for-it.sh", "target-db:3306","-t", "0",  "--", "./wait-for-it.sh", "mongo:27017", "-t", "0", "--", "./wait-for-it.sh", "kafka:9092", "-t", "0", "--", "./wait-for-it.sh", "elasticsearch:9200", "-t", "0",  "--", "make", "go-test"]
+    command: ["bash", "./wait-for-it.sh", "source-db:3306","-t", "0",
+              "--", "./wait-for-it.sh", "target-db:3306","-t", "0",
+              "--", "./wait-for-it.sh", "mongo:27017", "-t", "0",
+              "--", "./wait-for-it.sh", "kafka:9092", "-t", "0",
+              "--", "./wait-for-it.sh", "elasticsearch:9200", "-t", "0",
+              "--", "make", "go-test"]
