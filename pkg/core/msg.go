@@ -94,7 +94,7 @@ func (msg *Msg) EventTime() time.Time {
 }
 
 func (msg *Msg) ProcessTime() time.Time {
-	return msg.EnterInput
+	return msg.Start
 }
 
 type MsgSubmitter interface {
@@ -179,7 +179,7 @@ func SafeEncodeString(s string) string {
 }
 
 type Phase struct {
-	EnterInput     time.Time
+	Start          time.Time
 	EnterEmitter   time.Time // also leave input
 	LeaveEmitter   time.Time
 	EnterScheduler time.Time // also enter submitter

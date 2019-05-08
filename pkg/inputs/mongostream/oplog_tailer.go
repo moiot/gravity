@@ -164,7 +164,7 @@ func (tailer *OplogTailer) Run() {
 
 			msg := core.Msg{
 				Phase: core.Phase{
-					EnterInput: received,
+					Start: received,
 				},
 				Host:      tailer.sourceHost,
 				Database:  op.GetDatabase(),

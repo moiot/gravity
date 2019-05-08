@@ -294,6 +294,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan Chunk) {
 				findOptions.SetLimit(int64(plugin.cfg.BatchSize))
 				findOptions.SetSort(map[string]interface{}{"_id": 1})
 
+				queryStartTime := time.Now()
 				cursor, err := collection.Find(context.Background(), bson.D{{"_id", idCond}}, findOptions)
 				if err != nil {
 					log.Fatalf("failed to get cursor: %v", err.Error())
@@ -341,7 +342,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan Chunk) {
 
 					msg := core.Msg{
 						Phase: core.Phase{
-							EnterInput: time.Now(),
+							Start: queryStartTime,
 						},
 						Type:     core.MsgDML,
 						Host:     plugin.cfg.Source.Host,
@@ -392,7 +393,7 @@ func (plugin *mongoBatchInput) finishChunk(c Chunk) {
 	c.Done = true
 	msg := &core.Msg{
 		Phase: core.Phase{
-			EnterInput: time.Now(),
+			Start: time.Now(),
 		},
 		Type:           core.MsgCtl,
 		InputStreamKey: utils.NewStringPtr(c.key()),
@@ -404,7 +405,7 @@ func (plugin *mongoBatchInput) finishChunk(c Chunk) {
 	<-msg.Done
 	msg = &core.Msg{
 		Phase: core.Phase{
-			EnterInput: time.Now(),
+			Start: time.Now(),
 		},
 		Type:           core.MsgCloseInputStream,
 		InputStreamKey: utils.NewStringPtr(c.key()),
