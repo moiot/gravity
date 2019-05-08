@@ -24,8 +24,10 @@ services:
       - ./mycnf:/etc/mysql/conf.d
 
   mongo:
-    image: mongo:4.1
     container_name: mongo
+    build:
+      context: ./
+      dockerfile: Dockerfile.mongo.setup
     ports:
       - 27017
     logging:
@@ -37,12 +39,6 @@ services:
     container_name: zookeeper
     logging:
       driver: none
-
-  mongo-setup:
-    image: mongo:4.1
-    entrypoint: ["mongo","--host","mongo","--port","27017","--eval", 'rs.initiate( { _id : "rs1",members: [{ _id: 0, host: "mongo:27017" }]})']
-    depends_on:
-      - mongo
 
   kafka:
     image: confluentinc/cp-kafka:5.1.0
@@ -72,7 +68,7 @@ services:
       context: ./
       dockerfile: Dockerfile.test.gravity
     depends_on:
-      - mongo-setup
+      - mongo
     environment:
       - MONGO_HOST=mongo
       - KAFKA_BROKER=kafka:9092
