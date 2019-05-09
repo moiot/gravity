@@ -39,7 +39,7 @@ type defaultEmitter struct {
 func (e *defaultEmitter) Emit(msg *core.Msg) error {
 	msg.EnterEmitter = time.Now()
 	metrics.Input2EmitterCounter.WithLabelValues(core.PipelineName).Add(1)
-	metrics.InputHistogram.WithLabelValues(core.PipelineName).Observe(msg.EnterEmitter.Sub(msg.EnterInput).Seconds())
+	metrics.InputHistogram.WithLabelValues(core.PipelineName).Observe(msg.EnterEmitter.Sub(msg.Start).Seconds())
 
 	if msg.InputStreamKey == nil {
 		return errors.Errorf("[emitter] InputStreamKey nil")

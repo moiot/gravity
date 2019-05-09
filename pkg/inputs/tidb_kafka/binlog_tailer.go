@@ -146,7 +146,7 @@ func (t *BinlogTailer) createMsgs(
 		for _, mutation := range table.Mutations {
 			msg := core.Msg{
 				Phase: core.Phase{
-					EnterInput: received,
+					Start: received,
 				},
 				Type:      core.MsgDML,
 				Database:  schemaName,

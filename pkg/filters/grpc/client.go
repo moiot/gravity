@@ -18,6 +18,9 @@ package grpc
 
 import (
 	"context"
+	"strings"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/juju/errors"
 	"github.com/moiot/gravity/pkg/core/encoding"
@@ -55,6 +58,11 @@ func (m *GRPCClient) Filter(msg *core.Msg) (bool, error) {
 	req := msgpb.FilterRequest{Msg: pbmsg}
 	rsp, err := m.client.Filter(context.Background(), &req)
 	if err != nil {
+		// TODO merge this PR https://github.com/hashicorp/go-plugin/pull/117/files
+		if strings.Contains(err.Error(), "received message larger than max") {
+			log.Errorf("grpc error, msg.DmlMsg.Pks: %v, err: %v", msg.DmlMsg.Pks, err.Error())
+			return false, nil
+		}
 		return false, errors.Trace(err)
 	}
 

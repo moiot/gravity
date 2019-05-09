@@ -20,12 +20,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moiot/gravity/pkg/utils"
+
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/moiot/gravity/pkg/registry"
 
 	"github.com/moiot/gravity/pkg/config"
-	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo_test"
 	"github.com/stretchr/testify/require"
 
@@ -36,7 +37,7 @@ func TestMongoPositionRepo_Get(t *testing.T) {
 	r := require.New(t)
 
 	mongoConfig := mongo_test.TestConfig()
-	mongoSession, err := mongo.CreateMongoSession(&mongoConfig)
+	mongoSession, err := utils.CreateMongoSession(&mongoConfig)
 	r.NoError(err)
 
 	repoConfig := NewMongoRepoConfig(&mongoConfig)
@@ -74,7 +75,8 @@ func TestMongoPositionRepo_Get(t *testing.T) {
 		r.NoError(err)
 
 		_, err = collection.Upsert(
-			bson.M{"name": tt.Name()}, bson.M{
+			bson.M{"name": tt.Name()},
+			bson.M{
 				"$set": bson.M{
 					"stage":            string(config.Stream),
 					"current_position": 1,

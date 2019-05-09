@@ -17,10 +17,10 @@
 package mongobatch
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo_test"
 	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/utils"
@@ -30,11 +30,13 @@ import (
 
 type fakeEmitter struct {
 	count int
+	msgs  []*core.Msg
 }
 
 func (e *fakeEmitter) Emit(msg *core.Msg) error {
 	if msg.DmlMsg != nil {
 		e.count++
+		e.msgs = append(e.msgs, msg)
 	}
 	close(msg.Done)
 	return nil
@@ -77,7 +79,7 @@ func TestMongoInput(t *testing.T) {
 
 	em := &fakeEmitter{}
 	router := &fakeRouter{db: "test", col: "test"}
-	session, err := mongo.CreateMongoSession(&source)
+	session, err := utils.CreateMongoSession(&source)
 	session.DB("_gravity").C("gravity_positions").Remove(bson.M{"name": t.Name()})
 
 	positionCache, err := mongoInput.NewPositionCache()
@@ -88,12 +90,48 @@ func TestMongoInput(t *testing.T) {
 	db.DropDatabase()
 
 	for i := 0; i < 100; i++ {
-		r.NoError(db.C("test").Insert(bson.M{"_id": i}))
+		r.NoError(db.C("test").Insert(bson.M{"_id": rand.Int63n(409587622938192896)}))
 	}
+
+	r.NoError(db.C("test").Insert(bson.M{"_id": 409587622938192896}))
+
+	c := db.C("test")
+	query := map[string]interface{}{
+		"_id": map[string]interface{}{
+			"$gte": 0,
+			"$lte": 409587622938192896,
+		},
+	}
+	iter := c.Find(query).
+		Sort("_id").
+		Limit(102).
+		Hint("_id").
+		Iter()
+
+	results := make([]map[string]interface{}, 103)
+	for i := range results {
+		results[i] = make(map[string]interface{})
+	}
+
+	count := 0
+	for iter.Next(results[count]) {
+		count++
+	}
+
+	r.NoError(iter.Err())
+
+	r.Equal(101, count)
 
 	r.NoError(positionCache.Start())
 	r.NoError(mongoInput.Start(em, router, positionCache))
 
 	mongoInput.Wait()
-	r.Equal(100, em.count)
+	r.Equal(101, em.count)
+	for i := range em.msgs {
+		if i != len(em.msgs)-1 {
+			cur := em.msgs[i].DmlMsg.Data["_id"].(int64)
+			next := em.msgs[i+1].DmlMsg.Data["_id"].(int64)
+			r.True(cur < next)
+		}
+	}
 }

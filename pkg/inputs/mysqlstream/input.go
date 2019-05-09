@@ -35,9 +35,9 @@ var (
 const inputStreamKey = "mysqlstream"
 
 type MySQLBinlogInputPluginConfig struct {
-	Source                  *utils.DBConfig            `mapstructure:"source" toml:"source" json:"source"`
-	IgnoreBiDirectionalData bool                       `mapstructure:"ignore-bidirectional-data" toml:"ignore-bidirectional-data" json:"ignore-bidirectional-data"`
-	StartPosition           *utils.MySQLBinlogPosition `mapstructure:"start-position" toml:"start-position" json:"start-position"`
+	Source                  *config.DBConfig            `mapstructure:"source" toml:"source" json:"source"`
+	IgnoreBiDirectionalData bool                        `mapstructure:"ignore-bidirectional-data" toml:"ignore-bidirectional-data" json:"ignore-bidirectional-data"`
+	StartPosition           *config.MySQLBinlogPosition `mapstructure:"start-position" toml:"start-position" json:"start-position"`
 
 	SourceProbeCfg *helper.SourceProbeCfg `mapstructure:"source-probe-config"json:"source-probe-config"`
 
@@ -57,7 +57,7 @@ type mysqlStreamInputPlugin struct {
 
 	sourceDB *sql.DB
 
-	probeDBConfig      *utils.DBConfig
+	probeDBConfig      *config.DBConfig
 	probeSQLAnnotation string
 
 	ctx    context.Context

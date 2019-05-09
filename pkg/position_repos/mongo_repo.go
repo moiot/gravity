@@ -17,14 +17,16 @@
 package position_repos
 
 import (
+	"context"
 	"time"
 
-	mgo "gopkg.in/mgo.v2"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/x/bsonx"
 
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/mitchellh/mapstructure"
-	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/utils"
 
@@ -78,7 +80,7 @@ type MongoPositionRet struct {
 //
 type mongoPositionRepo struct {
 	mongoConfig config.MongoConnConfig
-	session     *mgo.Session
+	client      *mongo.Client
 }
 
 type PositionWrapper struct {
@@ -98,32 +100,34 @@ func (repo *mongoPositionRepo) Configure(pipelineName string, data map[string]in
 }
 
 func (repo *mongoPositionRepo) Init() error {
-	session, err := mongo.CreateMongoSession(&repo.mongoConfig)
+	client, err := utils.CreateMongoClient(&repo.mongoConfig)
 	if err != nil {
 		return errors.Trace(err)
 	}
+	repo.client = client
 
-	repo.session = session
+	collection := client.Database(mongoPositionDB).Collection(mongoPositionCollection)
 
-	session.SetMode(mgo.Primary, true)
-	collection := session.DB(mongoPositionDB).C(mongoPositionCollection)
-	err = collection.EnsureIndex(mgo.Index{
-		Key:    []string{"name"},
-		Unique: true,
-	})
-	if err != nil {
-		return errors.Trace(err)
-	}
+	indexes := collection.Indexes()
 
+	_, _ = indexes.CreateOne(
+		context.Background(),
+		mongo.IndexModel{
+			Keys:    bsonx.Doc{{"name", bsonx.Int32(1)}},
+			Options: options.Index().SetBackground(false).SetUnique(true),
+		})
 	return nil
 }
 
 func (repo *mongoPositionRepo) Get(pipelineName string) (PositionMeta, string, bool, error) {
-	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
+	collection := repo.client.Database(mongoPositionDB).Collection(mongoPositionCollection)
+	ret := collection.FindOne(context.Background(), bson.M{"name": pipelineName})
+	if err := ret.Err(); err != nil {
+		return PositionMeta{}, "", false, errors.Trace(err)
+	}
 	mongoRet := MongoPositionRet{}
-	err := collection.Find(bson.M{"name": pipelineName}).One(&mongoRet)
-	if err != nil {
-		if err == mgo.ErrNotFound {
+	if err := ret.Decode(&mongoRet); err != nil {
+		if err == mongo.ErrNoDocuments {
 			return PositionMeta{}, "", false, nil
 		}
 		return PositionMeta{}, "", false, errors.Trace(err)
@@ -132,7 +136,11 @@ func (repo *mongoPositionRepo) Get(pipelineName string) (PositionMeta, string, b
 	// backward compatible with old mongoRet schema
 	if mongoRet.Version == "" {
 		oldPosition := PositionEntity{}
-		if err := collection.Find(bson.M{"name": pipelineName}).One(&oldPosition); err != nil {
+		oldRet := collection.FindOne(context.Background(), bson.M{"name": pipelineName})
+		if err := oldRet.Err(); err != nil {
+			return PositionMeta{}, "", false, errors.Trace(err)
+		}
+		if err := oldRet.Decode(&oldPosition); err != nil {
 			return PositionMeta{}, "", true, errors.Trace(err)
 		}
 
@@ -173,26 +181,32 @@ func (repo *mongoPositionRepo) Put(pipelineName string, meta PositionMeta, v str
 		return errors.Errorf("empty value")
 	}
 
-	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
-	_, err := collection.Upsert(
-		bson.M{"name": pipelineName}, bson.M{
+	collection := repo.client.Database(mongoPositionDB).Collection(mongoPositionCollection)
+	_, err := collection.UpdateOne(
+		context.Background(),
+		bson.M{"name": pipelineName},
+		bson.M{
 			"$set": bson.M{
 				"version":     meta.Version,
 				"stage":       string(meta.Stage),
 				"value":       v,
 				"last_update": time.Now().Format(time.RFC3339Nano),
 			},
-		})
+		},
+		options.Update().SetUpsert(true))
 	return errors.Trace(err)
 }
 
 func (repo *mongoPositionRepo) Delete(pipelineName string) error {
-	collection := repo.session.DB(mongoPositionDB).C(mongoPositionCollection)
-	return errors.Trace(collection.Remove(bson.M{"name": pipelineName}))
+	_, err := repo.client.Database(mongoPositionDB).Collection(mongoPositionCollection).DeleteOne(
+		context.Background(),
+		bson.M{"name": pipelineName},
+	)
+	return errors.Trace(err)
 }
 
 func (repo *mongoPositionRepo) Close() error {
-	repo.session.Close()
+	repo.client.Disconnect(context.Background())
 	return nil
 }
 

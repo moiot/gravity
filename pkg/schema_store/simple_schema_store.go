@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"sync"
 
+	"github.com/moiot/gravity/pkg/config"
+
 	"github.com/juju/errors"
 
 	"github.com/moiot/gravity/pkg/utils"
@@ -12,7 +14,7 @@ import (
 type SimpleSchemaStore struct {
 	sync.RWMutex
 	sourceDB *sql.DB
-	dbCfg    *utils.DBConfig
+	dbCfg    *config.DBConfig
 	schemas  map[string]Schema
 }
 
@@ -86,7 +88,7 @@ func NewSimpleSchemaStoreFromDBConn(db *sql.DB) (SchemaStore, error) {
 	return &SimpleSchemaStore{sourceDB: db, schemas: make(map[string]Schema)}, nil
 }
 
-func NewSimpleSchemaStore(dbCfg *utils.DBConfig) (*SimpleSchemaStore, error) {
+func NewSimpleSchemaStore(dbCfg *config.DBConfig) (*SimpleSchemaStore, error) {
 	sourceDB, err := utils.CreateDBConnection(dbCfg)
 	if err != nil {
 		return nil, errors.Trace(err)

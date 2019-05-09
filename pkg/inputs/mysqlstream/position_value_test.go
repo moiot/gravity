@@ -18,8 +18,8 @@ import (
 func initRepo(repo position_repos.PositionRepo, pipelineName string, startGTID string, currentGTID string) error {
 
 	positionValue := &helper.BinlogPositionsValue{
-		CurrentPosition: &utils.MySQLBinlogPosition{BinlogGTID: currentGTID},
-		StartPosition:   &utils.MySQLBinlogPosition{BinlogGTID: startGTID},
+		CurrentPosition: &config.MySQLBinlogPosition{BinlogGTID: currentGTID},
+		StartPosition:   &config.MySQLBinlogPosition{BinlogGTID: startGTID},
 	}
 
 	m := position_repos.PositionMeta{
@@ -82,7 +82,7 @@ func TestSetupInitialPosition(t *testing.T) {
 
 			db := mysql_test.MustSetupSourceDB(pipelineName)
 			gtid := "abc:999"
-			specStart := utils.MySQLBinlogPosition{
+			specStart := config.MySQLBinlogPosition{
 				BinlogGTID: gtid,
 			}
 
@@ -109,7 +109,7 @@ func TestSetupInitialPosition(t *testing.T) {
 
 			r.NoError(initRepo(repo, pipelineName, startGTID, currentGTID))
 
-			specStart := utils.MySQLBinlogPosition{BinlogGTID: startGTID}
+			specStart := config.MySQLBinlogPosition{BinlogGTID: startGTID}
 
 			db := mysql_test.MustSetupSourceDB(pipelineName)
 			cache, err := position_cache.NewPositionCache(
@@ -140,7 +140,7 @@ func TestSetupInitialPosition(t *testing.T) {
 			r.NoError(initRepo(repo, pipelineName, startGTID, currentGTID))
 
 			newGTID := "abc:789"
-			specStart := utils.MySQLBinlogPosition{BinlogGTID: newGTID}
+			specStart := config.MySQLBinlogPosition{BinlogGTID: newGTID}
 
 			db := mysql_test.MustSetupSourceDB(pipelineName)
 			cache, err := position_cache.NewPositionCache(

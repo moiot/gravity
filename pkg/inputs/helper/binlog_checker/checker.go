@@ -291,7 +291,7 @@ func (checker *binlogChecker) initRepo() error {
 
 func NewBinlogChecker(
 	pipelineName string,
-	dbConfig *utils.DBConfig,
+	dbConfig *config.DBConfig,
 	annotation string,
 	interval time.Duration,
 	disableChecker bool) (BinlogChecker, error) {

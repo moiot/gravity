@@ -136,6 +136,7 @@ func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColu
 	}
 
 	maxStatement := fmt.Sprintf("SELECT %s FROM `%s`.`%s` %s ORDER BY %s LIMIT 1", columnsString, dbName, tableName, where, descOrderString)
+
 	log.Infof("[FindMaxMinValueFromDB] statement: %s", maxStatement)
 
 	maxRowPtrs, err := utils.QueryGeneralRowsDataWithSQL(db, maxStatement)
@@ -148,6 +149,7 @@ func FindMaxMinValueFromDB(db *sql.DB, dbName string, tableName string, scanColu
 	}
 
 	minStatement := fmt.Sprintf("SELECT %s FROM `%s`.`%s` %s ORDER BY %s LIMIT 1", columnsString, dbName, tableName, where, ascOrderString)
+
 	log.Infof("[FindMaxMinValueFromDB] statement: %s", minStatement)
 	minRowPtrs, err := utils.QueryGeneralRowsDataWithSQL(db, minStatement)
 	if err != nil {
@@ -633,7 +635,7 @@ func NextBatchStartPoint(
 			return nil, false, 0, errors.Trace(err)
 		}
 		if exists {
-			maxReached, err := GreaterThanMax(db, ScanValuesFromRowValues(nextRowValues, scanIndexes), maxValues)
+			maxReached, err := GreaterThanMax(db, fullTableName, scanColumns, ScanValuesFromRowValues(nextRowValues, scanIndexes), maxValues)
 			if err != nil {
 				return nil, false, 0, errors.Trace(err)
 			}
@@ -687,26 +689,53 @@ func NextScanElementForChunk(
 	}
 }
 
-func GreaterThanMax(db *sql.DB, scanValues []interface{}, maxValues []interface{}) (bool, error) {
-	for i := range scanValues {
-		var greaterThan bool
-		row := db.QueryRow("SELECT ? > ?", scanValues[i], maxValues[i])
-		if err := row.Scan(&greaterThan); err != nil {
+func GreaterThanMax(
+	db *sql.DB,
+	fullTableName string,
+	scanColumns []string,
+	scanValues []interface{},
+	maxValues []interface{}) (bool, error) {
+
+	for i := range scanColumns {
+		var equal bool
+		equalRow := db.QueryRow("SELECT ? = ?", scanValues[i], maxValues[i])
+		if err := equalRow.Scan(&equal); err != nil {
 			return false, errors.Trace(err)
 		}
 
-		if greaterThan {
-			return true, nil
+		if equal {
+			continue
 		}
 
-		var lessThan bool
-		row = db.QueryRow("SELECT ? < ?", scanValues[i], maxValues[i])
-		if err := row.Scan(&lessThan); err != nil {
+		prefix := fmt.Sprintf("SELECT * FROM %s WHERE", fullTableName)
+
+		var where []string
+		var args []interface{}
+
+		for j := 0; j < i; j++ {
+			where = append(where, fmt.Sprintf("%s = ?", scanColumns[j]))
+			args = append(args, scanValues[j])
+		}
+
+		where = append(where, fmt.Sprintf("%s >= ? AND %s <= ?", scanColumns[i], scanColumns[i]))
+		args = append(args, scanValues[i], maxValues[i])
+
+		query := fmt.Sprintf("%s %s LIMIT 1", prefix, strings.Join(where, " AND "))
+		log.Infof("[GreaterThanMax] query: %v, args: %v", query, args)
+		rows, err := db.Query(query, args...)
+		if err != nil {
 			return false, errors.Trace(err)
 		}
+		exists := false
+		for rows.Next() {
+			exists = true
+		}
+		rows.Close()
 
-		if lessThan {
+		if exists {
 			return false, nil
+		} else {
+			return true, nil
 		}
 	}
 	return false, nil

@@ -7,14 +7,14 @@ cmd/scratch
 profile
 *.idea
 *.meta
-config.toml
-master_config.toml
+
+
 *_dev.toml
 *_dev.json
 
 config_dev
-nuclear/config_dev
-scanner/config_dev
+
+
 
 *.log
 .schema-store

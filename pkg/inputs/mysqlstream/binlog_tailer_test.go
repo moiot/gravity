@@ -55,7 +55,7 @@ func (db fakeDB) GetServerUUID() (string, error) {
 func TestFixGTID(t *testing.T) {
 	assert := assert.New(t)
 
-	binlogPosition := utils.MySQLBinlogPosition{
+	binlogPosition := config.MySQLBinlogPosition{
 		BinLogFileName: "test",
 		BinLogFilePos:  1,
 		BinlogGTID:     fmt.Sprintf("%s,%s", masterGTID, slave1GTID),
@@ -108,7 +108,7 @@ func TestMsgEmit(t *testing.T) {
 	r.NoError(err)
 
 	positionValue := helper.BinlogPositionsValue{
-		CurrentPosition: &utils.MySQLBinlogPosition{
+		CurrentPosition: &config.MySQLBinlogPosition{
 			BinLogFileName: position.Name,
 			BinLogFilePos:  position.Pos,
 			BinlogGTID:     gtidSet.String(),

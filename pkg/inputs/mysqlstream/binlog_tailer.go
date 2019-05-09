@@ -632,7 +632,7 @@ func (tailer *BinlogTailer) reopenBinlogSyncer(gtidString string) (*replication.
 	return tailer.getBinlogStreamer(gtidString)
 }
 
-func fixGTID(db utils.MySQLStatusGetter, binlogPosition utils.MySQLBinlogPosition) (*utils.MySQLBinlogPosition, error) {
+func fixGTID(db utils.MySQLStatusGetter, binlogPosition config.MySQLBinlogPosition) (*config.MySQLBinlogPosition, error) {
 	log.Infof("[fixGTID] gtid: %v", binlogPosition.BinlogGTID)
 
 	pos, gs, err := ToGoMySQLPosition(binlogPosition)
@@ -674,7 +674,7 @@ func fixGTID(db utils.MySQLStatusGetter, binlogPosition utils.MySQLBinlogPositio
 		}
 	}
 
-	positionConfig := utils.MySQLBinlogPosition{
+	positionConfig := config.MySQLBinlogPosition{
 		BinLogFileName: pos.Name,
 		BinLogFilePos:  pos.Pos,
 		BinlogGTID:     gs.String(),

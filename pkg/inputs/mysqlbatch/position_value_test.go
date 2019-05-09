@@ -50,7 +50,7 @@ func TestSetupInitialPosition(t *testing.T) {
 		pipelineName := utils.TestCaseMd5Name(tt)
 
 		batchPositionValue := BatchPositionValueV1{
-			Start: utils.MySQLBinlogPosition{BinlogGTID: "abc:123"},
+			Start: config.MySQLBinlogPosition{BinlogGTID: "abc:123"},
 		}
 
 		s, err := EncodeBatchPositionValue(batchPositionValue)
@@ -85,7 +85,7 @@ func TestDecodeBatchPositionValueMigration(t *testing.T) {
 
 	// encode v1beta1 and decode it, we should get v1
 	beta := BatchPositionValueV1Beta1{
-		Start: utils.MySQLBinlogPosition{
+		Start: config.MySQLBinlogPosition{
 			BinLogFileName: "test",
 			BinlogGTID:     "test_gtid",
 		},

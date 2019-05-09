@@ -3,11 +3,12 @@ package config
 import (
 	"flag"
 
+	"github.com/moiot/gravity/pkg/config"
+
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 
 	"github.com/moiot/gravity/pkg/logutil"
-	"github.com/moiot/gravity/pkg/utils"
 )
 
 type Config struct {
@@ -43,8 +44,8 @@ func (cfg *Config) ParseCmd(arguments []string) error {
 }
 
 type MySQLConfig struct {
-	Target        *utils.DBConfig            `toml:"target" json:"target"`
-	StartPosition *utils.MySQLBinlogPosition `toml:"start-position" json:"start-position"`
+	Target        *config.DBConfig            `toml:"target" json:"target"`
+	StartPosition *config.MySQLBinlogPosition `toml:"start-position" json:"start-position"`
 }
 
 func (c *Config) CreateConfigFromFile(path string) error {

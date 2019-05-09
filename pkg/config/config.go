@@ -12,7 +12,6 @@ import (
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/moiot/gravity/pkg/logutil"
-	"github.com/moiot/gravity/pkg/utils"
 )
 
 var DefaultBinlogSyncerTimeout = "10s"
@@ -69,7 +68,7 @@ type PipelineConfig struct {
 
 	TableConfig []*TableConfig `toml:"table-config" json:"table-config"`
 
-	TargetMySQL *utils.DBConfig `toml:"target-mysql" json:"target-mysql"`
+	TargetMySQL *DBConfig `toml:"target-mysql" json:"target-mysql"`
 
 	TargetMySQLWorkerCfg *TargetMySQLWorkerConfig `toml:"target-mysql-worker" json:"target-mysql-worker"`
 
@@ -93,8 +92,8 @@ type SourceKafkaConfig struct {
 }
 
 type SourceProbeCfg struct {
-	SourceMySQL *utils.DBConfig `mapstructure:"mysql" toml:"mysql" json:"mysql"`
-	Annotation  string          `mapstructure:"annotation" toml:"annotation" json:"annotation"`
+	SourceMySQL *DBConfig `mapstructure:"mysql" toml:"mysql" json:"mysql"`
+	Annotation  string    `mapstructure:"annotation" toml:"annotation" json:"annotation"`
 }
 
 type MongoPosition bson.MongoTimestamp
@@ -110,14 +109,14 @@ type MongoConfigs struct {
 }
 
 type MySQLConfig struct {
-	IgnoreBiDirectionalData bool                       `mapstructure:"ignore-bidirectional-data" toml:"ignore-bidirectional-data" json:"ignore-bidirectional-data"`
-	Source                  *utils.DBConfig            `mapstructure:"source" toml:"source" json:"source"`
-	SourceSlave             *utils.DBConfig            `mapstructure:"source-slave" toml:"source-slave" json:"source-slave"`
-	StartPosition           *utils.MySQLBinlogPosition `mapstructure:"start-position" toml:"start-position" json:"start-position"`
+	IgnoreBiDirectionalData bool                 `mapstructure:"ignore-bidirectional-data" toml:"ignore-bidirectional-data" json:"ignore-bidirectional-data"`
+	Source                  *DBConfig            `mapstructure:"source" toml:"source" json:"source"`
+	SourceSlave             *DBConfig            `mapstructure:"source-slave" toml:"source-slave" json:"source-slave"`
+	StartPosition           *MySQLBinlogPosition `mapstructure:"start-position" toml:"start-position" json:"start-position"`
 }
 
 type SourceTiDBConfig struct {
-	SourceDB    *utils.DBConfig    `mapstructure:"source-db" toml:"source-db" json:"source-db"`
+	SourceDB    *DBConfig          `mapstructure:"source-db" toml:"source-db" json:"source-db"`
 	SourceKafka *SourceKafkaConfig `mapstructure:"source-kafka" toml:"source-kafka" json:"source-kafka"`
 	// OffsetStoreConfig       *SourceProbeCfg    `mapstructure:"offset-store" toml:"offset-store" json:"offset-store"`
 	PositionRepo            *GenericPluginConfig `mapstructure:"position-repo" toml:"position-repo" json:"position-repo"`
@@ -138,6 +137,44 @@ type MongoConnConfig struct {
 	Password string `mapstructure:"password" toml:"password" json:"password"`
 	Database string `mapstructure:"database" toml:"database" json:"database"`
 	Direct   bool   `mapstructure:"direct" toml:"direct" json:"direct"`
+}
+
+func (cfg MongoConnConfig) URI() string {
+	username := ""
+	if cfg.Username != "" {
+		username = cfg.Username
+	}
+
+	password := ""
+	if cfg.Password != "" {
+		password = cfg.Password
+	}
+
+	host := "localhost"
+	if cfg.Host != "" {
+		host = cfg.Host
+	}
+
+	port := 27017
+	if cfg.Port != 0 {
+		port = cfg.Port
+	}
+
+	db := cfg.Database
+
+	var url string
+	if username == "" || password == "" {
+		url = fmt.Sprintf("mongodb://%s:%d/%s", host, port, db)
+	} else {
+		url = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s", username, password, host, port, db)
+	}
+
+	//If not specified, the connection will timeout, probably because the replica set has not been initialized yet.
+	if cfg.Direct {
+		url += "?connect=direct"
+	}
+
+	return url
 }
 
 type TargetMySQLWorkerConfig struct {

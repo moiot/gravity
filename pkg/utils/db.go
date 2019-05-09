@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moiot/gravity/pkg/config"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	gomysql "github.com/siddontang/go-mysql/mysql"
@@ -261,7 +263,7 @@ func QueryGeneralRowsDataWithSQL(db *sql.DB, statement string, args ...interface
 	return rowsPtr, nil
 }
 
-func CreateDBConnection(cfg *DBConfig) (*sql.DB, error) {
+func CreateDBConnection(cfg *config.DBConfig) (*sql.DB, error) {
 	if err := cfg.ValidateAndSetDefault(); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -304,54 +306,7 @@ func CloseDBConnections(dbs ...*sql.DB) {
 	}
 }
 
-// DBConfig is the DB configuration.
-type DBConfig struct {
-	Host                   string        `toml:"host" json:"host" mapstructure:"host"`
-	Location               string        `toml:"location" json:"location" mapstructure:"location"`
-	Username               string        `toml:"username" json:"username" mapstructure:"username"`
-	Password               string        `toml:"password" json:"password" mapstructure:"password"`
-	Port                   int           `toml:"port" json:"port" mapstructure:"port"`
-	Schema                 string        `toml:"schema" json:"schema" mapstructure:"schema"`
-	MaxIdle                int           `toml:"max-idle" json:"max-idle" mapstructure:"max-idle"`
-	MaxOpen                int           `toml:"max-open" json:"max-open" mapstructure:"max-open"`
-	MaxLifeTimeDurationStr string        `toml:"max-life-time-duration" json:"max-life-time-duration" mapstructure:"max-life-time-duration"`
-	MaxLifeTimeDuration    time.Duration `toml:"-" json:"-" mapstructure:"-"`
-}
-
-func (dbc *DBConfig) ValidateAndSetDefault() error {
-	// Sets the location for time.Time values (when using parseTime=true). "Local" sets the system's location. See time.LoadLocation for details.
-	// Note that this sets the location for time.Time values but does not change MySQL's time_zone setting.
-	// For that see the time_zone system variable, which can also be set as a DSN parameter.
-	if dbc.Location == "" {
-		dbc.Location = time.Local.String()
-	}
-
-	// set default values of connection related settings
-	// assume the response time of db is 2ms, then
-	// then a single connection can have tps of 500 TPS
-	if dbc.MaxOpen == 0 {
-		dbc.MaxOpen = 200
-	}
-
-	if dbc.MaxIdle == 0 {
-		dbc.MaxIdle = dbc.MaxOpen
-	}
-
-	var err error
-	if dbc.MaxLifeTimeDurationStr == "" {
-		dbc.MaxLifeTimeDurationStr = "15m"
-		dbc.MaxLifeTimeDuration = 15 * time.Minute
-	} else {
-		dbc.MaxLifeTimeDuration, err = time.ParseDuration(dbc.MaxLifeTimeDurationStr)
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-
-	return nil
-}
-
-func TestConfig() *DBConfig {
+func TestConfig() *config.DBConfig {
 	host, ok := os.LookupEnv("DB_HOST")
 	if !ok {
 		host = "localhost"
@@ -375,7 +330,7 @@ func TestConfig() *DBConfig {
 
 	iport, _ := strconv.Atoi(port)
 
-	return &DBConfig{
+	return &config.DBConfig{
 		Host:     host,
 		Port:     iport,
 		Username: user,
@@ -616,12 +571,6 @@ func IsBinlogPurgedError(err error) bool {
 	return false
 }
 
-type MySQLBinlogPosition struct {
-	BinLogFileName string `toml:"binlog-name" json:"binlog-name" mapstructure:"binlog-name"`
-	BinLogFilePos  uint32 `toml:"binlog-pos" json:"binlog-pos" mapstructure:"binlog-pos"`
-	BinlogGTID     string `toml:"binlog-gtid" json:"binlog-gtid" mapstructure:"binlog-gtid"`
-}
-
 func TableIdentity(schemaName string, tableName string) string {
 	return fmt.Sprintf("`%s`.`%s`", schemaName, tableName)
 }
@@ -656,7 +605,7 @@ func SQLWithAnnotation(annotation string, sql string) string {
 	return fmt.Sprintf("%s%s", annotation, sql)
 }
 
-func NewBinlogSyncer(serverID uint32, dbConfig *DBConfig) *replication.BinlogSyncer {
+func NewBinlogSyncer(serverID uint32, dbConfig *config.DBConfig) *replication.BinlogSyncer {
 	syncerConfig := replication.BinlogSyncerConfig{
 		ServerID:  serverID,
 		Flavor:    "mysql",

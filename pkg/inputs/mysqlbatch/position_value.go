@@ -215,15 +215,15 @@ type TableStatsV1 struct {
 }
 
 type BatchPositionValueV1Beta1 struct {
-	SchemaVersion string                    `toml:"schema-version" json:"schema-version"`
-	Start         utils.MySQLBinlogPosition `toml:"start-binlog" json:"start-binlog"`
-	TableStates   map[string]TableStats     `toml:"table-stats" json:"table-stats"`
+	SchemaVersion string                     `toml:"schema-version" json:"schema-version"`
+	Start         config.MySQLBinlogPosition `toml:"start-binlog" json:"start-binlog"`
+	TableStates   map[string]TableStats      `toml:"table-stats" json:"table-stats"`
 }
 
 type BatchPositionValueV1 struct {
-	SchemaVersion string                    `toml:"schema-version" json:"schema-version"`
-	Start         utils.MySQLBinlogPosition `toml:"start-binlog" json:"start-binlog"`
-	TableStates   map[string]TableStatsV1   `toml:"table-stats" json:"table-stats"`
+	SchemaVersion string                     `toml:"schema-version" json:"schema-version"`
+	Start         config.MySQLBinlogPosition `toml:"start-binlog" json:"start-binlog"`
+	TableStates   map[string]TableStatsV1    `toml:"table-stats" json:"table-stats"`
 }
 
 type BatchPositionVersionMigrationWrapper struct {
@@ -297,7 +297,7 @@ func SetupInitialPosition(cache position_cache.PositionCacheInterface, sourceDB 
 
 	if !exist {
 		dbUtil := utils.NewMySQLDB(sourceDB)
-		var startPosition utils.MySQLBinlogPosition
+		var startPosition config.MySQLBinlogPosition
 
 		// For tidb, we just assume the binlog position is empty
 		if !utils.IsTiDB(sourceDB) {
@@ -306,7 +306,7 @@ func SetupInitialPosition(cache position_cache.PositionCacheInterface, sourceDB 
 				return errors.Trace(err)
 			}
 
-			startPosition = utils.MySQLBinlogPosition{
+			startPosition = config.MySQLBinlogPosition{
 				BinLogFileName: binlogFilePos.Name,
 				BinLogFilePos:  binlogFilePos.Pos,
 				BinlogGTID:     gtid.String(),
@@ -334,22 +334,22 @@ func SetupInitialPosition(cache position_cache.PositionCacheInterface, sourceDB 
 
 var mu sync.Mutex
 
-func GetStartBinlog(cache position_cache.PositionCacheInterface) (utils.MySQLBinlogPosition, error) {
+func GetStartBinlog(cache position_cache.PositionCacheInterface) (config.MySQLBinlogPosition, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
 	position, exist, err := cache.Get()
 	if err != nil {
-		return utils.MySQLBinlogPosition{}, errors.Trace(err)
+		return config.MySQLBinlogPosition{}, errors.Trace(err)
 	}
 
 	if !exist {
-		return utils.MySQLBinlogPosition{}, errors.Errorf("empty position")
+		return config.MySQLBinlogPosition{}, errors.Errorf("empty position")
 	}
 
 	batchPositionValue, ok := position.Value.(BatchPositionValueV1)
 	if !ok {
-		return utils.MySQLBinlogPosition{}, errors.Errorf("invalid position type")
+		return config.MySQLBinlogPosition{}, errors.Errorf("invalid position type")
 	}
 
 	return batchPositionValue.Start, nil

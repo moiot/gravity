@@ -1,9 +1,14 @@
 package mongobatch
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/moiot/gravity/pkg/position_repos"
 
@@ -11,13 +16,11 @@ import (
 	"github.com/mitchellh/mapstructure"
 	log "github.com/sirupsen/logrus"
 	mgo "gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/inputs/mongostream"
 	"github.com/moiot/gravity/pkg/metrics"
-	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
 	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/registry"
@@ -79,6 +82,8 @@ type mongoBatchInput struct {
 	router  core.Router
 	session *mgo.Session
 
+	client *mongo.Client
+
 	wg     sync.WaitGroup
 	closeC chan struct{}
 
@@ -120,7 +125,14 @@ func (plugin *mongoBatchInput) Configure(pipelineName string, data map[string]in
 }
 
 func (plugin *mongoBatchInput) Start(emitter core.Emitter, router core.Router, positionCache position_cache.PositionCacheInterface) error {
-	session, err := mongo.CreateMongoSession(plugin.cfg.Source)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(plugin.cfg.Source.URI()))
+	if err != nil {
+		return errors.Trace(err)
+	}
+	plugin.client = client
+
+	session, err := utils.CreateMongoSession(plugin.cfg.Source)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -155,7 +167,7 @@ func (plugin *mongoBatchInput) Start(emitter core.Emitter, router core.Router, p
 
 	log.Debugf("[mongoBatchInput] chunks: %v", pos.Chunks)
 
-	taskC := make(chan chunk, len(plugin.pos.Chunks))
+	taskC := make(chan Chunk, len(plugin.pos.Chunks))
 	for _, c := range plugin.pos.Chunks {
 		if !c.Done {
 			taskC <- c
@@ -175,6 +187,7 @@ func (plugin *mongoBatchInput) Close() {
 	close(plugin.closeC)
 	plugin.wg.Wait()
 	plugin.session.Close()
+	plugin.client.Disconnect(context.Background())
 	plugin.throttle.Stop()
 	log.Infof("[mongoBatchInput] closed")
 }
@@ -239,75 +252,97 @@ func (plugin *mongoBatchInput) Wait() {
 	plugin.wg.Wait()
 }
 
-func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
+func (plugin *mongoBatchInput) runWorker(ch chan Chunk) {
 	defer plugin.wg.Done()
 
 	for {
 		select {
 		case task, ok := <-ch:
 			if !ok {
-				log.Infof("[mongoBatchInput] no more chunk, exit worker.")
+				log.Infof("[mongoBatchInput] no more Chunk, exit worker.")
 				return
 			}
 			if task.Current == nil {
 				task.Current = task.Min
 			}
-			var actualCount int
+
 			first := true
+			collection := plugin.client.Database(task.Database).Collection(task.Collection)
 			for {
 				<-plugin.throttle.C
-				c := plugin.session.DB(task.Database).C(task.Collection)
-				idQuery := make(map[string]interface{})
+
+				var batchResult []map[string]interface{}
+				idCond := bson.M{}
+
 				if task.Current != nil {
 					if first {
-						idQuery["$gte"] = task.Current.Value
+						idCond["$gte"] = task.Current.Value
 					} else {
-						idQuery["$gt"] = task.Current.Value
+						idCond["$gt"] = task.Current.Value
 					}
+					first = false
 				}
 				if task.Max != nil {
-					idQuery["$lte"] = task.Max.Value
+					idCond["$lte"] = task.Max.Value
 				}
 
-				if len(idQuery) == 0 {
+				if len(idCond) == 0 {
 					log.Fatalf("id query empty")
 				}
 
-				first = false
-				var results []map[string]interface{}
-				err := c.Find(bson.M{"_id": idQuery}).Sort("_id").Limit(plugin.cfg.BatchSize).Hint("_id").All(&results)
+				findOptions := options.Find()
+				findOptions.SetLimit(int64(plugin.cfg.BatchSize))
+				findOptions.SetSort(map[string]interface{}{"_id": 1})
+
+				queryStartTime := time.Now()
+				cursor, err := collection.Find(context.Background(), bson.D{{"_id", idCond}}, findOptions)
 				if err != nil {
-					log.Fatalf("[mongoBatchInput] error query for task. %s", errors.ErrorStack(err))
+					log.Fatalf("failed to get cursor: %v", err.Error())
 				}
-				actualCount = len(results)
-				if actualCount == 0 {
-					log.Infof("[mongoBatchInput] done chunk %#v", task)
+
+				for cursor.Next(context.Background()) {
+					result := make(map[string]interface{})
+					if err := cursor.Decode(&result); err != nil {
+						log.Fatalf("cursor decode error: %v", err.Error())
+					}
+
+					batchResult = append(batchResult, result)
+				}
+				if err := cursor.Err(); err != nil {
+					log.Fatalf("cursor error: %v", err.Error())
+				}
+				cursor.Close(context.Background())
+
+				resultCount := len(batchResult)
+
+				log.Infof("[mongoBatchInput] %d records returned from query: %v, limit %v",
+					resultCount, idCond, plugin.cfg.BatchSize)
+
+				if resultCount == 0 {
+					log.Infof("[mongoBatchInput] done Chunk.max %#v, Chunk.min %#v, Chunk.current: %#v",
+						*task.Max, *task.Min, *task.Current)
 					plugin.finishChunk(task)
 					break
-				} else {
-					log.Infof("[mongoBatchInput] %d records returned from query %v", actualCount, idQuery)
-
 				}
 
-				id := results[len(results)-1]["_id"]
+				id := batchResult[resultCount-1]["_id"]
 				task.Current = &IDValue{Value: id}
-				task.Scanned += len(results)
+				task.Scanned += int64(resultCount)
 				now := time.Now()
-				metrics.InputCounter.WithLabelValues(plugin.pipelineName, task.Database, task.Collection, string(core.MsgDML), string(core.Insert)).Add(float64(len(results)))
-				for _, result := range results {
+				for i := 0; i < resultCount; i++ {
 					op := gtm.Op{
-						Id:        result["_id"],
+						Id:        batchResult[i]["_id"],
 						Operation: "i",
 						Namespace: fmt.Sprintf("%s.%s", task.Database, task.Collection),
-						Data:      result,
+						Data:      batchResult[i],
 						Row:       nil,
-						Timestamp: bson.MongoTimestamp(now.Unix() << 32),
-						Source:    gtm.DirectQuerySource,
+						// Timestamp: bson.MongoTimestamp(now.Unix() << 32),
+						Source: gtm.DirectQuerySource,
 					}
 
 					msg := core.Msg{
 						Phase: core.Phase{
-							EnterInput: time.Now(),
+							Start: queryStartTime,
 						},
 						Type:     core.MsgDML,
 						Host:     plugin.cfg.Source.Host,
@@ -315,7 +350,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 						Table:    task.Collection,
 						DmlMsg: &core.DMLMsg{
 							Operation: core.Insert,
-							Data:      result,
+							Data:      batchResult[i],
 							Old:       make(map[string]interface{}),
 							Pks: map[string]interface{}{
 								"_id": op.Id,
@@ -339,6 +374,14 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 					default:
 					}
 				}
+				metrics.InputCounter.
+					WithLabelValues(
+						plugin.pipelineName,
+						task.Database,
+						task.Collection,
+						string(core.MsgDML),
+						string(core.Insert)).
+					Add(float64(resultCount))
 			}
 		case <-plugin.closeC:
 			return
@@ -346,11 +389,11 @@ func (plugin *mongoBatchInput) runWorker(ch chan chunk) {
 	}
 }
 
-func (plugin *mongoBatchInput) finishChunk(c chunk) {
+func (plugin *mongoBatchInput) finishChunk(c Chunk) {
 	c.Done = true
 	msg := &core.Msg{
 		Phase: core.Phase{
-			EnterInput: time.Now(),
+			Start: time.Now(),
 		},
 		Type:           core.MsgCtl,
 		InputStreamKey: utils.NewStringPtr(c.key()),
@@ -362,7 +405,7 @@ func (plugin *mongoBatchInput) finishChunk(c chunk) {
 	<-msg.Done
 	msg = &core.Msg{
 		Phase: core.Phase{
-			EnterInput: time.Now(),
+			Start: time.Now(),
 		},
 		Type:           core.MsgCloseInputStream,
 		InputStreamKey: utils.NewStringPtr(c.key()),
@@ -374,7 +417,7 @@ func (plugin *mongoBatchInput) finishChunk(c chunk) {
 	}
 	<-msg.Done
 	if err := plugin.saveChunk(c); err != nil {
-		log.Fatalf("failed to save chunk: %v", errors.ErrorStack(err))
+		log.Fatalf("failed to save Chunk: %v", errors.ErrorStack(err))
 	}
 	if err := plugin.positionCache.Flush(); err != nil {
 		log.Fatalf("failed to flush position: %v", errors.ErrorStack(err))
@@ -382,11 +425,11 @@ func (plugin *mongoBatchInput) finishChunk(c chunk) {
 }
 
 func (plugin *mongoBatchInput) AfterMsgCommit(msg *core.Msg) error {
-	c := msg.InputContext.(chunk)
+	c := msg.InputContext.(Chunk)
 	return plugin.saveChunk(c)
 }
 
-func (plugin *mongoBatchInput) saveChunk(c chunk) error {
+func (plugin *mongoBatchInput) saveChunk(c Chunk) error {
 	plugin.pos.Chunks[plugin.chunkMap[c.key()]] = c
 
 	plugin.posLock.Lock()

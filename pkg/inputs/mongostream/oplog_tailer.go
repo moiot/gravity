@@ -18,7 +18,6 @@ import (
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/metrics"
-	"github.com/moiot/gravity/pkg/mongo"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
 	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/utils"
@@ -158,14 +157,14 @@ func (tailer *OplogTailer) Run() {
 			log.Fatalf("[oplog_tailer] err: %v", err)
 		case op := <-tailer.opCtx.OpC:
 			received := time.Now()
-			if mongo.IsDeadSignal(op, tailer.pipelineName) {
+			if utils.IsDeadSignal(op, tailer.pipelineName) {
 				log.Info("[oplog_tailer] receive dead signal, exit")
 				tailer.Stop()
 			}
 
 			msg := core.Msg{
 				Phase: core.Phase{
-					EnterInput: received,
+					Start: received,
 				},
 				Host:      tailer.sourceHost,
 				Database:  op.GetDatabase(),
@@ -258,7 +257,7 @@ func outputStreamKey(oplog *gtm.Op) string {
 }
 
 func (tailer *OplogTailer) SendDeadSignal() error {
-	return mongo.SendDeadSignal(tailer.session, tailer.pipelineName)
+	return utils.SendDeadSignal(tailer.session, tailer.pipelineName)
 }
 
 func (tailer *OplogTailer) Wait() {

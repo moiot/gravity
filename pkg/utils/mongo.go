@@ -1,8 +1,27 @@
-package mongo
+/*
+ *
+ * // Copyright 2019 , Beijing Mobike Technology Co., Ltd.
+ * //
+ * // Licensed under the Apache License, Version 2.0 (the "License");
+ * // you may not use this file except in compliance with the License.
+ * // You may obtain a copy of the License at
+ * //
+ * //     http://www.apache.org/licenses/LICENSE-2.0
+ * //
+ * // Unless required by applicable law or agreed to in writing, software
+ * // distributed under the License is distributed on an "AS IS" BASIS,
+ * // See the License for the specific language governing permissions and
+ * // limitations under the License.
+ */
+
+package utils
 
 import (
-	"fmt"
+	"context"
 	"time"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
@@ -15,47 +34,26 @@ import (
 )
 
 func CreateMongoSession(cfg *config.MongoConnConfig) (*mgo.Session, error) {
-	username := ""
-	if cfg.Username != "" {
-		username = cfg.Username
-	}
+	url := cfg.URI()
 
-	password := ""
-	if cfg.Password != "" {
-		password = cfg.Password
-	}
-
-	host := "localhost"
-	if cfg.Host != "" {
-		host = cfg.Host
-	}
-
-	port := 27017
-	if cfg.Port != 0 {
-		port = cfg.Port
-	}
-
-	db := cfg.Database
-
-	var url string
-	if username == "" || password == "" {
-		url = fmt.Sprintf("mongodb://%s:%d/%s", host, port, db)
-	} else {
-		url = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s", username, password, host, port, db)
-	}
-
-	//If not specified, the connection will timeout, probably because the replica set has not been initialized yet.
-	if cfg.Direct {
-		url += "?connect=direct"
-	}
+	log.Infof("connecting to %s", url)
 
 	session, err := mgo.Dial(url)
 	if err != nil {
 		return nil, errors.Annotatef(err, "failed to open mongo session: %s, err: %v", url, err.Error())
 	}
 
-	log.Infof("connected to %s", url)
 	return session, nil
+}
+
+func CreateMongoClient(cfg *config.MongoConnConfig) (*mongo.Client, error) {
+	uri := cfg.URI()
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return client, nil
 }
 
 const deadSignalCollection = "dead_signals"

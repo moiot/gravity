@@ -31,11 +31,13 @@ import (
 const Name = "stdout"
 
 type StdoutPluginConfig struct {
-	Routes []map[string]interface{} `mapstructure:"routes"  json:"routes"`
+	Routes     []map[string]interface{} `mapstructure:"routes"  json:"routes"`
+	DisableLog bool                     `mapstructure:"disable-log" json:"disable-log"`
 }
 
 type stdOutput struct {
 	pipelineName string
+	disableLog   bool
 	routes       []*routers.MySQLRoute
 }
 
@@ -48,6 +50,7 @@ func (plugin *stdOutput) Configure(pipelineName string, data map[string]interfac
 		return errors.Trace(err)
 	}
 
+	plugin.disableLog = pluginConfig.DisableLog
 	// init routes
 	plugin.routes, err = routers.NewMySQLRoutes(pluginConfig.Routes)
 	if err != nil {
@@ -82,14 +85,15 @@ func (plugin *stdOutput) Execute(msgs []*core.Msg) error {
 			continue
 		}
 
-		if msg.DmlMsg != nil {
-			fmt.Fprintf(os.Stdout, "schema: %v, table: %v, dml op: %v, data: %v\n", msg.Database, msg.Table, msg.DmlMsg.Operation, msg.DmlMsg.Data)
-		} else if msg.DdlMsg != nil {
-			fmt.Fprintf(os.Stdout, "schema: %v, table: %v, ddl: %v\n", msg.Database, msg.Table, msg.DdlMsg.Statement)
-		} else {
-			fmt.Fprintf(os.Stdout, "schema: %v, table: %v, type: %v", msg.Database, msg.Table, msg.Type)
+		if !plugin.disableLog {
+			if msg.DmlMsg != nil {
+				fmt.Fprintf(os.Stdout, "schema: %v, table: %v, dml op: %v, data: %v\n", msg.Database, msg.Table, msg.DmlMsg.Operation, msg.DmlMsg.Data)
+			} else if msg.DdlMsg != nil {
+				fmt.Fprintf(os.Stdout, "schema: %v, table: %v, ddl: %v\n", msg.Database, msg.Table, msg.DdlMsg.Statement)
+			} else {
+				fmt.Fprintf(os.Stdout, "schema: %v, table: %v, type: %v", msg.Database, msg.Table, msg.Type)
+			}
 		}
-
 	}
 	return nil
 }

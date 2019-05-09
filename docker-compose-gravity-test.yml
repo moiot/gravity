@@ -24,8 +24,10 @@ services:
       - ./mycnf:/etc/mysql/conf.d
 
   mongo:
-    image: mongo:4.1
     container_name: mongo
+    build:
+      context: ./
+      dockerfile: Dockerfile.mongo.setup
     ports:
       - 27017
     logging:
@@ -71,4 +73,9 @@ services:
       - MONGO_HOST=mongo
       - KAFKA_BROKER=kafka:9092
       - ELASTICSEARCH_URLS=http://elasticsearch:9200
-    command: ["bash", "./wait-for-it.sh", "source-db:3306","-t", "0",  "--", "./wait-for-it.sh", "target-db:3306","-t", "0",  "--", "./wait-for-it.sh", "mongo:27017", "-t", "0", "--", "./wait-for-it.sh", "kafka:9092", "-t", "0", "--", "./wait-for-it.sh", "elasticsearch:9200", "-t", "0",  "--", "make", "go-test"]
+    command: ["bash", "./wait-for-it.sh", "source-db:3306","-t", "0",
+              "--", "./wait-for-it.sh", "target-db:3306","-t", "0",
+              "--", "./wait-for-it.sh", "mongo:27017", "-t", "0",
+              "--", "./wait-for-it.sh", "kafka:9092", "-t", "0",
+              "--", "./wait-for-it.sh", "elasticsearch:9200", "-t", "0",
+              "--", "make", "go-test"]

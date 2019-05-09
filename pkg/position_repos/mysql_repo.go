@@ -66,7 +66,7 @@ func IsPositionStoreEvent(schemaName string, tableName string) bool {
 // port = ...
 //
 type mysqlPositionRepo struct {
-	dbCfg      utils.DBConfig
+	dbCfg      config.DBConfig
 	db         *sql.DB
 	annotation string
 }
@@ -182,7 +182,7 @@ func (repo *mysqlPositionRepo) Close() error {
 	return errors.Trace(repo.db.Close())
 }
 
-func NewMySQLRepoConfig(annotation string, source *utils.DBConfig) *config.GenericPluginConfig {
+func NewMySQLRepoConfig(annotation string, source *config.DBConfig) *config.GenericPluginConfig {
 	cfg := config.GenericPluginConfig{
 		Type: MySQLRepoName,
 		Config: map[string]interface{}{
@@ -192,7 +192,7 @@ func NewMySQLRepoConfig(annotation string, source *utils.DBConfig) *config.Gener
 	}
 	return &cfg
 }
-func NewMySQLRepo(pipelineName string, annotation string, source *utils.DBConfig) PositionRepo {
+func NewMySQLRepo(pipelineName string, annotation string, source *config.DBConfig) PositionRepo {
 	cfg := NewMySQLRepoConfig(annotation, source)
 	plugin, err := registry.GetPlugin(registry.PositionRepo, MySQLRepoName)
 	if err != nil {

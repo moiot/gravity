@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moiot/gravity/pkg/config"
+
 	"github.com/mitchellh/hashstructure"
 
 	"github.com/pingcap/parser/ast"
@@ -35,7 +37,7 @@ const (
 
 type inputContext struct {
 	op       binlogOp
-	position utils.MySQLBinlogPosition
+	position config.MySQLBinlogPosition
 }
 
 func NewInsertMsgs(
@@ -64,7 +66,7 @@ func NewInsertMsgs(
 		}
 		msg := core.Msg{
 			Phase: core.Phase{
-				EnterInput: received,
+				Start: received,
 			},
 			Type:         core.MsgDML,
 			Host:         host,
@@ -141,7 +143,7 @@ func NewUpdateMsgs(
 		if !pkUpdate {
 			msg := core.Msg{
 				Phase: core.Phase{
-					EnterInput: received,
+					Start: received,
 				},
 				Type:         core.MsgDML,
 				Host:         host,
@@ -171,7 +173,7 @@ func NewUpdateMsgs(
 			// first delete old row
 			msgDelete := core.Msg{
 				Phase: core.Phase{
-					EnterInput: received,
+					Start: received,
 				},
 				Type:         core.MsgDML,
 				Host:         host,
@@ -198,7 +200,7 @@ func NewUpdateMsgs(
 			// then insert new row
 			msgInsert := core.Msg{
 				Phase: core.Phase{
-					EnterInput: received,
+					Start: received,
 				},
 				Type:         core.MsgDML,
 				Host:         host,
@@ -286,7 +288,7 @@ func NewDeleteMsgs(
 		}
 		msg := core.Msg{
 			Phase: core.Phase{
-				EnterInput: received,
+				Start: received,
 			},
 			Type:         core.MsgDML,
 			Host:         host,
@@ -329,11 +331,11 @@ func NewDDLMsg(
 	ddlSQL string,
 	ts int64,
 	received time.Time,
-	position utils.MySQLBinlogPosition) *core.Msg {
+	position config.MySQLBinlogPosition) *core.Msg {
 
 	return &core.Msg{
 		Phase: core.Phase{
-			EnterInput: received,
+			Start: received,
 		},
 		Type:                core.MsgDDL,
 		Timestamp:           time.Unix(ts, 0),
@@ -356,15 +358,15 @@ func NewBarrierMsg(callback core.MsgCallbackFunc) *core.Msg {
 		InputStreamKey:      utils.NewStringPtr(inputStreamKey),
 		AfterCommitCallback: callback,
 		Phase: core.Phase{
-			EnterInput: time.Now(),
+			Start: time.Now(),
 		},
 	}
 }
 
-func NewXIDMsg(ts int64, received time.Time, callback core.MsgCallbackFunc, position utils.MySQLBinlogPosition) *core.Msg {
+func NewXIDMsg(ts int64, received time.Time, callback core.MsgCallbackFunc, position config.MySQLBinlogPosition) *core.Msg {
 	return &core.Msg{
 		Phase: core.Phase{
-			EnterInput: received,
+			Start: received,
 		},
 		Type:                core.MsgCtl,
 		Timestamp:           time.Unix(ts, 0),
