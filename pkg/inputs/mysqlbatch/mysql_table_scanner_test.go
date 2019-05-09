@@ -888,7 +888,8 @@ CREATE TABLE %s.%s (
 			columnTypes,
 			[]int{0},
 			c.currentMinValues,
-			c.maxValues)
+			c.maxValues,
+			"")
 		r.NoError(err)
 		r.Equal(c.retContinue, continueNext)
 
