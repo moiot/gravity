@@ -75,7 +75,8 @@ func TestMongoPositionRepo_Get(t *testing.T) {
 		r.NoError(err)
 
 		_, err = collection.Upsert(
-			bson.M{"name": tt.Name()}, bson.M{
+			bson.M{"name": tt.Name()},
+			bson.M{
 				"$set": bson.M{
 					"stage":            string(config.Stream),
 					"current_position": 1,

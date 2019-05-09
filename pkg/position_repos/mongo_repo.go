@@ -113,10 +113,8 @@ func (repo *mongoPositionRepo) Init() error {
 	_, _ = indexes.CreateOne(
 		context.Background(),
 		mongo.IndexModel{
-			Keys: bsonx.Doc{{"name", bsonx.String("text")}},
-			Options: options.Index().
-				SetBackground(false).
-				SetUnique(true),
+			Keys:    bsonx.Doc{{"name", bsonx.Int32(1)}},
+			Options: options.Index().SetBackground(false).SetUnique(true),
 		})
 	return nil
 }
