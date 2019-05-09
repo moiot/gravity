@@ -137,7 +137,7 @@ func DeleteEmptyTables(db *sql.DB, tables []*schema_store.Table, tableConfigs []
 		go func(idx int) {
 			defer wg.Done()
 
-			if !utils.IsTableEmpty(db, tables[idx].Schema, tables[idx].Name) {
+			if !utils.IsTableEmpty(db, tables[idx].Schema, tables[idx].Name, tableConfigs[idx].Condition) {
 				mu.Lock()
 				defer mu.Unlock()
 				retTables = append(retTables, tables[idx])
@@ -165,7 +165,7 @@ func InitializePositionAndDeleteScannedTable(
 
 	for i, t := range tables {
 		// Initialize table position and delete table that finished scan.
-		finished, err := InitTablePosition(db, positionCache, t, scanColumnsArray[i], &estimatedRowCount[i])
+		finished, err := InitTablePosition(db, positionCache, t, scanColumnsArray[i], tableConfigs[i], &estimatedRowCount[i])
 		if err != nil {
 			return nil, nil, nil, nil, errors.Trace(err)
 		}

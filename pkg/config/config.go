@@ -29,10 +29,12 @@ type Config struct {
 
 	HttpAddr string `toml:"http-addr" json:"http-addr"`
 
-	PositionFile  string `toml:"position-file" json:"position-file"`
-	ConfigFile    string `toml:"-" json:"-"`
-	ClearPosition bool   `toml:"-" json:"-"`
-	Version       bool
+	PositionFile         string `toml:"position-file" json:"position-file"`
+	BlockProfileRate     int    ` toml:"-" json:"-"`
+	MutexProfileFraction int    ` toml:"-" json:"-"`
+	ConfigFile           string `toml:"-" json:"-"`
+	ClearPosition        bool   `toml:"-" json:"-"`
+	Version              bool
 }
 
 type PipelineConfig struct {
@@ -196,6 +198,8 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.Log.File.Filename, "log-file", "", "log file path")
 	fs.StringVar(&cfg.Log.Format, "log-format", "json", "log format")
 	fs.StringVar(&cfg.HttpAddr, "http-addr", ":8080", "http-addr")
+	fs.IntVar(&cfg.BlockProfileRate, "block-profile-rate", 0, "set block profile rate")
+	fs.IntVar(&cfg.MutexProfileFraction, "mutex-profile-fraction", 0, "set mutex profile fraction")
 	return cfg
 }
 

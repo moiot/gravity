@@ -30,6 +30,8 @@ type TableConfig struct {
 
 	// ScanColumn is an array of string, that enforces these table's scan columns
 	ScanColumn []string `mapstructure:"scan-column" toml:"scan-column" json:"scan-column"`
+
+	Condition string `mapstructure:"condition"  toml:"condition" json:"condition"`
 }
 
 type PluginConfig struct {
@@ -108,6 +110,7 @@ type TableWork struct {
 	TableConfig       *TableConfig
 	ScanColumns       []string
 	EstimatedRowCount int64
+	Condition         string
 }
 
 const Name = "mysql-batch"
@@ -257,7 +260,9 @@ func (plugin *mysqlBatchInputPlugin) Start(emitter core.Emitter, router core.Rou
 			TableDef:          tableDefs[i],
 			TableConfig:       &tableConfigs[i],
 			ScanColumns:       scanColumnsArray[i],
-			EstimatedRowCount: estimatedRowCount[i]}
+			EstimatedRowCount: estimatedRowCount[i],
+			Condition:         tableConfigs[i].Condition,
+		}
 		tableQueue <- &work
 	}
 	close(tableQueue)
@@ -391,6 +396,7 @@ func InitTablePosition(
 	positionCache position_cache.PositionCacheInterface,
 	tableDef *schema_store.Table,
 	scanColumns []string,
+	tableConfig TableConfig,
 	estimatedRowCount *int64) (bool, error) {
 
 	fullTableName := utils.TableIdentity(tableDef.Schema, tableDef.Name)
@@ -399,7 +405,7 @@ func InitTablePosition(
 		return false, errors.Trace(err)
 	}
 
-	empty := utils.IsTableEmpty(db, tableDef.Schema, tableDef.Name)
+	empty := utils.IsTableEmpty(db, tableDef.Schema, tableDef.Name, tableConfig.Condition)
 	if empty {
 		*estimatedRowCount = 0
 	} else {
@@ -417,7 +423,7 @@ func InitTablePosition(
 			minPositions = append(minPositions, TablePosition{Column: ScanColumnForDump, Type: PlainInt, Value: 0})
 			log.Infof("[InitTablePosition] scan dump PutMaxMin table: %v, maxPos: %+v, minPos: %+v", fullTableName, maxPositions, minPositions)
 		} else {
-			retMax, retMin := FindMaxMinValueFromDB(db, tableDef.Schema, tableDef.Name, scanColumns)
+			retMax, retMin := FindMaxMinValueFromDB(db, tableDef.Schema, tableDef.Name, scanColumns, tableConfig.Condition)
 			for i, column := range scanColumns {
 				maxPositions = append(maxPositions, TablePosition{Value: retMax[i], Column: column})
 				minPositions = append(minPositions, TablePosition{Value: retMin[i], Column: column})

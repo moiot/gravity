@@ -25,21 +25,35 @@ func (store *SimpleSchemaStore) IsInCache(dbName string) bool {
 		return false
 	}
 }
+func (store *SimpleSchemaStore) getFromCache(dbName string, lock bool) (Schema, bool) {
+	if lock {
+		store.RLock()
+		defer store.RUnlock()
+	}
+
+	cachedSchema, ok := store.schemas[dbName]
+	if ok {
+		return cachedSchema, true
+	}
+	return nil, false
+}
 
 func (store *SimpleSchemaStore) GetSchema(dbName string) (Schema, error) {
-	store.Lock()
-	defer store.Unlock()
-
 	if dbName == "" {
 		return nil, nil
 	}
 
-	// Return the cached Schema
-	cachedSchema, ok := store.schemas[dbName]
+	schema, ok := store.getFromCache(dbName, true)
 	if ok {
-		return cachedSchema, nil
+		return schema, nil
 	}
 
+	store.Lock()
+	defer store.Unlock()
+	schema, ok = store.getFromCache(dbName, false)
+	if ok {
+		return schema, nil
+	}
 	schema, err := GetSchemaFromDB(store.sourceDB, dbName)
 	if err != nil {
 		return nil, errors.Trace(err)
