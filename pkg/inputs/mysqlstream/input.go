@@ -45,7 +45,7 @@ type MySQLBinlogInputPluginConfig struct {
 	PositionRepo *config.GenericPluginConfig `mapstructure:"position-repo" toml:"position-repo" json:"position-repo"`
 
 	// If we detect any internal txn tag that matches FailOnTxnTag, just fail.
-	FailOnTxnTag string `mapstructure:"fail-on-txn-tag" toml:"fail-on-txn-tag"`
+	FailOnTxnTags []string `mapstructure:"fail-on-txn-tags" toml:"fail-on-txn-tags"`
 
 	//
 	// internal configurations that is not exposed to users
@@ -97,8 +97,8 @@ func (plugin *mysqlStreamInputPlugin) Configure(pipelineName string, configInput
 	}
 
 	// By default, fail on txn tag start with the same pipelineName prefix.
-	if cfg.FailOnTxnTag == "" {
-		cfg.FailOnTxnTag = fmt.Sprintf("%s*", pipelineName)
+	if len(cfg.FailOnTxnTags) == 0 {
+		cfg.FailOnTxnTags = []string{fmt.Sprintf("%s*", pipelineName)}
 	}
 
 	// probe connection settings

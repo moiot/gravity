@@ -265,7 +265,7 @@ func (tailer *BinlogTailer) Start() error {
 
 				schemaName, tableName := string(ev.Table.Schema), string(ev.Table.Table)
 
-				if p, circular := utils.MatchTxnTagPipelineName(schemaName, tableName, tailer.cfg.FailOnTxnTag, ev); circular {
+				if p, circular := utils.MatchTxnTagPipelineName(schemaName, tableName, tailer.cfg.FailOnTxnTags, ev); circular {
 					log.Fatalf("[binlog_tailer] detected internal circular traffic, txn tag: %v", p)
 				}
 
