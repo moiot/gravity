@@ -196,11 +196,11 @@ func (w *staticSlidingWindow) reportWatermarkDelay() float64 {
 	watermark := w.Watermark()
 
 	// ProcessTime can be seen as the duration that event are in the queue.
-	metrics.End2EndProcessTimeHistogram.WithLabelValues(core.PipelineName).Observe(time.Since(watermark.ProcessTime).Seconds())
+	seconds := time.Since(watermark.ProcessTime).Seconds()
+	metrics.End2EndProcessTimeHistogram.WithLabelValues(core.PipelineName).Observe(seconds)
 
 	// EventTime can be seen as the end to end duration of event process time.
-	seconds := time.Since(watermark.EventTime).Seconds()
-	metrics.End2EndEventTimeHistogram.WithLabelValues(core.PipelineName).Observe(seconds)
+	metrics.End2EndEventTimeHistogram.WithLabelValues(core.PipelineName).Observe(time.Since(watermark.EventTime).Seconds())
 
 	return seconds
 }
