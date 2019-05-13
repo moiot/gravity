@@ -38,8 +38,12 @@ func IsInternalTraffic(db string, tbl string) bool {
 	return (db == dbNameV1 && tbl == tableNameV1) || (db == dbNameV2 && tbl == tableNameV2)
 }
 
+func IsInternalTrafficV2(db string, tbl string) bool {
+	return db == dbNameV2 && tbl == tableNameV2
+}
+
 func MatchTxnTagPipelineName(db string, tbl string, patterns []string, ev *replication.RowsEvent) (string, bool) {
-	if IsInternalTraffic(db, tbl) {
+	if IsInternalTrafficV2(db, tbl) {
 		for rowIndex := 0; rowIndex < len(ev.Rows); rowIndex++ {
 			pipelineName := ev.Rows[rowIndex][2].(string)
 			for _, pattern := range patterns {
