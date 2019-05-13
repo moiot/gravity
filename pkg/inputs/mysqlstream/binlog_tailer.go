@@ -266,7 +266,7 @@ func (tailer *BinlogTailer) Start() error {
 				schemaName, tableName := string(ev.Table.Schema), string(ev.Table.Table)
 
 				if p, circular := utils.MatchTxnTagPipelineName(schemaName, tableName, tailer.cfg.FailOnTxnTag, ev); circular {
-					log.Fatalf("[binlog_tailer] detected internal traffic, txn tag: %v", p)
+					log.Fatalf("[binlog_tailer] detected internal circular traffic, txn tag: %v", p)
 				}
 
 				// dead signal is received from special internal table.
