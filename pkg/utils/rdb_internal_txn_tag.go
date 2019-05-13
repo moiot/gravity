@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/rand"
 
+	"github.com/siddontang/go-mysql/replication"
+
 	"github.com/moiot/gravity/pkg/consts"
 
 	"github.com/juju/errors"
@@ -34,6 +36,22 @@ var TxnTagSQLFormat = fmt.Sprintf("insert into `%s`.`%s`", dbNameV2, tableNameV2
 
 func IsInternalTraffic(db string, tbl string) bool {
 	return (db == dbNameV1 && tbl == tableNameV1) || (db == dbNameV2 && tbl == tableNameV2)
+}
+
+func MatchTxnTagPipelineName(db string, tbl string, patterns []string, ev *replication.RowsEvent) (string, bool) {
+	if IsInternalTraffic(db, tbl) {
+		for rowIndex := 0; rowIndex < len(ev.Rows); rowIndex++ {
+			pipelineName := ev.Rows[rowIndex][2].(string)
+			for _, pattern := range patterns {
+				if Glob(pattern, pipelineName) {
+					return pipelineName, true
+				}
+			}
+		}
+		return "", false
+	} else {
+		return "", false
+	}
 }
 
 func InitInternalTxnTags(db *sql.DB) error {

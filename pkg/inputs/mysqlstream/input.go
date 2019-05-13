@@ -3,6 +3,7 @@ package mysqlstream
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sync"
 	"time"
 
@@ -42,6 +43,9 @@ type MySQLBinlogInputPluginConfig struct {
 	SourceProbeCfg *helper.SourceProbeCfg `mapstructure:"source-probe-config"json:"source-probe-config"`
 
 	PositionRepo *config.GenericPluginConfig `mapstructure:"position-repo" toml:"position-repo" json:"position-repo"`
+
+	// If we detect any internal txn tag that matches FailOnTxnTag, just fail.
+	FailOnTxnTags []string `mapstructure:"fail-on-txn-tags" toml:"fail-on-txn-tags"`
 
 	//
 	// internal configurations that is not exposed to users
@@ -90,6 +94,11 @@ func (plugin *mysqlStreamInputPlugin) Configure(pipelineName string, configInput
 	// validate configurations
 	if cfg.Source == nil {
 		return errors.Errorf("[mysqlbinlog] empty master db configured")
+	}
+
+	// By default, fail on txn tag start with the same pipelineName prefix.
+	if len(cfg.FailOnTxnTags) == 0 {
+		cfg.FailOnTxnTags = []string{fmt.Sprintf("%s*", pipelineName)}
 	}
 
 	// probe connection settings

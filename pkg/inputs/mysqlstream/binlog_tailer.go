@@ -264,6 +264,11 @@ func (tailer *BinlogTailer) Start() error {
 			case *replication.RowsEvent:
 
 				schemaName, tableName := string(ev.Table.Schema), string(ev.Table.Table)
+
+				if p, circular := utils.MatchTxnTagPipelineName(schemaName, tableName, tailer.cfg.FailOnTxnTags, ev); circular {
+					log.Fatalf("[binlog_tailer] detected internal circular traffic, txn tag: %v", p)
+				}
+
 				// dead signal is received from special internal table.
 				// it is only used for test purpose right now.
 				isDeadSignal := mysql_test.IsDeadSignal(schemaName, tableName)
