@@ -602,7 +602,7 @@ func (tailer *BinlogTailer) FlushMsgTxnBuffer() {
 		ctx := m.InputContext.(inputContext)
 
 		// check circular traffic again before emitter emit the message
-		if pipelineName, circular := utils.MatchTxnTagPipelineName(tailer.cfg.FailOnTxnTags, m); circular {
+		if pipelineName, circular := core.MatchTxnTagPipelineName(tailer.cfg.FailOnTxnTags, m); circular {
 			log.Fatalf("[binlog_tailer] detected internal circular traffic, txn tag: %v", pipelineName)
 		}
 
