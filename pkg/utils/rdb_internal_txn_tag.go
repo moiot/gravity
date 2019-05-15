@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/siddontang/go-mysql/replication"
+	"github.com/moiot/gravity/pkg/core"
 
 	"github.com/moiot/gravity/pkg/consts"
 
@@ -42,14 +42,12 @@ func IsInternalTrafficV2(db string, tbl string) bool {
 	return db == dbNameV2 && tbl == tableNameV2
 }
 
-func MatchTxnTagPipelineName(db string, tbl string, patterns []string, ev *replication.RowsEvent) (string, bool) {
-	if IsInternalTrafficV2(db, tbl) {
-		for rowIndex := 0; rowIndex < len(ev.Rows); rowIndex++ {
-			pipelineName := ev.Rows[rowIndex][2].(string)
-			for _, pattern := range patterns {
-				if Glob(pattern, pipelineName) {
-					return pipelineName, true
-				}
+func MatchTxnTagPipelineName(patterns []string, msg *core.Msg) (string, bool) {
+	if IsInternalTrafficV2(msg.Database, msg.Table) {
+		pipelineName := msg.DmlMsg.Data["pipeline_name"].(string)
+		for _, pattern := range patterns {
+			if Glob(pattern, pipelineName) {
+				return pipelineName, true
 			}
 		}
 		return "", false

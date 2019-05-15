@@ -265,10 +265,6 @@ func (tailer *BinlogTailer) Start() error {
 
 				schemaName, tableName := string(ev.Table.Schema), string(ev.Table.Table)
 
-				if p, circular := utils.MatchTxnTagPipelineName(schemaName, tableName, tailer.cfg.FailOnTxnTags, ev); circular {
-					log.Fatalf("[binlog_tailer] detected internal circular traffic, txn tag: %v", p)
-				}
-
 				// dead signal is received from special internal table.
 				// it is only used for test purpose right now.
 				isDeadSignal := mysql_test.IsDeadSignal(schemaName, tableName)
@@ -604,6 +600,11 @@ func (tailer *BinlogTailer) FlushMsgTxnBuffer() {
 			m.Type = core.MsgCtl
 		}
 		ctx := m.InputContext.(inputContext)
+
+		// check circular traffic again before emitter emit the message
+		if pipelineName, circular := utils.MatchTxnTagPipelineName(tailer.cfg.FailOnTxnTags, m); circular {
+			log.Fatalf("[binlog_tailer] detected internal circular traffic, txn tag: %v", pipelineName)
+		}
 
 		if err := tailer.emitter.Emit(m); err != nil {
 			log.Fatalf("failed to emit, idx: %d, schema: %v, table: %v, msgType: %v, op: %v, err: %v",
