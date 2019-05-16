@@ -6,6 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moiot/gravity/pkg/consts"
+	"github.com/moiot/gravity/pkg/utils"
+
 	"github.com/juju/errors"
 	"github.com/pingcap/parser/ast"
 	log "github.com/sirupsen/logrus"
@@ -205,4 +208,22 @@ type Phase struct {
 	EnterAcker     time.Time // also leave output
 	EnterOutput    time.Time
 	//Committed      time.Time not used
+}
+
+func IsInternalTrafficV2(db string, tbl string) bool {
+	return db == consts.GravityDBName && tbl == consts.TxnTagTableName
+}
+
+func MatchTxnTagPipelineName(patterns []string, msg *Msg) (string, bool) {
+	if IsInternalTrafficV2(msg.Database, msg.Table) {
+		pipelineName := msg.DmlMsg.Data["pipeline_name"].(string)
+		for _, pattern := range patterns {
+			if utils.Glob(pattern, pipelineName) {
+				return pipelineName, true
+			}
+		}
+		return "", false
+	} else {
+		return "", false
+	}
 }

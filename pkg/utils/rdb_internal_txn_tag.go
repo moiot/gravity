@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/siddontang/go-mysql/replication"
-
 	"github.com/moiot/gravity/pkg/consts"
 
 	"github.com/juju/errors"
@@ -20,7 +18,7 @@ const (
 	tableNameV1 = "_drc_bidirection"
 
 	dbNameV2    = consts.GravityDBName
-	tableNameV2 = "_gravity_txn_tags"
+	tableNameV2 = consts.TxnTagTableName
 )
 
 var tableDDLV2 = fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s.%s (
@@ -36,26 +34,6 @@ var TxnTagSQLFormat = fmt.Sprintf("insert into `%s`.`%s`", dbNameV2, tableNameV2
 
 func IsInternalTraffic(db string, tbl string) bool {
 	return (db == dbNameV1 && tbl == tableNameV1) || (db == dbNameV2 && tbl == tableNameV2)
-}
-
-func IsInternalTrafficV2(db string, tbl string) bool {
-	return db == dbNameV2 && tbl == tableNameV2
-}
-
-func MatchTxnTagPipelineName(db string, tbl string, patterns []string, ev *replication.RowsEvent) (string, bool) {
-	if IsInternalTrafficV2(db, tbl) {
-		for rowIndex := 0; rowIndex < len(ev.Rows); rowIndex++ {
-			pipelineName := ev.Rows[rowIndex][2].(string)
-			for _, pattern := range patterns {
-				if Glob(pattern, pipelineName) {
-					return pipelineName, true
-				}
-			}
-		}
-		return "", false
-	} else {
-		return "", false
-	}
 }
 
 func InitInternalTxnTags(db *sql.DB) error {
