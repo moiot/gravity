@@ -61,6 +61,9 @@ func NewMysqlTableDataGenerator(db *sql.DB, schema string, table string) MysqlTa
 		if err != nil {
 			log.Fatal(errors.Trace(err))
 		}
+		if extra.Valid && strings.Contains(strings.ToUpper(extra.String), "GENERATED") {
+			continue
+		}
 		c := Column{
 			name:  columnName,
 			sType: columnType,

@@ -57,6 +57,7 @@ type Column struct {
 	IsNullable   bool              `json:"is_nullable"`
 	IsUnsigned   bool              `json:"is_unsigned"`
 	IsPrimaryKey bool              `json:"is_primary_key"`
+	IsGenerated  bool              `json:"is_generated"`
 }
 
 // Table

@@ -42,9 +42,10 @@ type Generator struct {
 const tableDef = `
 CREATE TABLE IF NOT EXISTS ` + "`%s`.`%s`" + `(
 id BIGINT unsigned NOT NULL,
-i INT DEFAULT 0,
+i INT NOT NULL DEFAULT 0,
 ii INT,
 ui INT unsigned,
+ge INT GENERATED ALWAYS AS ((i + 1)) VIRTUAL,
 ti  tinyint(4) DEFAULT NULL,
 de decimal(11, 3),
 fl float(11,3) NOT NULL,

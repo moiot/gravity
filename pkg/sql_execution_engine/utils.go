@@ -95,17 +95,21 @@ func GetSingleSqlPlaceHolderAndArgWithEncodedData(msg *core.Msg, tableDef *schem
 	data := msg.DmlMsg.Data
 
 	var placeHolders []string
-	args := make([]interface{}, len(tableDef.Columns))
+	var args []interface{}
 
 	for _, column := range tableDef.Columns {
-		columnName := column.Name
-		columnIdx := column.Idx
-		columnData, ok := data[columnName]
-		if !ok {
-			return "", nil, errors.Errorf("columnName: %v data is nil, data: %v", columnName, data)
+		if column.IsGenerated {
+			placeHolders = append(placeHolders, "DEFAULT")
+		} else {
+			columnName := column.Name
+			columnData, ok := data[columnName]
+			if !ok {
+				placeHolders = append(placeHolders, "DEFAULT")
+			} else {
+				args = append(args, adjustArgs(columnData, tableDef.MustColumn(columnName)))
+				placeHolders = append(placeHolders, "?")
+			}
 		}
-		args[columnIdx] = adjustArgs(columnData, tableDef.MustColumn(columnName))
-		placeHolders = append(placeHolders, "?")
 	}
 	singleSqlPlaceHolder := fmt.Sprintf("(%s)", strings.Join(placeHolders, ","))
 	return singleSqlPlaceHolder, args, nil

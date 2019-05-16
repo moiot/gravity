@@ -176,6 +176,9 @@ func GetTableDefFromDB(db *sql.DB, dbName string, tableName string) (*Table, err
 		} else {
 			column.IsPrimaryKey = false
 		}
+		if extra.Valid && strings.Contains(strings.ToUpper(extra.String), "GENERATED") {
+			column.IsGenerated = true
+		}
 		// some validation
 		//if !column.IsNullable && column.DefaultVal.IsNull {
 		//	return errors.Errorf("column %v cannot be NULL, but default value is NULL", column.Name), nil
