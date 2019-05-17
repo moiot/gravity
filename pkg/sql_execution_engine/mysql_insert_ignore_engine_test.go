@@ -35,8 +35,10 @@ PRIMARY KEY (id)
 		Schema: testSchemaName,
 		Name:   "t",
 		Columns: []schema_store.Column{
-			{Name: "id", Idx: 0},
-			{Name: "v", Idx: 1},
+			{Name: "id"}, //Idx: 0,
+
+			{Name: "v"}, //Idx: 1,
+
 		},
 	}
 

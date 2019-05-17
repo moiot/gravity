@@ -146,7 +146,9 @@ func GetTableDefFromDB(db *sql.DB, dbName string, tableName string) (*Table, err
 			return nil, errors.Trace(err)
 		}
 
-		var column = Column{Idx: ordinalPos, Name: columnName, ColType: columnType}
+		var column = Column{
+			//Idx:  ordinalPos,
+			Name: columnName, ColType: columnType}
 
 		// There might be a situation when the column cannot be NULL,
 		// but there is no default value defined

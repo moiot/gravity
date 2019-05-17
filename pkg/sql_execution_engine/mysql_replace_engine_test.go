@@ -5,8 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/moiot/gravity/pkg/mysql_test"
 	sqlmock "gopkg.in/DATA-DOG/go-sqlmock.v1"
+
+	"github.com/moiot/gravity/pkg/mysql_test"
 
 	"github.com/stretchr/testify/require"
 
@@ -46,8 +47,8 @@ func TestMySQLReplaceEngineExecute(t *testing.T) {
 		Schema: testSchemaName,
 		Name:   "t",
 		Columns: []schema_store.Column{
-			{Name: "id", Idx: 0},
-			{Name: "v", Idx: 1},
+			{Name: "id"}, //Idx: 0},
+			{Name: "v"},  //Idx: 1},
 		},
 	}
 

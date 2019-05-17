@@ -50,7 +50,7 @@ func (col Column) IsDatetime() bool {
 
 // Column
 type Column struct {
-	Idx          int               `json:"idx"`
+	//Idx          int               `json:"idx"`
 	Name         string            `json:"name"`
 	ColType      string            `json:"col_type"`
 	DefaultVal   ColumnValueString `json:"default_value_string"`
