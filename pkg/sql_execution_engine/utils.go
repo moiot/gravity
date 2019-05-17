@@ -40,11 +40,11 @@ func GenerateSingleDeleteSQL(msg *core.Msg, tableDef *schema_store.Table) (strin
 }
 
 func GenerateReplaceSQLWithMultipleValues(msgBatch []*core.Msg, tableDef *schema_store.Table) (string, []interface{}, error) {
-	columnNames := make([]string, len(tableDef.Columns))
+	columnNames := make([]string, 0, len(tableDef.Columns))
 	for _, column := range tableDef.Columns {
 		columnName := column.Name
-		columnIdx := column.Idx
-		columnNames[columnIdx] = fmt.Sprintf("`%s`", columnName)
+		//columnIdx := column.Idx
+		columnNames = append(columnNames, fmt.Sprintf("`%s`", columnName))
 	}
 
 	sqlPrefix := fmt.Sprintf("REPLACE INTO `%s`.`%s` (%s) VALUES", tableDef.Schema, tableDef.Name, strings.Join(columnNames, ","))
@@ -95,28 +95,32 @@ func GetSingleSqlPlaceHolderAndArgWithEncodedData(msg *core.Msg, tableDef *schem
 	data := msg.DmlMsg.Data
 
 	var placeHolders []string
-	args := make([]interface{}, len(tableDef.Columns))
+	var args []interface{}
 
 	for _, column := range tableDef.Columns {
-		columnName := column.Name
-		columnIdx := column.Idx
-		columnData, ok := data[columnName]
-		if !ok {
-			return "", nil, errors.Errorf("columnName: %v data is nil, data: %v", columnName, data)
+		if column.IsGenerated {
+			placeHolders = append(placeHolders, "DEFAULT")
+		} else {
+			columnName := column.Name
+			columnData, ok := data[columnName]
+			if !ok {
+				placeHolders = append(placeHolders, "DEFAULT")
+			} else {
+				args = append(args, adjustArgs(columnData, tableDef.MustColumn(columnName)))
+				placeHolders = append(placeHolders, "?")
+			}
 		}
-		args[columnIdx] = adjustArgs(columnData, tableDef.MustColumn(columnName))
-		placeHolders = append(placeHolders, "?")
 	}
 	singleSqlPlaceHolder := fmt.Sprintf("(%s)", strings.Join(placeHolders, ","))
 	return singleSqlPlaceHolder, args, nil
 }
 
 func GenerateInsertIgnoreSQL(msgBatch []*core.Msg, tableDef *schema_store.Table) (string, []interface{}, error) {
-	columnNames := make([]string, len(tableDef.Columns))
+	columnNames := make([]string, 0, len(tableDef.Columns))
 	for _, column := range tableDef.Columns {
 		columnName := column.Name
-		columnIdx := column.Idx
-		columnNames[columnIdx] = fmt.Sprintf("`%s`", columnName)
+		//columnIdx := column.Idx
+		columnNames = append(columnNames, fmt.Sprintf("`%s`", columnName))
 	}
 
 	sqlPrefix := fmt.Sprintf("INSERT IGNORE INTO `%s`.`%s` (%s) VALUES", tableDef.Schema, tableDef.Name, strings.Join(columnNames, ","))
@@ -154,9 +158,9 @@ func GenerateInsertOnDuplicateKeyUpdate(msgBatch []*core.Msg, tableDef *schema_s
 		return "", nil, errors.Errorf("do not support unique key change")
 	}
 
-	allColumnNamesInSQL := make([]string, len(tableDef.Columns))
+	allColumnNamesInSQL := make([]string, 0, len(tableDef.Columns))
 	allColumnPlaceHolder := make([]string, len(tableDef.Columns))
-	args := make([]interface{}, len(tableDef.Columns))
+	args := make([]interface{}, 0, len(tableDef.Columns))
 	for i := range allColumnPlaceHolder {
 		allColumnPlaceHolder[i] = "?"
 	}
@@ -167,9 +171,9 @@ func GenerateInsertOnDuplicateKeyUpdate(msgBatch []*core.Msg, tableDef *schema_s
 	for _, column := range tableDef.Columns {
 		columnName := column.Name
 		columnNameInSQL := fmt.Sprintf("`%s`", columnName)
-		allColumnNamesInSQL[column.Idx] = columnNameInSQL
+		allColumnNamesInSQL = append(allColumnNamesInSQL, columnNameInSQL)
 		columnData := msg.DmlMsg.Data[columnName]
-		args[column.Idx] = adjustArgs(columnData, tableDef.MustColumn(columnName))
+		args = append(args, adjustArgs(columnData, tableDef.MustColumn(columnName)))
 		_, ok := msg.DmlMsg.Pks[columnName]
 		if !ok {
 			columnNamesAssignWithoutPks[updateColumnsIdx] = fmt.Sprintf("%s = ?", columnNameInSQL)

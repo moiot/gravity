@@ -223,7 +223,7 @@ func buildTableDef(table *pb.Table) *schema_store.Table {
 
 	for i, c := range table.ColumnInfo {
 		ret.Columns = append(ret.Columns, schema_store.Column{
-			Idx:          i,
+			//Idx:          i,
 			Name:         c.Name,
 			ColType:      c.MysqlType,
 			IsPrimaryKey: c.IsPrimaryKey,

@@ -146,7 +146,9 @@ func GetTableDefFromDB(db *sql.DB, dbName string, tableName string) (*Table, err
 			return nil, errors.Trace(err)
 		}
 
-		var column = Column{Idx: ordinalPos, Name: columnName, ColType: columnType}
+		var column = Column{
+			//Idx:  ordinalPos,
+			Name: columnName, ColType: columnType}
 
 		// There might be a situation when the column cannot be NULL,
 		// but there is no default value defined
@@ -175,6 +177,9 @@ func GetTableDefFromDB(db *sql.DB, dbName string, tableName string) (*Table, err
 			column.IsPrimaryKey = true
 		} else {
 			column.IsPrimaryKey = false
+		}
+		if extra.Valid && strings.Contains(strings.ToUpper(extra.String), "GENERATED") {
+			column.IsGenerated = true
 		}
 		// some validation
 		//if !column.IsNullable && column.DefaultVal.IsNull {
