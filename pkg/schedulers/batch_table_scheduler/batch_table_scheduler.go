@@ -257,7 +257,7 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 		scheduler.windowMutex.Lock()
 		window, ok := scheduler.slidingWindows[key]
 		if !ok {
-			window = sliding_window.NewStaticSlidingWindow(scheduler.cfg.SlidingWindowSize)
+			window = sliding_window.NewStaticSlidingWindow(scheduler.cfg.SlidingWindowSize, key)
 			scheduler.slidingWindows[key] = window
 			log.Infof("[batchScheduler.SubmitMsg] added new sliding window, key=%s, type=%s", key, msg.Type)
 			if msg.DdlMsg != nil {
@@ -312,8 +312,6 @@ func (scheduler *batchScheduler) AckMsg(msg *core.Msg) error {
 		scheduler.windowMutex.Unlock()
 
 		window.AckWindowItem(msg.SequenceNumber())
-
-		metrics.QueueLength.WithLabelValues(scheduler.pipelineName, "sliding-window", *msg.InputStreamKey).Set(float64(window.WaitingQueueLen()))
 		WorkerPoolSlidingWindowRatio.WithLabelValues(scheduler.pipelineName, *msg.InputStreamKey).Set(float64(window.WaitingQueueLen() / window.Size()))
 	}
 

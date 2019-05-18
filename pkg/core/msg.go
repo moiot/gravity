@@ -6,14 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/moiot/gravity/pkg/consts"
-	"github.com/moiot/gravity/pkg/utils"
-
 	"github.com/juju/errors"
 	"github.com/pingcap/parser/ast"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/moiot/gravity/pkg/consts"
+	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
+	"github.com/moiot/gravity/pkg/utils"
 )
 
 var PipelineName string
@@ -101,12 +101,14 @@ func (msg *Msg) SequenceNumber() int64 {
 }
 
 func (msg *Msg) BeforeWindowMoveForward() {
+	start := time.Now()
 	if msg.AfterCommitCallback != nil {
 		if err := msg.AfterCommitCallback(msg); err != nil {
 			log.Fatalf("callback failed: %v", errors.ErrorStack(err))
 		}
 	}
 	close(msg.Done)
+	metrics.InputAfterCommitHistogram.WithLabelValues(PipelineName).Observe(time.Since(start).Seconds())
 }
 
 func (msg *Msg) EventTime() time.Time {
