@@ -48,6 +48,8 @@ type staticSlidingWindow struct {
 	// happens at the source, for example, mysql binlog timestamp.
 	lastCommitEventTime int64
 
+	heapSize int64
+
 	closeC chan struct{}
 }
 
@@ -127,7 +129,7 @@ func (w *staticSlidingWindow) start() {
 
 	for readyItem := range w.readyC {
 		heap.Push(w.readyCommitHeap, readyItem)
-
+		atomic.AddInt64(&w.heapSize, 1)
 		for {
 			smallestItem, err := w.readyCommitHeap.SmallestItem()
 
@@ -151,6 +153,7 @@ func (w *staticSlidingWindow) start() {
 			//log.Infof("[sliding_window] pop: %v", smallestItem.SequenceNumber())
 
 			heap.Pop(w.readyCommitHeap)
+			atomic.AddInt64(&w.heapSize, -1)
 
 			w.nextItemToCommit, ok = <-w.waitingItemC
 			if !ok {
@@ -182,7 +185,7 @@ func (w *staticSlidingWindow) reportMetrics() {
 
 			metrics.QueueLength.WithLabelValues(core.PipelineName, "sliding-window-waiting-chan", w.name).Set(float64(len(w.waitingItemC)))
 			metrics.QueueLength.WithLabelValues(core.PipelineName, "sliding-window-ready-chan", w.name).Set(float64(len(w.readyC)))
-			metrics.QueueLength.WithLabelValues(core.PipelineName, "sliding-window-ready-heap", w.name).Set(float64(w.readyCommitHeap.Len()))
+			metrics.QueueLength.WithLabelValues(core.PipelineName, "sliding-window-ready-heap", w.name).Set(float64(atomic.LoadInt64(&w.heapSize)))
 
 		case <-w.closeC:
 			ticker.Stop()
