@@ -125,6 +125,7 @@ func (t *BinlogTailer) createMsgs(
 	binlog pb.Binlog,
 	kMsg *sarama.ConsumerMessage,
 ) ([]*core.Msg, error) {
+
 	var msgList []*core.Msg
 	if binlog.Type == pb.BinlogType_DDL {
 		metrics.InputCounter.WithLabelValues(t.name, "", "", string(core.MsgDDL), "").Add(1)
@@ -153,10 +154,6 @@ func (t *BinlogTailer) createMsgs(
 				Table:     tableName,
 				Timestamp: time.Unix(int64(ParseTimeStamp(uint64(binlog.CommitTs))), 0),
 				Done:      make(chan struct{}),
-			}
-
-			if !t.router.Exists(&msg) {
-				continue
 			}
 
 			if binlog_checker.IsBinlogCheckerMsg(schemaName, tableName) {
@@ -216,7 +213,22 @@ func (t *BinlogTailer) createMsgs(
 			msgList = append(msgList, &msg)
 		}
 	}
+	if len(msgList) > 0 {
+		lastMsg := msgList[len(msgList)-1]
+		lastMsg.InputContext = kMsg
+		lastMsg.AfterCommitCallback = t.AfterMsgCommit
+	}
 	return msgList, nil
+}
+
+func (t *BinlogTailer) AfterMsgCommit(msg *core.Msg) error {
+	kMsg, ok := msg.InputContext.(*sarama.ConsumerMessage)
+	if !ok {
+		return errors.Errorf("invalid input context")
+	}
+
+	t.consumer.MarkPartitionOffset(kMsg.Topic, kMsg.Partition, kMsg.Offset, "")
+	return nil
 }
 
 func buildTableDef(table *pb.Table) *schema_store.Table {
@@ -296,7 +308,7 @@ func NewBinlogTailer(
 
 	srcKafkaCfg := config.SourceKafka
 
-	osf := NewKafkaOffsetStoreFactory(pipelineName, positionCache)
+	offsetFactory := NewKafkaOffsetStoreFactory(pipelineName, positionCache)
 	kafkaConfig := sarama_cluster.NewConfig()
 	kafkaConfig.Version = kafka.MsgVersion
 	// if no previous offset committed, use the oldest offset
@@ -363,7 +375,7 @@ func NewBinlogTailer(
 		srcKafkaCfg.GroupID,
 		srcKafkaCfg.Topics,
 		kafkaConfig,
-		osf,
+		offsetFactory,
 	)
 	if err != nil {
 		log.Error(err)
