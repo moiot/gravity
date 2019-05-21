@@ -43,7 +43,7 @@ type Fetch struct {
 }
 
 type Offsets struct {
-	CommitInterval string `toml:"commit-interval" json:"commit-interval"`
+	CommitInterval string `mapstructure:"commit-interval" toml:"commit-interval" json:"commit-interval"`
 }
 
 type KafkaConsumerConfig struct {
