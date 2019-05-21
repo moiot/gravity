@@ -334,7 +334,7 @@ func NewBinlogTailer(
 
 	d, err := time.ParseDuration(srcKafkaCfg.Consumer.Offsets.CommitInterval)
 	if err != nil {
-		return nil, errors.Errorf("invalid commit interval")
+		return nil, errors.Errorf("invalid commit interval: %v", srcKafkaCfg.Consumer.Offsets.CommitInterval)
 	}
 	kafkaConfig.Consumer.Offsets.CommitInterval = d
 
