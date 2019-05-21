@@ -46,7 +46,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1550472134897,
+  "iteration": 1558423995786,
   "links": [],
   "panels": [
     {
@@ -57,8 +57,8 @@
       "datasource": "${DS_GRAVITY}",
       "fill": 1,
       "gridPos": {
-        "h": 7,
-        "w": 24,
+        "h": 6,
+        "w": 12,
         "x": 0,
         "y": 0
       },
@@ -105,7 +105,100 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Low Watermark",
+      "title": "80% Low Watermark",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "s",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_GRAVITY}",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 13,
+      "legend": {
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "max": true,
+        "min": false,
+        "rightSide": true,
+        "show": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gravity_event_time_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "event time",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gravity_process_time_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "process time",
+          "refId": "B"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "95% Low Watermark",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -153,7 +246,277 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 7
+        "y": 6
+      },
+      "id": 15,
+      "legend": {
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "max": true,
+        "min": false,
+        "rightSide": true,
+        "show": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.8, sum(rate(gravity_input_probe_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "probe",
+          "refId": "G"
+        },
+        {
+          "expr": "histogram_quantile(0.8, sum(rate(gravity_input_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "input",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.8, sum(rate(gravity_emitter_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "emitter",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.8, sum(rate(gravity_scheduler_total_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "scheduler total",
+          "refId": "C"
+        },
+        {
+          "expr": "histogram_quantile(0.8, sum(rate(gravity_scheduler_submit_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "scheduler submit",
+          "refId": "D"
+        },
+        {
+          "expr": "histogram_quantile(0.8, sum(rate(gravity_scheduler_ack_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "scheduler ack",
+          "refId": "E"
+        },
+        {
+          "expr": "histogram_quantile(0.8, sum(rate(gravity_output_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "output",
+          "refId": "F"
+        },
+        {
+          "expr": "histogram_quantile(0.8, sum(rate(gravity_input_after_commit_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "after-commit",
+          "refId": "H"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "80% Latency",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "s",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_GRAVITY}",
+      "fill": 1,
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "id": 8,
+      "legend": {
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "max": true,
+        "min": false,
+        "rightSide": true,
+        "show": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gravity_input_probe_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "probe",
+          "refId": "G"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gravity_input_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "input",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gravity_emitter_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "emitter",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gravity_scheduler_total_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "scheduler total",
+          "refId": "C"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gravity_scheduler_submit_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "scheduler submit",
+          "refId": "D"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gravity_scheduler_ack_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "scheduler ack",
+          "refId": "E"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gravity_output_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "output",
+          "refId": "F"
+        },
+        {
+          "expr": "histogram_quantile(0.8, sum(rate(gravity_input_after_commit_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "after-commit",
+          "refId": "H"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "95% Latency",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "s",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_GRAVITY}",
+      "fill": 1,
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 13
       },
       "id": 2,
       "legend": {
@@ -269,19 +632,17 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 7
+        "y": 13
       },
-      "id": 8,
+      "id": 17,
       "legend": {
-        "alignAsTable": true,
-        "avg": true,
-        "current": true,
-        "max": true,
+        "avg": false,
+        "current": false,
+        "max": false,
         "min": false,
-        "rightSide": true,
         "show": true,
         "total": false,
-        "values": true
+        "values": false
       },
       "lines": true,
       "linewidth": 1,
@@ -297,59 +658,16 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.8, sum(rate(gravity_input_probe_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "expr": "avg(gravity_scheduler_batch_size{pipeline='$pipeline'})",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "probe",
-          "refId": "G"
-        },
-        {
-          "expr": "histogram_quantile(0.8, sum(rate(gravity_input_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
-          "format": "time_series",
-          "intervalFactor": 1,
-          "legendFormat": "input",
           "refId": "A"
-        },
-        {
-          "expr": "histogram_quantile(0.8, sum(rate(gravity_emitter_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
-          "format": "time_series",
-          "intervalFactor": 1,
-          "legendFormat": "emitter",
-          "refId": "B"
-        },
-        {
-          "expr": "histogram_quantile(0.8, sum(rate(gravity_scheduler_total_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
-          "format": "time_series",
-          "intervalFactor": 1,
-          "legendFormat": "scheduler total",
-          "refId": "C"
-        },
-        {
-          "expr": "histogram_quantile(0.8, sum(rate(gravity_scheduler_submit_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
-          "format": "time_series",
-          "intervalFactor": 1,
-          "legendFormat": "scheduler submit",
-          "refId": "D"
-        },
-        {
-          "expr": "histogram_quantile(0.8, sum(rate(gravity_scheduler_ack_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
-          "format": "time_series",
-          "intervalFactor": 1,
-          "legendFormat": "scheduler ack",
-          "refId": "E"
-        },
-        {
-          "expr": "histogram_quantile(0.8, sum(rate(gravity_output_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
-          "format": "time_series",
-          "intervalFactor": 1,
-          "legendFormat": "output",
-          "refId": "F"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Latency",
+      "title": "actual batch size",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -365,7 +683,7 @@
       },
       "yaxes": [
         {
-          "format": "s",
+          "format": "short",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -394,12 +712,100 @@
       "datasource": "${DS_GRAVITY}",
       "fill": 1,
       "gridPos": {
-        "h": 7,
-        "w": 24,
+        "h": 6,
+        "w": 12,
         "x": 0,
-        "y": 14
+        "y": 20
       },
       "id": 6,
+      "legend": {
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "hideEmpty": true,
+        "hideZero": false,
+        "max": true,
+        "min": false,
+        "rightSide": true,
+        "show": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "avg(gravity_scheduler_nr_dep_hash{pipeline='$pipeline'}) by (schema, table)",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "{{schema}}.{{table}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "nr dep hashes",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "${DS_GRAVITY}",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "id": 18,
       "legend": {
         "alignAsTable": true,
         "avg": true,
@@ -485,7 +891,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 21
+        "y": 26
       },
       "id": 10,
       "legend": {
@@ -575,7 +981,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 31
+        "y": 36
       },
       "id": 12,
       "legend": {
@@ -612,6 +1018,20 @@
           "intervalFactor": 1,
           "legendFormat": "{{cat0}}.{{cat1}}",
           "refId": "A"
+        },
+        {
+          "expr": "sum(rate(gravity_output_counter{pipeline='$pipeline'}[1m]))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "total ",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(gravity_scheduler_flush_stats{pipeline='$pipeline'}[1m])) by (table, stats)",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "{{table}}-flush-{{stats}}",
+          "refId": "C"
         }
       ],
       "thresholds": [],
@@ -684,7 +1104,7 @@
     ]
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {
@@ -715,5 +1135,5 @@
   "timezone": "",
   "title": "Gravity Pipeline Detail",
   "uid": "7aulI8Xmz",
-  "version": 6
+  "version": 18
 }
