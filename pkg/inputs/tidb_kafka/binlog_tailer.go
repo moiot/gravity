@@ -113,10 +113,12 @@ func buildPKNameList(pkColList []*pb.ColumnInfo) []string {
 	return pkNames
 }
 
-func buildPKValueMap(pkColList []*pb.ColumnInfo, row *pb.Row) map[string]interface{} {
+func buildPKValueMap(columnInfos []*pb.ColumnInfo, row *pb.Row) map[string]interface{} {
 	pkValues := make(map[string]interface{})
-	for i, colInfo := range pkColList {
-		pkValues[colInfo.Name] = deserialize(row.Columns[i], colInfo.MysqlType)
+	for i, columnInfo := range columnInfos {
+		if columnInfo.IsPrimaryKey {
+			pkValues[columnInfo.Name] = deserialize(row.Columns[i], columnInfo.MysqlType)
+		}
 	}
 	return pkValues
 }
@@ -143,7 +145,6 @@ func (t *BinlogTailer) createMsgs(
 	for _, table := range binlog.DmlData.Tables {
 		schemaName := *table.SchemaName
 		tableName := *table.TableName
-		pkColumnList := buildPKColumnList(table.ColumnInfo)
 		for _, mutation := range table.Mutations {
 			msg := core.Msg{
 				Phase: core.Phase{
@@ -208,7 +209,7 @@ func (t *BinlogTailer) createMsgs(
 			}
 
 			dmlMsg.Data = data
-			dmlMsg.Pks = buildPKValueMap(pkColumnList, mutation.Row)
+			dmlMsg.Pks = buildPKValueMap(table.ColumnInfo, mutation.Row)
 			msg.DmlMsg = dmlMsg
 			msgList = append(msgList, &msg)
 		}
