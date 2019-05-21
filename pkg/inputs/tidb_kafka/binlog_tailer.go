@@ -42,7 +42,6 @@ type BinlogTailer struct {
 
 func (t *BinlogTailer) Start() error {
 	log.Info("Consumer subscribes ", t.consumer.Subscriptions())
-	log.Info("Begin to consume!")
 
 	t.wg.Add(1)
 	go func() {
@@ -357,7 +356,7 @@ func NewBinlogTailer(
 
 	kafkaConfig.Consumer.MaxWaitTime = maxWaitDuration
 
-	log.Infof("[tidb_binlog_tailer] consumer config: sarama config: %v, pipeline config: %v", kafkaConfig, srcKafkaCfg)
+	log.Infof("[tidb_binlog_tailer] consumer config: sarama config: %v, pipeline config: %+v", kafkaConfig, srcKafkaCfg)
 
 	consumer, err := sarama_cluster.NewConsumer(
 		srcKafkaCfg.BrokerConfig.BrokerAddrs,
