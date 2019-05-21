@@ -402,18 +402,20 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 				flushLen = len(batch)
 			}
 			curBatch := make([]*core.Msg, 0, flushLen)
+			var reminder []*core.Msg
 			var latchedMsg []*core.Msg
-
 			var latched bool
-			for _, m := range batch[:flushLen] {
+			curLatches := make(map[uint64]int)
+			for i, m := range batch {
 				latched = false
 				for _, h := range m.OutputDepHashes {
-					if latches[h.H] > 0 {
+					if latches[h.H] > 0 || curLatches[h.H] > 0 {
 						latched = true
 						break
 					}
 				}
-				if !latched {
+
+				if !latched { // neither latched by previous batch nor current batch
 					curBatch = append(curBatch, m)
 					for _, h := range m.OutputDepHashes {
 						latches[h.H] += 1
@@ -429,18 +431,27 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 							return errors.Trace(oldCB(message))
 						}
 					}
+					if len(curBatch) == flushLen {
+						if len(batch) > i+1 {
+							reminder = batch[i+1:]
+						}
+						break
+					}
 				} else {
 					latchedMsg = append(latchedMsg, m)
+					for _, h := range m.OutputDepHashes { // add to latch of current batch to intercept msg following
+						curLatches[h.H] += 1
+					}
 				}
 			}
 
-			queueIdx := round % uint(scheduler.cfg.NrWorker)
-			round++
-			scheduler.workerQueues[queueIdx] <- curBatch
+			if len(curBatch) > 0 {
+				queueIdx := round % uint(scheduler.cfg.NrWorker)
+				round++
+				scheduler.workerQueues[queueIdx] <- curBatch
+			}
 
 			// delete the delivered messages
-			reminder := make([]*core.Msg, len(batch)-flushLen)
-			copy(reminder, batch[flushLen:])
 			newBatch := batch[:0] // reuse batch storage
 			newBatch = append(newBatch, latchedMsg...)
 			newBatch = append(newBatch, reminder...)
