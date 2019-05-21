@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mitchellh/hashstructure"
-
-	jsoniter "github.com/json-iterator/go"
+	"github.com/OneOfOne/xxhash"
+	json "github.com/json-iterator/go"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
@@ -176,7 +175,7 @@ func (tailer *OplogTailer) Run() {
 			var c prometheus.Counter
 
 			if op.IsCommand() {
-				stmt, err := jsoniter.MarshalToString(op.Data)
+				stmt, err := json.MarshalToString(op.Data)
 				if err != nil {
 					log.Fatalf("[oplog_tailer] fail to marshal command. data: %v, err: %s", op.Data, err)
 				}
@@ -212,11 +211,7 @@ func (tailer *OplogTailer) Run() {
 			c.Add(1)
 			msg.InputStreamKey = utils.NewStringPtr("mongooplog")
 			idKey := outputStreamKey(msg.Oplog)
-			h, err := hashstructure.Hash(idKey, nil)
-			if err != nil {
-				log.Fatalf("failed to generate hash: %v", err.Error())
-			}
-			msg.OutputDepHashes = []core.OutputHash{{idKey, h}}
+			msg.OutputDepHashes = []core.OutputHash{{idKey, xxhash.ChecksumString64(idKey)}}
 			msg.InputContext = config.MongoPosition(op.Timestamp)
 			msg.AfterCommitCallback = tailer.AfterMsgCommit
 			if err := tailer.emitter.Emit(&msg); err != nil {

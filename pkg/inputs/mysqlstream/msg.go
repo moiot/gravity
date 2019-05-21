@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OneOfOne/xxhash"
+
 	"github.com/moiot/gravity/pkg/config"
 
 	"github.com/mitchellh/hashstructure"
@@ -444,13 +446,18 @@ func dataHashForUKChange(
 	return hashes
 }
 
+var hasher = xxhash.New64()
+var hashOptions = hashstructure.HashOptions{
+	Hasher: hasher,
+}
+
 func dataHash(schema string, table string, idxName string, idxColumns []string, data map[string]interface{}) (string, uint64, error) {
 	key := []interface{}{schema, table, idxName}
 	for _, columnName := range idxColumns {
 		key = append(key, columnName, data[columnName])
 	}
 
-	h, err := hashstructure.Hash(key, nil)
+	h, err := hashstructure.Hash(key, &hashOptions)
 	if err != nil {
 		return "", 0, errors.Trace(err)
 	}

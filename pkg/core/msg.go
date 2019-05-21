@@ -82,10 +82,14 @@ type Msg struct {
 func (msg *Msg) String() string {
 	b := strings.Builder{}
 	b.WriteString("core.Msg{ ")
+	if msg.InputStreamKey != nil {
+		b.WriteString(*msg.InputStreamKey)
+		b.WriteString("-")
+	}
 	if msg.InputSequence != nil {
-		b.WriteString(fmt.Sprintf("%s-%d ", *msg.InputStreamKey, *msg.InputSequence))
+		b.WriteString(fmt.Sprintf("%d ", *msg.InputSequence))
 	} else {
-		b.WriteString("-1 ")
+		b.WriteString("0 ")
 	}
 	b.WriteString(string(msg.Type))
 	if msg.Type == MsgDDL {
