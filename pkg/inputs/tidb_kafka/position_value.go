@@ -1,8 +1,12 @@
 package tidb_kafka
 
 import (
+	"time"
+
 	jsoniter "github.com/json-iterator/go"
+	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/position_cache"
+	"github.com/moiot/gravity/pkg/position_repos"
 
 	"github.com/juju/errors"
 
@@ -154,4 +158,27 @@ func (store *OffsetStore) FetchOffset(req *offsets.OffsetFetchRequest) (*offsets
 
 func (store *OffsetStore) Close() error {
 	return nil // should not close with kafka consumer. output needs to commit offset
+}
+
+// We only create the position record right now. We may allow user to
+// change the initial kafka offset from spec in future.
+func SetupInitialPosition(positionCache position_cache.PositionCacheInterface) error {
+	_, exist, err := positionCache.Get()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if !exist {
+		position := position_repos.Position{
+			PositionMeta: position_repos.PositionMeta{
+				Stage:      config.Stream,
+				UpdateTime: time.Now(),
+			},
+			Value: KafkaPositionValue{},
+		}
+		if err := positionCache.Put(position); err != nil {
+			return errors.Trace(err)
+		}
+		return errors.Trace(positionCache.Flush())
+	}
+	return nil
 }
