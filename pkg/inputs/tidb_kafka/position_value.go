@@ -39,7 +39,10 @@ func KafkaPositionValueDecoder(value string) (interface{}, error) {
 	if err := myJson.UnmarshalFromString(value, &position); err != nil {
 		return nil, errors.Trace(err)
 	}
-	return &position, nil
+	if position.Offsets == nil {
+		position.Offsets = make(map[string]ConsumerGroupOffset)
+	}
+	return position, nil
 }
 
 func (f *KafkaOffsetStoreFactory) GenOffsetStore(c *sarama_cluster.Consumer) sarama_cluster.OffsetStore {
@@ -63,7 +66,7 @@ func (store *OffsetStore) CommitOffset(req *offsets.OffsetCommitRequest) (*offse
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	positionValue, ok := position.Value.(*KafkaPositionValue)
+	positionValue, ok := position.Value.(KafkaPositionValue)
 	if !ok {
 		return nil, errors.Errorf("invalid position type")
 	}
@@ -107,19 +110,42 @@ func (store *OffsetStore) FetchOffset(req *offsets.OffsetFetchRequest) (*offsets
 		return resp, nil
 	}
 
-	kafkaPositionValue, ok := position.Value.(*KafkaPositionValue)
+	kafkaPositionValue, ok := position.Value.(KafkaPositionValue)
 	if !ok {
 		return nil, errors.Errorf("invalid position type")
 	}
 
+	// For any empty offset, use -3 to indicate an invalid offset.
+	//
+	// So that the library will use Consumer.Offsets.Initial, see:
+	//
+	// func (i offsetInfo) NextOffset(fallback int64) int64 {
+	// 	if i.Offset > -1 {
+	// 		return i.Offset
+	// 	}
+	// 	return fallback
+	// }
 	consumerGroupOffset, ok := kafkaPositionValue.Offsets[req.ConsumerGroup]
 	if !ok {
-		return nil, errors.Errorf("consumer group offset empty")
-	}
+		for reqTopic, reqPartitions := range req.Partitions() {
+			for _, p := range reqPartitions {
+				resp.AddBlock(reqTopic, p, -3, "")
+			}
 
-	for topic, topicOffset := range consumerGroupOffset {
-		for partition, offset := range topicOffset {
-			resp.AddBlock(topic, partition, offset, "")
+		}
+	} else {
+		for reqTopic, reqPartitions := range req.Partitions() {
+			for _, p := range reqPartitions {
+				if _, ok := consumerGroupOffset[reqTopic]; !ok {
+					consumerGroupOffset[reqTopic] = make(map[int32]int64)
+				}
+
+				if _, ok := consumerGroupOffset[reqTopic][p]; !ok {
+					consumerGroupOffset[reqTopic][p] = -3
+				}
+
+				resp.AddBlock(reqTopic, p, consumerGroupOffset[reqTopic][p], "")
+			}
 		}
 	}
 	resp.LastUpdate = position.UpdateTime
