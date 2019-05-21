@@ -33,6 +33,7 @@ type BinlogTailer struct {
 	consumer       *sarama_cluster.Consumer
 	config         *gCfg.SourceTiDBConfig
 	emitter        core.Emitter
+	router         core.Router
 	binlogChecker  binlog_checker.BinlogChecker
 	mapLock        sync.Mutex
 
@@ -153,6 +154,10 @@ func (t *BinlogTailer) createMsgs(
 				Table:     tableName,
 				Timestamp: time.Unix(int64(ParseTimeStamp(uint64(binlog.CommitTs))), 0),
 				Done:      make(chan struct{}),
+			}
+
+			if !t.router.Exists(&msg) {
+				continue
 			}
 
 			if binlog_checker.IsBinlogCheckerMsg(schemaName, tableName) {
@@ -286,6 +291,7 @@ func NewBinlogTailer(
 	positionCache position_cache.PositionCacheInterface,
 	config *gCfg.SourceTiDBConfig,
 	emitter core.Emitter,
+	router core.Router,
 	binlogChecker binlog_checker.BinlogChecker,
 ) (*BinlogTailer, error) {
 
@@ -371,6 +377,7 @@ func NewBinlogTailer(
 		consumer:        consumer,
 		config:          config,
 		emitter:         emitter,
+		router:          router,
 		binlogChecker:   binlogChecker,
 	}
 	return tailer, nil

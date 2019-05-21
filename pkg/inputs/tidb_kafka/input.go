@@ -100,7 +100,7 @@ func (plugin *tidbKafkaStreamInputPlugin) NewPositionCache() (position_cache.Pos
 	return positionCache, nil
 }
 
-func (plugin *tidbKafkaStreamInputPlugin) Start(emitter core.Emitter, positionCache position_cache.PositionCacheInterface) error {
+func (plugin *tidbKafkaStreamInputPlugin) Start(emitter core.Emitter, router core.Router, positionCache position_cache.PositionCacheInterface) error {
 	plugin.emitter = emitter
 	plugin.gravityServerID = utils.GenerateRandomServerID()
 	plugin.positionCache = positionCache
@@ -126,6 +126,7 @@ func (plugin *tidbKafkaStreamInputPlugin) Start(emitter core.Emitter, positionCa
 		positionCache,
 		cfg,
 		emitter,
+		router,
 		binlogChecker,
 	)
 	if err != nil {
