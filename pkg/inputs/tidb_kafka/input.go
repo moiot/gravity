@@ -97,6 +97,11 @@ func (plugin *tidbKafkaStreamInputPlugin) NewPositionCache() (position_cache.Pos
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+
+	if err := SetupInitialPosition(positionCache); err != nil {
+		return nil, errors.Trace(err)
+	}
+
 	return positionCache, nil
 }
 

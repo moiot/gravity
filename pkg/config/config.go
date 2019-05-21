@@ -85,7 +85,7 @@ type PipelineConfig struct {
 type SourceKafkaConfig struct {
 	BrokerConfig KafkaGlobalConfig    `mapstructure:"brokers" toml:"brokers" json:"brokers"`
 	GroupID      string               `mapstructure:"group-id" toml:"group-id" json:"group-id"`
-	Topics       []string             `mapstructure:"topic" toml:"topics" json:"topics"`
+	Topics       []string             `mapstructure:"topics" toml:"topics" json:"topics"`
 	ConsumeFrom  string               `mapstructure:"consume-from" toml:"consume-from" json:"consume-from"`
 	Common       KafkaCommonConfig    `mapstructure:"common" toml:"common" json:"common"`
 	Consumer     *KafkaConsumerConfig `mapstructure:"consumer" toml:"consumer" json:"consumer"`
