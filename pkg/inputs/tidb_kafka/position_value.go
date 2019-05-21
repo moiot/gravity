@@ -3,8 +3,6 @@ package tidb_kafka
 import (
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	jsoniter "github.com/json-iterator/go"
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/position_cache"
@@ -68,8 +66,6 @@ type OffsetStore struct {
 }
 
 func (store *OffsetStore) CommitOffset(req *offsets.OffsetCommitRequest) (*offsets.OffsetCommitResponse, error) {
-
-	log.Infof("[CommitOffset]: consumerGroup: %v, req.Blocks(): %+v", req.ConsumerGroup, req.Blocks())
 
 	position, _, err := store.positionCache.Get()
 	if err != nil {
