@@ -396,6 +396,30 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 			return nil
 		}
 
+		//
+		// flushFunc will pick up messages that is not latched, assemble these messages into a "curBatch".
+		// After a flush, the latched messages are kept in the "batch" for the next flush.
+		//
+		// With the reassembling, a message that has a latch won't block messages comes after it.
+		//
+		// For example:
+		//
+		// Assume the table latch is
+		//
+		//   {a: 1, d: 1, e: 1}
+		//
+		// and MaxBatchPerWorker = 2
+		//
+		// If the latch for "a", "b", "c" are not released for 3 rounds, then the result for each round are:
+		//
+		// Round 1 batch: [a, b, c, d, e, f, g]
+		//         curBatch: [b, c]
+		//
+		// Round 2 batch: [a, d, e, f, g, h, i]
+		//         curBatch: [f, g]
+		//
+		// Round 3 batch: [a, d, e]
+		//
 		flushFunc := func() {
 			flushLen := scheduler.cfg.MaxBatchPerWorker
 			if len(batch) < flushLen {
