@@ -17,6 +17,8 @@ const ProcessDelayWarningThreshold = 30
 type staticSlidingWindow struct {
 	cap int
 
+	name string
+
 	// waitingItemC is used to holds sequence window,
 	// the size of this queue determines the window size of the sliding window
 	waitingItemC chan WindowItem
@@ -45,6 +47,10 @@ type staticSlidingWindow struct {
 	// lastCommitEventTime is the time when the last event
 	// happens at the source, for example, mysql binlog timestamp.
 	lastCommitEventTime int64
+
+	heapSize int64
+
+	closeC chan struct{}
 }
 
 func (w *staticSlidingWindow) AddWindowItem(item WindowItem) {
@@ -94,6 +100,7 @@ func (w *staticSlidingWindow) WaitingQueueLen() int {
 
 func (w *staticSlidingWindow) Close() {
 	// log.Infof("[staticSlidingWindow] closing")
+	close(w.closeC)
 
 	close(w.waitingItemC)
 
@@ -104,27 +111,6 @@ func (w *staticSlidingWindow) Close() {
 	// log.Infof("[staticSlidingWindow] closed")
 }
 
-func (w *staticSlidingWindow) removeItemFromSequence() (WindowItem, bool) {
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case nextItem, ok := <-w.waitingItemC:
-			if !ok {
-				return nil, ok
-			}
-			return nextItem, ok
-
-		case <-ticker.C:
-			delay := w.reportWatermarkDelay()
-			if delay > ProcessDelayWarningThreshold {
-				log.Warnf("[sliding_window] no item add after %f seconds.", delay)
-			}
-		}
-	}
-}
-
 // start runs the loop that get item from readyC and put it into readyCommitHeap
 // when the current smallest item is the same as the readyCommitHeap's smallest item
 // we then call the commit method of the item.
@@ -132,7 +118,8 @@ func (w *staticSlidingWindow) start() {
 	defer w.wgForClose.Done()
 
 	// init the nextItemToCommit the first time
-	if nextItemToCommit, ok := w.removeItemFromSequence(); !ok {
+	nextItemToCommit, ok := <-w.waitingItemC
+	if !ok {
 		log.Infof("[staticSlidingWindow]: exist on init.")
 		return
 	} else {
@@ -140,85 +127,90 @@ func (w *staticSlidingWindow) start() {
 		log.Infof("[staticSlidingWindow] init nextItemToCommit: %s", w.nextItemToCommit)
 	}
 
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
+	for readyItem := range w.readyC {
+		heap.Push(w.readyCommitHeap, readyItem)
+		atomic.AddInt64(&w.heapSize, 1)
+		for {
+			smallestItem, err := w.readyCommitHeap.SmallestItem()
 
-	for {
-		select {
-		case readyItem, ok := <-w.readyC:
+			// empty heap, break the loop, continue waiting for ready item
+			if err != nil {
+				break
+			}
+
+			//log.Infof("[sliding_window] smallestItem: %v, nextSequence: %v", smallestItem.SequenceNumber(), w.nextItemToCommit.SequenceNumber())
+
+			// break the loop, continue waiting for ready item
+			if smallestItem != w.nextItemToCommit.SequenceNumber() {
+				break
+			}
+
+			// now we are ready to commit
+			w.nextItemToCommit.BeforeWindowMoveForward()
+			atomic.StoreInt64(&w.lastCommitProcessTime, w.nextItemToCommit.ProcessTime().UnixNano())
+			atomic.StoreInt64(&w.lastCommitEventTime, w.nextItemToCommit.EventTime().UnixNano())
+
+			//log.Infof("[sliding_window] pop: %v", smallestItem.SequenceNumber())
+
+			heap.Pop(w.readyCommitHeap)
+			atomic.AddInt64(&w.heapSize, -1)
+
+			w.nextItemToCommit, ok = <-w.waitingItemC
 			if !ok {
-				// log.Infof("staticSlidingWindow readyC closed")
 				return
-			}
-			heap.Push(w.readyCommitHeap, readyItem)
-
-			for {
-				smallestItem, err := w.readyCommitHeap.SmallestItem()
-
-				// empty heap, break the loop, continue waiting for ready item
-				if err != nil {
-					break
-				}
-
-				//log.Infof("[sliding_window] smallestItem: %v, nextSequence: %v", smallestItem.SequenceNumber(), w.nextItemToCommit.SequenceNumber())
-
-				// break the loop, continue waiting for ready item
-				if smallestItem != w.nextItemToCommit.SequenceNumber() {
-					break
-				}
-
-				// now we are ready to commit
-				w.nextItemToCommit.BeforeWindowMoveForward()
-				atomic.StoreInt64(&w.lastCommitProcessTime, w.nextItemToCommit.ProcessTime().UnixNano())
-				atomic.StoreInt64(&w.lastCommitEventTime, w.nextItemToCommit.EventTime().UnixNano())
-				w.reportWatermarkDelay()
-
-				//log.Infof("[sliding_window] pop: %v", smallestItem.SequenceNumber())
-
-				heap.Pop(w.readyCommitHeap)
-
-				w.nextItemToCommit, ok = w.removeItemFromSequence()
-				if !ok {
-					return
-				}
-			}
-
-		case <-ticker.C:
-			delay := w.reportWatermarkDelay()
-			if delay > ProcessDelayWarningThreshold {
-				log.Warnf("[sliding_window] item not ack after %f seconds. %s", delay, w.nextItemToCommit)
 			}
 		}
 	}
 }
 
-func (w *staticSlidingWindow) reportWatermarkDelay() float64 {
-	watermark := w.Watermark()
+func (w *staticSlidingWindow) reportMetrics() {
+	defer w.wgForClose.Done()
 
-	// ProcessTime can be seen as the duration that event are in the queue.
-	seconds := time.Since(watermark.ProcessTime).Seconds()
-	metrics.End2EndProcessTimeHistogram.WithLabelValues(core.PipelineName).Observe(seconds)
+	ticker := time.NewTicker(1 * time.Second)
 
-	// EventTime can be seen as the end to end duration of event process time.
-	metrics.End2EndEventTimeHistogram.WithLabelValues(core.PipelineName).Observe(time.Since(watermark.EventTime).Seconds())
+	for {
+		select {
+		case <-ticker.C:
+			watermark := w.Watermark()
 
-	return seconds
+			// ProcessTime can be seen as the duration that event are in the queue.
+			seconds := time.Since(watermark.ProcessTime).Seconds()
+			if seconds > ProcessDelayWarningThreshold {
+				log.Warnf("[sliding_window] item not ack after %f seconds. %s", seconds, w.nextItemToCommit)
+			}
+			metrics.End2EndProcessTimeHistogram.WithLabelValues(core.PipelineName).Observe(seconds)
+
+			// EventTime can be seen as the end to end duration of event process time.
+			metrics.End2EndEventTimeHistogram.WithLabelValues(core.PipelineName).Observe(time.Since(watermark.EventTime).Seconds())
+
+			metrics.QueueLength.WithLabelValues(core.PipelineName, "sliding-window-waiting-chan", w.name).Set(float64(len(w.waitingItemC)))
+			metrics.QueueLength.WithLabelValues(core.PipelineName, "sliding-window-ready-chan", w.name).Set(float64(len(w.readyC)))
+			metrics.QueueLength.WithLabelValues(core.PipelineName, "sliding-window-ready-heap", w.name).Set(float64(atomic.LoadInt64(&w.heapSize)))
+
+		case <-w.closeC:
+			ticker.Stop()
+			return
+		}
+	}
 }
 
-func NewStaticSlidingWindow(windowSize int) Window {
+func NewStaticSlidingWindow(windowSize int, name string) Window {
 	h := &windowItemHeap{}
 	heap.Init(h)
 
 	w := &staticSlidingWindow{
 		cap:                   windowSize,
+		name:                  name,
 		waitingItemC:          make(chan WindowItem, windowSize),
 		readyCommitHeap:       h,
-		readyC:                make(chan int64),
+		readyC:                make(chan int64, windowSize),
 		lastCommitProcessTime: 1<<63 - 1,
+		closeC:                make(chan struct{}),
 	}
 
-	w.wgForClose.Add(1)
+	w.wgForClose.Add(2)
 	go w.start()
+	go w.reportMetrics()
 
 	return w
 }

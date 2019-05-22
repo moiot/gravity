@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mitchellh/hashstructure"
+	"github.com/OneOfOne/xxhash"
 
 	"github.com/Shopify/sarama"
 	"github.com/juju/errors"
@@ -288,11 +288,7 @@ func deserialize(raw *pb.Column, colType string) interface{} {
 func (t *BinlogTailer) dispatchMsg(msg *core.Msg) error {
 	msg.InputStreamKey = utils.NewStringPtr("tidbbinlog")
 	pkSign := msg.GetPkSign()
-	h, err := hashstructure.Hash(pkSign, nil)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	msg.OutputDepHashes = []core.OutputHash{{pkSign, h}}
+	msg.OutputDepHashes = []core.OutputHash{{pkSign, xxhash.ChecksumString64(pkSign)}}
 
 	return errors.Trace(t.emitter.Emit(msg))
 }

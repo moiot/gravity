@@ -33,7 +33,7 @@ var _ = Describe("static sliding window test", func() {
 
 		gomock.InOrder(commitCalls...)
 
-		window := NewStaticSlidingWindow(100)
+		window := NewStaticSlidingWindow(100, "test")
 
 		for i := 0; i < 10; i++ {
 			window.AddWindowItem(items[i])
@@ -64,7 +64,7 @@ var _ = Describe("static sliding window test", func() {
 
 		gomock.InOrder(commitCalls...)
 
-		window := NewStaticSlidingWindow(100)
+		window := NewStaticSlidingWindow(100, "test")
 
 		for i := 0; i < 10; i++ {
 			window.AddWindowItem(items[i])
@@ -98,7 +98,7 @@ var _ = Describe("static sliding window test", func() {
 
 		gomock.InOrder(calls...)
 
-		window := NewStaticSlidingWindow(n + 1)
+		window := NewStaticSlidingWindow(n+1, "test")
 
 		for i := 0; i < n; i++ {
 			window.AddWindowItem(items[i])
@@ -125,7 +125,7 @@ var _ = Describe("static sliding window test", func() {
 
 	It("should show correct watermark", func() {
 		mockCtrl := gomock.NewController(GinkgoT())
-		window := NewStaticSlidingWindow(10)
+		window := NewStaticSlidingWindow(10, "test")
 		Expect(window.Watermark().ProcessTime.Unix()).Should(BeEquivalentTo(0))
 		var watermark1 Watermark
 

@@ -39,6 +39,14 @@ var InputHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 15), // ~ 8s
 }, []string{PipelineTag})
 
+var InputAfterCommitHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: "gravity",
+	Subsystem: "input",
+	Name:      "after_commit_latency",
+	Help:      "Latency of after commit callback in seconds.",
+	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 15), // ~ 8s
+}, []string{PipelineTag})
+
 var Emitter2SchedulerCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "gravity",
 	Subsystem: "emitter",
@@ -123,7 +131,7 @@ var QueueLength = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 func init() {
 	prometheus.MustRegister(
 		ProbeHistogram,
-		InputCounter, Input2EmitterCounter, InputHistogram,
+		InputCounter, Input2EmitterCounter, InputHistogram, InputAfterCommitHistogram,
 		Emitter2SchedulerCounter, EmitterHistogram,
 		Scheduler2OutputCounter, SchedulerTotalHistogram, SchedulerSubmitHistogram, SchedulerAckHistogram,
 		OutputCounter, OutputHistogram,

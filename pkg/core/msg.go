@@ -6,14 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/moiot/gravity/pkg/consts"
-	"github.com/moiot/gravity/pkg/utils"
-
 	"github.com/juju/errors"
 	"github.com/pingcap/parser/ast"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/moiot/gravity/pkg/consts"
+	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
+	"github.com/moiot/gravity/pkg/utils"
 )
 
 var PipelineName string
@@ -82,6 +82,15 @@ type Msg struct {
 func (msg *Msg) String() string {
 	b := strings.Builder{}
 	b.WriteString("core.Msg{ ")
+	if msg.InputStreamKey != nil {
+		b.WriteString(*msg.InputStreamKey)
+		b.WriteString("-")
+	}
+	if msg.InputSequence != nil {
+		b.WriteString(fmt.Sprintf("%d ", *msg.InputSequence))
+	} else {
+		b.WriteString("0 ")
+	}
 	b.WriteString(string(msg.Type))
 	if msg.Type == MsgDDL {
 		b.WriteString(" ")
@@ -101,12 +110,14 @@ func (msg *Msg) SequenceNumber() int64 {
 }
 
 func (msg *Msg) BeforeWindowMoveForward() {
+	start := time.Now()
 	if msg.AfterCommitCallback != nil {
 		if err := msg.AfterCommitCallback(msg); err != nil {
 			log.Fatalf("callback failed: %v", errors.ErrorStack(err))
 		}
 	}
 	close(msg.Done)
+	metrics.InputAfterCommitHistogram.WithLabelValues(PipelineName).Observe(time.Since(start).Seconds())
 }
 
 func (msg *Msg) EventTime() time.Time {

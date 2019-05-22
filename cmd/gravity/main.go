@@ -11,9 +11,10 @@ import (
 	"runtime"
 	"syscall"
 
+	"github.com/OneOfOne/xxhash"
 	"github.com/fsnotify/fsnotify"
 	hplugin "github.com/hashicorp/go-plugin"
-	jsoniter "github.com/json-iterator/go"
+	json "github.com/json-iterator/go"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -25,7 +26,7 @@ import (
 	"github.com/moiot/gravity/pkg/utils"
 )
 
-var myJson = jsoniter.Config{
+var myJson = json.Config{
 	EscapeHTML:             true,
 	SortMapKeys:            true,
 	ValidateJsonRawMessage: true,
@@ -50,6 +51,8 @@ func main() {
 		utils.PrintRawInfo("gravity")
 		os.Exit(0)
 	}
+
+	log.Info("xxhash backend: ", xxhash.Backend)
 
 	if cfg.ConfigFile != "" {
 		if err := cfg.ConfigFromFile(cfg.ConfigFile); err != nil {

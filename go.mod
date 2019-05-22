@@ -2,6 +2,7 @@ module github.com/moiot/gravity
 
 require (
 	github.com/BurntSushi/toml v0.3.1
+	github.com/OneOfOne/xxhash v1.2.5
 	github.com/Shopify/sarama v1.19.0
 	github.com/aws/aws-sdk-go v1.16.11 // indirect
 	github.com/coreos/etcd v3.3.10+incompatible
@@ -51,6 +52,7 @@ require (
 	github.com/siddontang/go-mysql v0.0.0-20190312052122-c6ab05a85eb8
 	github.com/sirupsen/logrus v1.2.0
 	github.com/stretchr/testify v1.3.0
+	github.com/tidwall/pretty v0.0.0-20190325153808-1166b9ac2b65 // indirect
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c // indirect
 	github.com/xdg/stringprep v1.0.0 // indirect
 	go.mongodb.org/mongo-driver v1.0.1
