@@ -433,15 +433,19 @@ func dataHashForUKChange(
 		log.Fatalf("[GenerateDMLDepHashes] failed: %v", err.Error())
 	}
 
-	hashes = append(hashes, core.OutputHash{Name: keyName, H: h})
+	if keyName != "" {
+		hashes = append(hashes, core.OutputHash{Name: keyName, H: h})
+	}
 
 	// add hash if unique key changed
 	if isUKUpdate {
-		keyName, h, err := dataHash(schema, table, idxName, columnNames, oldData)
+		keyName, h, err = dataHash(schema, table, idxName, columnNames, oldData)
 		if err != nil {
 			log.Fatalf("[GenerateDataHashes] failed: %v", err.Error())
 		}
-		hashes = append(hashes, core.OutputHash{Name: keyName, H: h})
+		if keyName != "" {
+			hashes = append(hashes, core.OutputHash{Name: keyName, H: h})
+		}
 	}
 	return hashes
 }
@@ -453,8 +457,15 @@ var hashOptions = hashstructure.HashOptions{
 
 func dataHash(schema string, table string, idxName string, idxColumns []string, data map[string]interface{}) (string, uint64, error) {
 	key := []interface{}{schema, table, idxName}
+	var nonNull bool
 	for _, columnName := range idxColumns {
-		key = append(key, columnName, data[columnName])
+		if data[columnName] != nil {
+			key = append(key, columnName, data[columnName])
+			nonNull = true
+		}
+	}
+	if !nonNull {
+		return "", 0, nil
 	}
 
 	h, err := hashstructure.Hash(key, &hashOptions)
