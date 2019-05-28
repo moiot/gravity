@@ -195,6 +195,8 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 			workerName := fmt.Sprintf("%d", workerIndex)
 
 			for msgBatch := range q {
+				metrics.QueueLength.WithLabelValues(scheduler.pipelineName, "worker", workerName).Set(float64(len(q)))
+
 				now := time.Now()
 				hasCtl := false
 				for _, m := range msgBatch {
@@ -212,7 +214,7 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 					continue
 				}
 
-				metrics.QueueLength.WithLabelValues(scheduler.pipelineName, "worker", workerName).Set(float64(len(q)))
+				// should not take ctl message into account
 				WorkerPoolJobBatchSizeGauge.WithLabelValues(scheduler.pipelineName, workerName).Set(float64(len(msgBatch)))
 				metrics.Scheduler2OutputCounter.WithLabelValues(core.PipelineName).Add(float64(len(msgBatch)))
 
