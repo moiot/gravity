@@ -63,6 +63,12 @@ func NewKafkaAsyncProducer(mqConfig *config.KafkaGlobalConfig, partitionerConstr
 		config.Producer.Partitioner = sarama.NewManualPartitioner
 	}
 
+	// Set default network timeout. The default one is too long, k8s might kill
+	// the container without any useful log.
+	config.Net.DialTimeout = 5 * time.Second
+	config.Net.ReadTimeout = 5 * time.Second
+	config.Net.WriteTimeout = 5 * time.Second
+
 	config.ClientID = "drc_gravity"
 	config.Producer.Return.Successes = true
 	config.Producer.RequiredAcks = sarama.WaitForAll
