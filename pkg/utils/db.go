@@ -125,7 +125,8 @@ func EstimateRowsCount(db *sql.DB, schemaName string, tableName string) (int64, 
 }
 
 //
-// https://github.com/go-sql-driver/mysql/pull/667/files#diff-b705cb67f51c2fabb1650cd83693b10cR16
+// We need to look at this file to check each type
+// https://github.com/go-sql-driver/mysql/blob/master/fields.go
 //
 func IsColumnString(columnType *sql.ColumnType) bool {
 	typeName := columnType.DatabaseTypeName()
@@ -134,6 +135,8 @@ func IsColumnString(columnType *sql.ColumnType) bool {
 		strings.Contains(typeName, "JSON")
 }
 
+// float, double is already handled
+// https://github.com/go-sql-driver/mysql/blob/master/fields.go#L166
 func IsColumnFloat(columnType *sql.ColumnType) bool {
 	typeName := columnType.DatabaseTypeName()
 	return strings.Contains(typeName, "DECIMAL")
