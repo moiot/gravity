@@ -124,25 +124,21 @@ func EstimateRowsCount(db *sql.DB, schemaName string, tableName string) (int64, 
 	return rowsCount.Int64, nil
 }
 
+//
+// https://github.com/go-sql-driver/mysql/pull/667/files#diff-b705cb67f51c2fabb1650cd83693b10cR16
+//
 func IsColumnString(columnType *sql.ColumnType) bool {
-	return strings.Contains(columnType.DatabaseTypeName(), "TEXT") ||
-		strings.Contains(columnType.DatabaseTypeName(), "CHAR") ||
-		strings.Contains(columnType.DatabaseTypeName(), "JSON")
-	// if columnDatabaseType == "TEXT" ||
-	// 	columnDatabaseType == "JSON" ||
-	// 	columnDatabaseType == "LONGTEXT" ||
-	// 	columnDatabaseType == "MEDIUMTEXT" ||
-	// 	columnDatabaseType == "CHAR" ||
-	// 	columnDatabaseType == "TINYTEXT" ||
-	// 	columnDatabaseType == "VARCHAR" {
-	// 		return true
-	// } else {
-	// 	return false
-	// }
+	typeName := columnType.DatabaseTypeName()
+	return strings.Contains(typeName, "TEXT") ||
+		strings.Contains(typeName, "CHAR") ||
+		strings.Contains(typeName, "JSON")
 }
 
 func IsColumnFloat(columnType *sql.ColumnType) bool {
-	return strings.Contains(columnType.DatabaseTypeName(), "DECIMAL")
+	typeName := columnType.DatabaseTypeName()
+	return strings.Contains(typeName, "DECIMAL") ||
+		strings.Contains(typeName, "FLOAT") ||
+		strings.Contains(typeName, "DOUBLE")
 }
 
 var nullString = reflect.TypeOf(sql.NullString{})
