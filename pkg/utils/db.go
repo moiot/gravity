@@ -141,12 +141,18 @@ func IsColumnString(columnType *sql.ColumnType) bool {
 	// }
 }
 
+func IsColumnFloat(columnType *sql.ColumnType) bool {
+	return strings.Contains(columnType.DatabaseTypeName(), "DECIMAL")
+}
+
 var nullString = reflect.TypeOf(sql.NullString{})
 
 // GetScanType returns better scan type than go-sql-driver/mysql
 func GetScanType(columnType *sql.ColumnType) reflect.Type {
 	if IsColumnString(columnType) {
 		return reflect.TypeOf(sql.NullString{})
+	} else if IsColumnFloat(columnType) {
+		return reflect.TypeOf(sql.NullFloat64{})
 	} else {
 		return columnType.ScanType()
 	}
@@ -176,7 +182,7 @@ func ScanGeneralRowsWithDataPtrs(rows *sql.Rows, columnTypes []*sql.ColumnType, 
 		return nil, errors.Trace(err)
 	}
 	// copy sql.RawBytes from db to here
-	for i, _ := range columnTypes {
+	for i := range columnTypes {
 		p, err := GetScanPtrSafe(i, columnTypes, vPtrs)
 		if err != nil {
 			return nil, errors.Trace(err)
