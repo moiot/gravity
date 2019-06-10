@@ -124,21 +124,22 @@ func EstimateRowsCount(db *sql.DB, schemaName string, tableName string) (int64, 
 	return rowsCount.Int64, nil
 }
 
+//
+// We need to look at this file to check each type
+// https://github.com/go-sql-driver/mysql/blob/master/fields.go
+//
 func IsColumnString(columnType *sql.ColumnType) bool {
-	return strings.Contains(columnType.DatabaseTypeName(), "TEXT") ||
-		strings.Contains(columnType.DatabaseTypeName(), "CHAR") ||
-		strings.Contains(columnType.DatabaseTypeName(), "JSON")
-	// if columnDatabaseType == "TEXT" ||
-	// 	columnDatabaseType == "JSON" ||
-	// 	columnDatabaseType == "LONGTEXT" ||
-	// 	columnDatabaseType == "MEDIUMTEXT" ||
-	// 	columnDatabaseType == "CHAR" ||
-	// 	columnDatabaseType == "TINYTEXT" ||
-	// 	columnDatabaseType == "VARCHAR" {
-	// 		return true
-	// } else {
-	// 	return false
-	// }
+	typeName := columnType.DatabaseTypeName()
+	return strings.Contains(typeName, "TEXT") ||
+		strings.Contains(typeName, "CHAR") ||
+		strings.Contains(typeName, "JSON")
+}
+
+// float, double is already handled
+// https://github.com/go-sql-driver/mysql/blob/master/fields.go#L166
+func IsColumnFloat(columnType *sql.ColumnType) bool {
+	typeName := columnType.DatabaseTypeName()
+	return strings.Contains(typeName, "DECIMAL")
 }
 
 var nullString = reflect.TypeOf(sql.NullString{})
@@ -147,6 +148,8 @@ var nullString = reflect.TypeOf(sql.NullString{})
 func GetScanType(columnType *sql.ColumnType) reflect.Type {
 	if IsColumnString(columnType) {
 		return reflect.TypeOf(sql.NullString{})
+	} else if IsColumnFloat(columnType) {
+		return reflect.TypeOf(sql.NullFloat64{})
 	} else {
 		return columnType.ScanType()
 	}
@@ -176,7 +179,7 @@ func ScanGeneralRowsWithDataPtrs(rows *sql.Rows, columnTypes []*sql.ColumnType, 
 		return nil, errors.Trace(err)
 	}
 	// copy sql.RawBytes from db to here
-	for i, _ := range columnTypes {
+	for i := range columnTypes {
 		p, err := GetScanPtrSafe(i, columnTypes, vPtrs)
 		if err != nil {
 			return nil, errors.Trace(err)

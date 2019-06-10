@@ -472,7 +472,7 @@ func newBatchDataPtrs(columnTypes []*sql.ColumnType, batch int) [][]interface{} 
 	ret := make([][]interface{}, batch)
 	for batchIdx := 0; batchIdx < batch; batchIdx++ {
 		vPtrs := make([]interface{}, len(columnTypes))
-		for columnIdx, _ := range columnTypes {
+		for columnIdx := range columnTypes {
 			scanType := utils.GetScanType(columnTypes[columnIdx])
 			vptr := reflect.New(scanType)
 			vPtrs[columnIdx] = vptr.Interface()
