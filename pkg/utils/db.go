@@ -136,9 +136,7 @@ func IsColumnString(columnType *sql.ColumnType) bool {
 
 func IsColumnFloat(columnType *sql.ColumnType) bool {
 	typeName := columnType.DatabaseTypeName()
-	return strings.Contains(typeName, "DECIMAL") ||
-		strings.Contains(typeName, "FLOAT") ||
-		strings.Contains(typeName, "DOUBLE")
+	return strings.Contains(typeName, "DECIMAL")
 }
 
 var nullString = reflect.TypeOf(sql.NullString{})
