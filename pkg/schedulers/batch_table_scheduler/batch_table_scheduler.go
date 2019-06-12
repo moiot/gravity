@@ -162,7 +162,7 @@ func (scheduler *batchScheduler) Healthy() bool {
 			return false
 		}
 	}
-	return false
+	return len(scheduler.slidingWindows) > 0
 }
 
 func (scheduler *batchScheduler) Start(output core.Output) error {
