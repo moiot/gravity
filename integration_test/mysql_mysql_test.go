@@ -19,7 +19,6 @@ import (
 	"github.com/moiot/gravity/pkg/inputs/mysqlstream"
 	"github.com/moiot/gravity/pkg/mysql_test"
 	"github.com/moiot/gravity/pkg/outputs/mysql"
-	"github.com/moiot/gravity/pkg/sliding_window"
 	"github.com/moiot/gravity/pkg/sql_execution_engine"
 	"github.com/moiot/gravity/pkg/utils"
 )
@@ -206,12 +205,6 @@ func TestMySQLBatch(t *testing.T) {
 
 	<-server.Input.Done()
 
-	// wait for some time to see if server is healthy
-	sliding_window.DefaultHealthyThreshold = 4
-	time.Sleep(6)
-
-	r.True(server.Scheduler.Healthy())
-
 	server.Close()
 
 	r.NoError(generator.TestChecksum())
@@ -296,8 +289,6 @@ func TestMySQLConditionBatch(t *testing.T) {
 	r.NoError(server.Start())
 
 	<-server.Input.Done()
-
-	r.True(server.Scheduler.Healthy())
 
 	server.Close()
 
@@ -384,12 +375,6 @@ func TestMySQLBatchWithCompositePkBasic(t *testing.T) {
 
 	<-server.Input.Done()
 
-	// wait for some time to see if server is healthy
-	sliding_window.DefaultHealthyThreshold = 4
-	time.Sleep(6)
-
-	r.True(server.Scheduler.Healthy())
-
 	server.Close()
 
 	c1 := mysql_test.TableChecksum(sourceDB, sourceDBName, testTableName)
@@ -463,12 +448,6 @@ func TestMySQLBatchWithCompositePkIntOrder(t *testing.T) {
 	r.NoError(server.Start())
 
 	<-server.Input.Done()
-
-	// wait for some time to see if server is healthy
-	sliding_window.DefaultHealthyThreshold = 4
-	time.Sleep(6)
-
-	r.True(server.Scheduler.Healthy())
 
 	server.Close()
 
@@ -558,12 +537,6 @@ func TestMySQLBatchWithCompositePkIntOrder(t *testing.T) {
 //
 // 	<-server.Input.Done()
 //
-// 	// wait for some time to see if server is healthy
-// 	sliding_window.DefaultHealthyThreshold = 4
-// 	time.Sleep(6)
-//
-// 	r.True(server.Scheduler.Healthy())
-//
 // 	server.Close()
 //
 // 	c1 := mysql_test.TableChecksum(sourceDB, sourceDBName, testTableName)
@@ -633,12 +606,6 @@ func TestMySQLBatchNoTableConfig(t *testing.T) {
 	r.NoError(server.Start())
 
 	<-server.Input.Done()
-
-	// wait for some time to see if server is healthy
-	sliding_window.DefaultHealthyThreshold = 4
-	time.Sleep(5)
-
-	r.True(server.Scheduler.Healthy())
 
 	server.Close()
 
@@ -790,12 +757,6 @@ func TestMySQLBatchWithInsertIgnore(t *testing.T) {
 	r.NoError(server.Start())
 
 	<-server.Input.Done()
-
-	// wait for some time to see if server is healthy
-	sliding_window.DefaultHealthyThreshold = 4
-	time.Sleep(5)
-
-	r.True(server.Scheduler.Healthy())
 
 	server.Close()
 
