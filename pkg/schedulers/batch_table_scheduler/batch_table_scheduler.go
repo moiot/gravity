@@ -162,7 +162,7 @@ func (scheduler *batchScheduler) Healthy() bool {
 			return false
 		}
 	}
-	return true
+	return false
 }
 
 func (scheduler *batchScheduler) Start(output core.Output) error {
