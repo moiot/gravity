@@ -575,24 +575,31 @@ func (tailer *BinlogTailer) AppendMsgTxnBuffer(msg *core.Msg) {
 // FlushMsgTxnBuffer will flush job in txn  buffer to queue.
 // We will also filter out job that don't need to send out in this stage.
 func (tailer *BinlogTailer) FlushMsgTxnBuffer() {
-	// ignore internal drc txn data
-	isBiDirectionalTxn := false
+	// ignore internal txn data
+	hasInternalTxnTag := false
 	for _, msg := range tailer.msgTxnBuffer {
 		if utils.IsInternalTraffic(msg.Database, msg.Table) {
-			isBiDirectionalTxn = true
-			log.Debugf("[binlogTailer] bidirectional transaction will be ignored")
+			hasInternalTxnTag = true
+			log.Debugf("[binlogTailer] internal traffic found")
 			break
 		}
 	}
-	if isBiDirectionalTxn && tailer.cfg.IgnoreBiDirectionalData {
+	if hasInternalTxnTag && tailer.cfg.IgnoreBiDirectionalData {
 		// only keep the xid message here.
 		txnBufferLen := len(tailer.msgTxnBuffer)
 		lastMsg := tailer.msgTxnBuffer[txnBufferLen-1]
 		ctx := lastMsg.InputContext.(inputContext)
+		// last message is not xid, this txn has more messages coming in,
+		// this is not possible since output plugin does not allow txn length
+		// exceeds the txn buffer limit.
 		if ctx.op != xid {
-			return
+			log.Fatalf("[binlogTailer] internal traffic's last message not xid, maybe txn too long")
 		}
+		log.Debugf("[binlogTailer] ignore internal traffic")
 		tailer.msgTxnBuffer = []*core.Msg{lastMsg}
+	} else {
+		log.Debugf("[binlogTailer] do not ignore traffic: hasInternalTxnTag %v, cfg.Ignore %v, msgTxnBufferLen: %v",
+			hasInternalTxnTag, tailer.cfg.IgnoreBiDirectionalData, len(tailer.msgTxnBuffer))
 	}
 
 	for i, m := range tailer.msgTxnBuffer {
