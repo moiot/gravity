@@ -582,8 +582,6 @@ func (tailer *BinlogTailer) FlushMsgTxnBuffer() {
 			hasInternalTxnTag = true
 			log.Debugf("[binlogTailer] internal traffic found")
 			break
-		} else {
-			log.Debugf("[binlogTailer] no internal traffic in txn")
 		}
 	}
 	if hasInternalTxnTag && tailer.cfg.IgnoreBiDirectionalData {
@@ -600,8 +598,8 @@ func (tailer *BinlogTailer) FlushMsgTxnBuffer() {
 		log.Debugf("[binlogTailer] ignore internal traffic")
 		tailer.msgTxnBuffer = []*core.Msg{lastMsg}
 	} else {
-		log.Debugf("[binlogTailer] do not ignore traffic: hasInternalTxnTag %v, cfg.Ignore %v",
-			hasInternalTxnTag, tailer.cfg.IgnoreBiDirectionalData)
+		log.Debugf("[binlogTailer] do not ignore traffic: hasInternalTxnTag %v, cfg.Ignore %v, msgTxnBufferLen: %v",
+			hasInternalTxnTag, tailer.cfg.IgnoreBiDirectionalData, len(tailer.msgTxnBuffer))
 	}
 
 	for i, m := range tailer.msgTxnBuffer {
