@@ -319,8 +319,15 @@ func (tailer *BinlogTailer) Start() error {
 
 				tableDef := schema[tableName]
 				if tableDef == nil {
-					log.Errorf("[binlogTailer] failed to get table def, schemaName: %v, tableName: %v", schemaName, tableName)
-					continue
+					if utils.IsInternalTraffic(schemaName, tableName) {
+						// We MUST fail here when the internal traffic's schema cannot be found.
+						// Otherwise, the internal traffic tag will be ignored and cause circular internal traffic.
+						log.Fatalf("[binlogTailer] failed to get internal traffic table: schemaName: %v, tableName: %v",
+							schemaName, tableName)
+					} else {
+						log.Errorf("[binlogTailer] failed to get table def, schemaName: %v, tableName: %v", schemaName, tableName)
+						continue
+					}
 				}
 
 				switch e.Header.EventType {
@@ -392,18 +399,33 @@ func (tailer *BinlogTailer) Start() error {
 					continue
 				}
 
+				//
+				// Once we have extracted the schema, we should always invalidate the schema cache unless the
+				// schema is from MySQL's internal schema.
+				//
+				// Consider a case where two pipeline forms a bidirectional data flow,
+				//
+				// A <---> B
+				//
+				// where the current pipeline is A, and B started working.
+				// If B created the internal txn table _gravity.gravity_txn_tags, but A does not
+				// invalidate the cache, the schema of _gravity.gravity_txn_tags won't be found.
+				//
+				dbName, table, ast := extractSchemaNameFromDDLQueryEvent(tailer.parser, ev)
+				if dbName == consts.MySQLInternalDBName {
+					continue
+				}
+
+				tailer.sourceSchemaStore.InvalidateSchemaCache(dbName)
+
 				if tailer.cfg.IgnoreBiDirectionalData && strings.Contains(ddlSQL, consts.DDLTag) {
 					log.Infof("ignore internal ddl: %s", ddlSQL)
 					continue
 				}
 
-				dbName, table, ast := extractSchemaNameFromDDLQueryEvent(tailer.parser, ev)
-
-				if dbName == consts.GravityDBName || dbName == "mysql" || dbName == "drc" {
+				if dbName == consts.GravityDBName || dbName == consts.OldDrcDBName {
 					continue
 				}
-
-				tailer.sourceSchemaStore.InvalidateSchemaCache(dbName)
 
 				log.Infof("QueryEvent: database: %s, sql: %s", dbName, ddlSQL)
 
