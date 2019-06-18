@@ -320,8 +320,8 @@ func (tailer *BinlogTailer) Start() error {
 				tableDef := schema[tableName]
 				if tableDef == nil {
 					if utils.IsInternalTraffic(schemaName, tableName) {
-						//
 						// We MUST fail here when the internal traffic's schema cannot be found.
+						// Otherwise, the internal traffic tag will be ignored and cause circular internal traffic.
 						log.Fatalf("[binlogTailer] failed to get internal traffic table: schemaName: %v, tableName: %v",
 							schemaName, tableName)
 					} else {
