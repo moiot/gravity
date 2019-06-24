@@ -9,7 +9,7 @@ This document takes synchronizing the data of the local MySQL instance and data 
 
 ## Step 1: Configure the MySQL environment
 
-1. Refer to [Configure the MySQL environment](configure-the-mysql-environment.md) to configure the MySQL environment.
+1. Refer to [Configure the MySQL environment](https://github.com/moiot/gravity/blob/master/docs/2.0/03-inputs-en.md#mysql-environment-configuration) to configure the MySQL environment.
 
 2. Create the table that needs to be synchronized in the source MySQL database and the target MySQL database:
 

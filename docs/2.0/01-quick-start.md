@@ -2,7 +2,7 @@
 
 #### MySQL 环境准备
 
-参考 [MySQL 环境准备](03-inputs.md) 准备一下 MySQL 环境。
+参考 [MySQL 环境准备](https://github.com/moiot/gravity/blob/master/docs/2.0/03-inputs.md#mysql-%E7%8E%AF%E5%A2%83%E7%9A%84%E5%87%86%E5%A4%87) 准备一下 MySQL 环境。
 
 MySQL 源端和目标端创建需要同步的表
 
