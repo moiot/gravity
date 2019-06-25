@@ -3,8 +3,6 @@ package mongostream
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"strconv"
 	"time"
 
 	"github.com/OneOfOne/xxhash"
@@ -212,7 +210,7 @@ func (tailer *OplogTailer) Run() {
 			}
 			c.Add(1)
 			msg.InputStreamKey = utils.NewStringPtr("mongooplog")
-			idKey := outputStreamKey(msg.Oplog)
+			idKey := fmt.Sprint(msg.Oplog.Id)
 			msg.OutputDepHashes = []core.OutputHash{{idKey, xxhash.ChecksumString64(idKey)}}
 			msg.InputContext = config.MongoPosition(op.Timestamp)
 			msg.AfterCommitCallback = tailer.AfterMsgCommit
@@ -237,39 +235,6 @@ func (tailer *OplogTailer) AfterMsgCommit(msg *core.Msg) error {
 		return errors.Trace(err)
 	}
 	return nil
-}
-
-func outputStreamKey(oplog *gtm.Op) string {
-	switch id := oplog.Id.(type) {
-
-	case bson.ObjectId:
-		return id.String()
-	case string:
-		return id
-	case int64:
-		return strconv.FormatInt(id, 10)
-	case int32:
-		return strconv.FormatInt(int64(id), 10)
-	case int:
-		return strconv.FormatInt(int64(id), 10)
-	case int16:
-		return strconv.FormatInt(int64(id), 10)
-	case int8:
-		return strconv.FormatInt(int64(id), 10)
-	case uint64:
-		return strconv.FormatUint(id, 10)
-	case uint32:
-		return strconv.FormatUint(uint64(id), 10)
-	case uint:
-		return strconv.FormatUint(uint64(id), 10)
-	case uint16:
-		return strconv.FormatUint(uint64(id), 10)
-	case uint8:
-		return strconv.FormatUint(uint64(id), 10)
-
-	default:
-		panic(fmt.Sprintf("unknown id type %v, value: %v", reflect.TypeOf(id), id))
-	}
 }
 
 func (tailer *OplogTailer) SendDeadSignal() error {
