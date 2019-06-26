@@ -319,8 +319,7 @@ func (plugin *mongoBatchInput) runWorker(ch chan Chunk) {
 					resultCount, idCond, plugin.cfg.BatchSize)
 
 				if resultCount == 0 {
-					log.Infof("[mongoBatchInput] done Chunk.max %#v, Chunk.min %#v, Chunk.current: %#v",
-						*task.Max, *task.Min, *task.Current)
+					log.Infof("[mongoBatchInput] done %#v", task)
 					plugin.finishChunk(task)
 					break
 				}

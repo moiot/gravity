@@ -238,7 +238,11 @@ batch-size = 500
 
 # how many concurrent workers
 # Optional
-worker-cnt = 10 
+worker-cnt = 10
+
+# how many concurrent requests could be raised to server(for rate limiting)
+# Optional
+batch-per-second-limit = 1
 
 # if collection has more rows than this threshold, it would be splitted into chunks to scan parallelly
 # Optional
