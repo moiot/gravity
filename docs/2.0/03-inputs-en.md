@@ -238,7 +238,7 @@ batch-size = 500
 
 # how many concurrent workers
 # Optional
-worker-cnt = 10 
+worker-cnt = 10
 
 # how many concurrent requests could be raised to server(for rate limiting)
 # Optional
