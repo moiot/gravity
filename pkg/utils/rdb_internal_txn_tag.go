@@ -17,9 +17,10 @@ const (
 	dbNameV1    = "drc"
 	tableNameV1 = "_drc_bidirection"
 
-	dbNameV2    = consts.GravityDBName
 	tableNameV2 = consts.TxnTagTableName
 )
+
+var dbNameV2 = consts.GravityDBName
 
 var tableDDLV2 = fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s.%s (
   id INT(11) UNSIGNED NOT NULL,
