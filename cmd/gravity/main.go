@@ -21,6 +21,7 @@ import (
 
 	"github.com/moiot/gravity/pkg/app"
 	"github.com/moiot/gravity/pkg/config"
+	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/logutil"
 	"github.com/moiot/gravity/pkg/utils"
@@ -72,6 +73,7 @@ func main() {
 	utils.LogRawInfo("gravity")
 
 	logutil.PipelineName = cfg.PipelineConfig.PipelineName
+	consts.GravityDBName = cfg.PipelineConfig.InternalDBName
 
 	log.RegisterExitHandler(func() {
 		hplugin.CleanupClients()
