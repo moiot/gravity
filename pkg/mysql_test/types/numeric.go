@@ -24,25 +24,25 @@ func NewIntegerColumn(colType string, signed bool, bytes int) *integerColumn {
 		colType:     colType,
 		signed:      signed,
 		minSigned:   -(1 << (bits - 1)),
-		maxSigned:   1<<(bits-1) - 1,
-		maxUnsigned: 1<<bits - 1,
+		maxSigned:   (1 << (bits - 1)) - 1,
+		maxUnsigned: (1 << bits) - 1,
 	}
 }
 
 func (c *integerColumn) ColType() string {
 	return c.colType
 }
+
 func (c *integerColumn) Generate(r *rand.Rand) interface{} {
 	if c.signed {
 		return r.Int63n(c.maxSigned-c.minSigned) + c.minSigned
-	} else if c.maxUnsigned < 1<<32 {
-		return r.Uint32()
 	} else {
 		v := r.Uint64()
-		for v > c.maxUnsigned {
-			v = r.Uint64()
+		if v > c.maxUnsigned {
+			return v % c.maxUnsigned
+		} else {
+			return v
 		}
-		return v
 	}
 }
 

@@ -236,34 +236,39 @@ func deserialize(raw interface{}, column schema_store.Column) interface{} {
 		return nil
 	}
 
+	ret := raw
 	ct := strings.ToLower(column.ColType)
 	if strings.Contains(ct, "text") || strings.Contains(ct, "char") || ct == "json" {
 		_, ok := raw.([]uint8)
 		if ok {
-			return string(raw.([]uint8))
+			ret = string(raw.([]uint8))
 		}
-	}
-
-	// https://github.com/siddontang/go-mysql/issues/338
-	// binlog itself doesn't specify whether it's signed or not
-	if column.IsUnsigned {
+	} else if column.IsUnsigned {
+		// https://github.com/siddontang/go-mysql/issues/338
+		// binlog itself doesn't specify whether it's signed or not
 		switch t := raw.(type) {
 		case int8:
-			return uint8(t)
+			ret = uint8(t)
 		case int16:
-			return uint16(t)
+			ret = uint16(t)
 		case int32:
-			return uint32(t)
+			if strings.Contains(strings.ToLower(column.ColType), "mediumint") {
+				b0 := byte(t & 0xFF)
+				b1 := byte(t >> 8)
+				b2 := byte(t >> 16)
+				ret = uint32(uint32(b0) | uint32(b1)<<8 | uint32(b2)<<16)
+			} else {
+				ret = uint32(t)
+			}
 		case int64:
-			return uint64(t)
+			ret = uint64(t)
 		case int:
-			return uint(t)
+			ret = uint(t)
 		default:
 			// nothing to do
 		}
 	}
-
-	return raw
+	return ret
 }
 
 func NewDeleteMsgs(
