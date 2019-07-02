@@ -7,9 +7,11 @@ import (
 )
 
 const PipelineConfigV3Version = "1.0"
+const defaultInternalDBName = "_gravity"
 
 type PipelineConfigV3 struct {
 	PipelineName    string                `yaml:"name" toml:"name" json:"name"`
+	InternalDBName  string                `yaml:"internal-db-name" toml:"internal-db-name" json:"internal-db-name"`
 	Version         string                `yaml:"version" toml:"version" json:"version"`
 	InputPlugin     InputConfig           `yaml:"input" toml:"input" json:"input"`
 	FilterPlugins   []GenericPluginConfig `yaml:"filters" toml:"filters" json:"filters,omitempty"`
@@ -20,6 +22,10 @@ type PipelineConfigV3 struct {
 func (c *PipelineConfigV3) SetDefault() {
 	if c.Version == "" {
 		c.Version = PipelineConfigV3Version
+	}
+
+	if c.InternalDBName == "" {
+		c.InternalDBName = defaultInternalDBName
 	}
 }
 

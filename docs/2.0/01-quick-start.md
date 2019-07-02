@@ -42,6 +42,9 @@ cd gravity && make
 # name 必填
 name = "mysql2mysqlDemo"
 
+# 内部用于保存位点、心跳等事项的库名，默认为 _gravity
+internal-db-name = "_gravity"
+
 #
 # Input 插件的定义，此处定义使用 mysql
 #
