@@ -33,7 +33,7 @@ var tableDDLV2 = fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s.%s (
 // Only for test purpose
 var TxnTagSQLFormat = fmt.Sprintf("insert into `%s`.`%s`", dbNameV2, tableNameV2)
 
-func IsInternalTraffic(db string, tbl string) bool {
+func IsCircularTrafficTag(db string, tbl string) bool {
 	return (db == dbNameV1 && tbl == tableNameV1) || (db == dbNameV2 && tbl == tableNameV2)
 }
 

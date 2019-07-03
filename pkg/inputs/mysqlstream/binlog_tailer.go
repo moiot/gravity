@@ -319,7 +319,7 @@ func (tailer *BinlogTailer) Start() error {
 
 				tableDef := schema[tableName]
 				if tableDef == nil {
-					if utils.IsInternalTraffic(schemaName, tableName) {
+					if utils.IsCircularTrafficTag(schemaName, tableName) {
 						// We MUST fail here when the internal traffic's schema cannot be found.
 						// Otherwise, the internal traffic tag will be ignored and cause circular internal traffic.
 						log.Fatalf("[binlogTailer] failed to get internal traffic table: schemaName: %v, tableName: %v",
@@ -579,7 +579,11 @@ func (tailer *BinlogTailer) AppendMsgTxnBuffer(msg *core.Msg) {
 		c = metrics.InputCounter.WithLabelValues(core.PipelineName, msg.Database, msg.Table, string(msg.Type), "")
 	}
 	c.Add(1)
-	if msg.Database != consts.GravityDBName && msg.Type != core.MsgCtl && tailer.router != nil && !tailer.router.Exists(msg) {
+	// do not send messages without router to the system
+	if !consts.IsInternalDBTraffic(msg.Database) &&
+		msg.Type != core.MsgCtl &&
+		tailer.router != nil &&
+		!tailer.router.Exists(msg) {
 		return
 	}
 	tailer.msgTxnBuffer = append(tailer.msgTxnBuffer, msg)
@@ -600,7 +604,7 @@ func (tailer *BinlogTailer) FlushMsgTxnBuffer() {
 	// ignore internal txn data
 	hasInternalTxnTag := false
 	for _, msg := range tailer.msgTxnBuffer {
-		if utils.IsInternalTraffic(msg.Database, msg.Table) {
+		if utils.IsCircularTrafficTag(msg.Database, msg.Table) {
 			hasInternalTxnTag = true
 			log.Debugf("[binlogTailer] internal traffic found")
 			break
