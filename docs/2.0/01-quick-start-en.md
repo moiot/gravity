@@ -50,6 +50,12 @@ You can choose to synchronize data between two MySQL clusters or from MySQL to K
         # name (required)
         name = "mysql2mysqlDemo"
         version = "1.0"
+        
+        # optional. 
+        # database name used to store position, heartbeat, etc. 
+        # default to "_gravity"
+        internal-db-name = "_gravity"
+        
         #
         # The definition of Input. `mysqlbinlog` is used for this definition.
         #

@@ -20,6 +20,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/moiot/gravity/pkg/consts"
+
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/bsonx"
@@ -27,6 +29,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 
 	"github.com/mitchellh/mapstructure"
+
 	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/utils"
 
@@ -37,12 +40,12 @@ import (
 )
 
 const (
-	mongoPositionDB         = "_gravity"
 	mongoPositionCollection = "gravity_positions"
 	Version                 = "1.0"
 	MongoRepoName           = "mongo-repo"
 )
 
+var mongoPositionDB = consts.GravityDBName
 var myJson = jsoniter.Config{SortMapKeys: true}.Froze()
 
 //
