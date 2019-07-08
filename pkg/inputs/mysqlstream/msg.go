@@ -3,7 +3,6 @@ package mysqlstream
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/OneOfOne/xxhash"
@@ -230,6 +229,9 @@ func NewUpdateMsgs(
 	}
 	return msgs, nil
 }
+
+const maxMediumintUnsigned int32 = 16777215
+
 func deserialize(raw interface{}, column schema_store.Column) interface{} {
 	// fix issue: https://github.com/siddontang/go-mysql/issues/242
 	if raw == nil {
@@ -237,8 +239,7 @@ func deserialize(raw interface{}, column schema_store.Column) interface{} {
 	}
 
 	ret := raw
-	ct := strings.ToLower(column.ColType)
-	if strings.Contains(ct, "text") || strings.Contains(ct, "char") || ct == "json" {
+	if column.Type == schema_store.TypeString || column.Type == schema_store.TypeJson {
 		_, ok := raw.([]uint8)
 		if ok {
 			ret = string(raw.([]uint8))
@@ -252,11 +253,14 @@ func deserialize(raw interface{}, column schema_store.Column) interface{} {
 		case int16:
 			ret = uint16(t)
 		case int32:
-			if strings.Contains(strings.ToLower(column.ColType), "mediumint") {
-				b0 := byte(t & 0xFF)
-				b1 := byte(t >> 8)
-				b2 := byte(t >> 16)
-				ret = uint32(uint32(b0) | uint32(b1)<<8 | uint32(b2)<<16)
+			if column.Type == schema_store.TypeMediumInt {
+				// problem with mediumint is that it's a 3-byte type. There is no compatible golang type to match that.
+				// So to convert from negative to positive we'd need to convert the value manually
+				if t >= 0 {
+					ret = uint32(t)
+				} else {
+					ret = uint32(maxMediumintUnsigned + t + 1)
+				}
 			} else {
 				ret = uint32(t)
 			}

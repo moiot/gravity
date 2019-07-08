@@ -224,7 +224,7 @@ func adjustArgs(arg interface{}, column *schema_store.Column) interface{} {
 	if arg == nil {
 		return arg
 	}
-	if column.IsDatetime() { // datetime is in utc and should ignore location
+	if column.Type == schema_store.TypeDatetime { // datetime is in utc and should ignore location
 		// zero value will be string
 		t, ok := arg.(time.Time)
 		if ok && !t.IsZero() {
