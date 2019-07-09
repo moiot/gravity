@@ -447,15 +447,17 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 					for _, h := range m.OutputDepHashes {
 						latches[h.H] += 1
 					}
-					if m.AfterAckCallback == nil {
-						m.AfterAckCallback = defaultCB
-					} else {
-						oldCB := m.AfterAckCallback
-						m.AfterAckCallback = func(message *core.Msg) error {
-							if err := defaultCB(message); err != nil {
-								return errors.Trace(err)
+					if len(m.OutputDepHashes) > 0 {
+						if m.AfterAckCallback == nil {
+							m.AfterAckCallback = defaultCB
+						} else {
+							oldCB := m.AfterAckCallback
+							m.AfterAckCallback = func(message *core.Msg) error {
+								if err := defaultCB(message); err != nil {
+									return errors.Trace(err)
+								}
+								return errors.Trace(oldCB(message))
 							}
-							return errors.Trace(oldCB(message))
 						}
 					}
 					if len(curBatch) == flushLen {

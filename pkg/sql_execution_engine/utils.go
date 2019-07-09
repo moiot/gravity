@@ -106,7 +106,7 @@ func GetSingleSqlPlaceHolderAndArgWithEncodedData(msg *core.Msg, tableDef *schem
 			if !ok {
 				placeHolders = append(placeHolders, "DEFAULT")
 			} else {
-				args = append(args, adjustArgs(columnData, tableDef.MustColumn(columnName)))
+				args = append(args, adjustArgs(columnData, &column))
 				placeHolders = append(placeHolders, "?")
 			}
 		}
@@ -270,18 +270,4 @@ func NewEngineExecutor(pipelineName string, engineName string, db *sql.DB, data 
 	}
 
 	return executor
-}
-
-// Only log delete operation for now.
-func logOperation(query string, args []interface{}, result sql.Result) {
-	if !strings.HasPrefix(query, "DELETE") {
-		return
-	}
-
-	nrDeleted, err := result.RowsAffected()
-	if err != nil {
-		logrus.Warnf("[logOperation]: %v", err.Error())
-	}
-
-	logrus.Debugf("[logOperation] singleDelete %s. args: %+v. rows affected: %d", query, args, nrDeleted)
 }
