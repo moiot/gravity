@@ -214,6 +214,7 @@ func GetTableDefFromDB(db *sql.DB, dbName string, tableName string) (*Table, err
 		t.Columns = append(t.Columns, column)
 		t.columnMap[column.Name] = &t.Columns[len(t.Columns)-1]
 	}
+	t.ReplaceSqlPrefix()
 
 	return &t, nil
 }

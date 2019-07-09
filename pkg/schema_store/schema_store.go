@@ -2,6 +2,7 @@ package schema_store
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -79,6 +80,7 @@ type Table struct {
 	PrimaryKeyColumns  []Column            `json:"primary_key_columns"`
 	UniqueKeyColumnMap map[string][]string `json:"unique_key_columns"`
 	columnMap          map[string]*Column
+	replaceSqlPrefix   string
 	once               sync.Once
 }
 
@@ -100,6 +102,19 @@ func (t *Table) ColumnNames() []string {
 
 	}
 	return names
+}
+
+func (t *Table) ReplaceSqlPrefix() string {
+	t.once.Do(func() {
+		columnNames := make([]string, 0, len(t.Columns))
+		for _, column := range t.Columns {
+			columnName := column.Name
+			//columnIdx := column.Idx
+			columnNames = append(columnNames, fmt.Sprintf("`%s`", columnName))
+		}
+		t.replaceSqlPrefix = fmt.Sprintf("REPLACE INTO `%s`.`%s` (%s) VALUES", t.Schema, t.Name, strings.Join(columnNames, ","))
+	})
+	return t.replaceSqlPrefix
 }
 
 func (t *Table) Column(col string) (c *Column, ok bool) {

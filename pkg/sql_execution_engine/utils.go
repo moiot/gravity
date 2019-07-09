@@ -40,15 +40,6 @@ func GenerateSingleDeleteSQL(msg *core.Msg, tableDef *schema_store.Table) (strin
 }
 
 func GenerateReplaceSQLWithMultipleValues(msgBatch []*core.Msg, tableDef *schema_store.Table) (string, []interface{}, error) {
-	columnNames := make([]string, 0, len(tableDef.Columns))
-	for _, column := range tableDef.Columns {
-		columnName := column.Name
-		//columnIdx := column.Idx
-		columnNames = append(columnNames, fmt.Sprintf("`%s`", columnName))
-	}
-
-	sqlPrefix := fmt.Sprintf("REPLACE INTO `%s`.`%s` (%s) VALUES", tableDef.Schema, tableDef.Name, strings.Join(columnNames, ","))
-
 	// Generate place holders and args
 	batchPlaceHolders, args, err := PlaceHoldersAndArgsFromEncodedData(msgBatch, tableDef)
 	if err != nil {
@@ -56,7 +47,7 @@ func GenerateReplaceSQLWithMultipleValues(msgBatch []*core.Msg, tableDef *schema
 	}
 
 	finalPlaceHolders := strings.Join(batchPlaceHolders, ",")
-	s := []string{sqlPrefix, finalPlaceHolders}
+	s := []string{tableDef.ReplaceSqlPrefix(), finalPlaceHolders}
 	return strings.Join(s, " "), args, nil
 }
 
