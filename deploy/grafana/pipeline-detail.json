@@ -46,7 +46,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1558423995786,
+  "iteration": 1562642097014,
   "links": [],
   "panels": [
     {
@@ -409,14 +409,14 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(gravity_input_probe_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "expr": "histogram_quantile(1, sum(rate(gravity_input_probe_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "probe",
           "refId": "G"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(gravity_input_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "expr": "histogram_quantile(1, sum(rate(gravity_input_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "input",
@@ -430,35 +430,35 @@
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(gravity_scheduler_total_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "expr": "histogram_quantile(1, sum(rate(gravity_scheduler_total_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "scheduler total",
           "refId": "C"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(gravity_scheduler_submit_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "expr": "histogram_quantile(1, sum(rate(gravity_scheduler_submit_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "scheduler submit",
           "refId": "D"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(gravity_scheduler_ack_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "expr": "histogram_quantile(1, sum(rate(gravity_scheduler_ack_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "scheduler ack",
           "refId": "E"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(gravity_output_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "expr": "histogram_quantile(1, sum(rate(gravity_output_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "output",
           "refId": "F"
         },
         {
-          "expr": "histogram_quantile(0.8, sum(rate(gravity_input_after_commit_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
+          "expr": "histogram_quantile(1, sum(rate(gravity_input_after_commit_latency_bucket{pipeline='$pipeline'}[1m])) by (le))",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "after-commit",
@@ -468,7 +468,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "95% Latency",
+      "title": "100% Latency",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -712,97 +712,9 @@
       "datasource": "${DS_GRAVITY}",
       "fill": 1,
       "gridPos": {
-        "h": 6,
-        "w": 12,
+        "h": 7,
+        "w": 24,
         "x": 0,
-        "y": 20
-      },
-      "id": 6,
-      "legend": {
-        "alignAsTable": true,
-        "avg": true,
-        "current": true,
-        "hideEmpty": true,
-        "hideZero": false,
-        "max": true,
-        "min": false,
-        "rightSide": true,
-        "show": true,
-        "total": false,
-        "values": true
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 5,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "avg(gravity_scheduler_nr_dep_hash{pipeline='$pipeline'}) by (schema, table)",
-          "format": "time_series",
-          "intervalFactor": 1,
-          "legendFormat": "{{schema}}.{{table}}",
-          "refId": "A"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "nr dep hashes",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "${DS_GRAVITY}",
-      "fill": 1,
-      "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 12,
         "y": 20
       },
       "id": 18,
@@ -891,7 +803,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 26
+        "y": 27
       },
       "id": 10,
       "legend": {
@@ -923,7 +835,21 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(gravity_input_counter{pipeline='$pipeline', type!='ctl'}[1m])) by (db, table)",
+          "expr": "sum(irate(gravity_input_counter{pipeline='$pipeline', type!='ctl'}[1m]))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "total(not ctl)",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(irate(gravity_input_counter{pipeline='$pipeline', type='ctl'}[1m]))",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "ctl",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(irate(gravity_input_counter{pipeline='$pipeline', type!='ctl'}[1m])) by (db, table)",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "{{db}}.{{table}}",
@@ -981,7 +907,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 37
       },
       "id": 12,
       "legend": {
@@ -1013,21 +939,23 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(rate(gravity_output_counter{pipeline='$pipeline'}[1m])) by (cat0, cat1)",
+          "expr": "sum(irate(gravity_output_counter{pipeline='$pipeline'}[1m])) by (cat0, cat1)",
           "format": "time_series",
+          "hide": false,
           "intervalFactor": 1,
           "legendFormat": "{{cat0}}.{{cat1}}",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(gravity_output_counter{pipeline='$pipeline'}[1m]))",
+          "expr": "sum(irate(gravity_output_counter{pipeline='$pipeline'}[1m]))",
           "format": "time_series",
+          "hide": false,
           "intervalFactor": 1,
           "legendFormat": "total ",
           "refId": "B"
         },
         {
-          "expr": "sum(rate(gravity_scheduler_flush_stats{pipeline='$pipeline'}[1m])) by (table, stats)",
+          "expr": "sum(irate(gravity_scheduler_flush_stats{pipeline='$pipeline'}[1m])) by (table, stats)",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "{{table}}-flush-{{stats}}",
@@ -1104,7 +1032,7 @@
     ]
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-30m",
     "to": "now"
   },
   "timepicker": {
@@ -1135,5 +1063,5 @@
   "timezone": "",
   "title": "Gravity Pipeline Detail",
   "uid": "7aulI8Xmz",
-  "version": 18
+  "version": 23
 }
