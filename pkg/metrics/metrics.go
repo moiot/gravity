@@ -62,6 +62,13 @@ var EmitterHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 	Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 15), // ~ 8s
 }, []string{PipelineTag})
 
+var SchedulerRetryCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "gravity",
+	Subsystem: "scheduler",
+	Name:      "retry_counter",
+	Help:      "Number of retries scheduler attempt",
+}, []string{PipelineTag})
+
 var Scheduler2OutputCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "gravity",
 	Subsystem: "scheduler",
@@ -133,7 +140,7 @@ func init() {
 		ProbeHistogram,
 		InputCounter, Input2EmitterCounter, InputHistogram, InputAfterCommitHistogram,
 		Emitter2SchedulerCounter, EmitterHistogram,
-		Scheduler2OutputCounter, SchedulerTotalHistogram, SchedulerSubmitHistogram, SchedulerAckHistogram,
+		SchedulerRetryCounter, Scheduler2OutputCounter, SchedulerTotalHistogram, SchedulerSubmitHistogram, SchedulerAckHistogram,
 		OutputCounter, OutputHistogram,
 		End2EndEventTimeHistogram, End2EndProcessTimeHistogram,
 		QueueLength,

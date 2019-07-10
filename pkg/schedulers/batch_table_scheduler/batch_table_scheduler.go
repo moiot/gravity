@@ -220,7 +220,12 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 
 				if scheduler.syncOutput != nil {
 					err := retry.Do(func() error {
-						return scheduler.syncOutput.Execute(msgBatch)
+						err := scheduler.syncOutput.Execute(msgBatch)
+						if err != nil {
+							metrics.SchedulerRetryCounter.WithLabelValues(core.PipelineName).Add(1)
+							log.Warnf("error execute sync output, retry. %v", err)
+						}
+						return err
 					}, scheduler.cfg.NrRetries, scheduler.cfg.RetrySleep)
 
 					if err != nil {
@@ -504,7 +509,7 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 			}
 		}
 
-		ticker := time.NewTicker(100 * time.Millisecond)
+		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 
 		for {
