@@ -122,7 +122,7 @@ func (scheduler *batchScheduler) Configure(pipelineName string, configData map[s
 		return errors.Trace(err)
 	}
 
-	if schedulerConfig.NrRetries <= 0 {
+	if schedulerConfig.NrRetries < 0 {
 		schedulerConfig.NrRetries = DefaultNrRetries
 	}
 
