@@ -119,7 +119,7 @@ func getUniqueKeysFromDB(db *sql.DB, dbName string, tableName string) (map[strin
 func GetTableDefFromDB(db *sql.DB, dbName string, tableName string) (*Table, error) {
 
 	var columnName string
-	var columnType string
+	var rawType string
 	var columnKey string
 	var ordinalPos = 0
 	var isNullableString string
@@ -141,14 +141,14 @@ func GetTableDefFromDB(db *sql.DB, dbName string, tableName string) (*Table, err
 	defer rows.Close()
 
 	for rows.Next() {
-		err := rows.Scan(&columnName, &columnType, &isNullableString, &columnKey, &defaultVal, &extra)
+		err := rows.Scan(&columnName, &rawType, &isNullableString, &columnKey, &defaultVal, &extra)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 
 		var column = Column{
 			//Idx:  ordinalPos,
-			Name: columnName, ColType: columnType}
+			Name: columnName, RawType: rawType}
 
 		// There might be a situation when the column cannot be NULL,
 		// but there is no default value defined
@@ -165,7 +165,7 @@ func GetTableDefFromDB(db *sql.DB, dbName string, tableName string) (*Table, err
 			isNullable = true
 		}
 
-		if strings.Contains(columnType, "unsigned") {
+		if strings.Contains(rawType, "unsigned") {
 			isUnsigned = true
 		} else {
 			isUnsigned = false
@@ -181,14 +181,40 @@ func GetTableDefFromDB(db *sql.DB, dbName string, tableName string) (*Table, err
 		if extra.Valid && strings.Contains(strings.ToUpper(extra.String), "GENERATED") {
 			column.IsGenerated = true
 		}
-		// some validation
-		//if !column.IsNullable && column.DefaultVal.IsNull {
-		//	return errors.Errorf("column %v cannot be NULL, but default value is NULL", column.Name), nil
-		//}
+
+		if strings.HasPrefix(rawType, "float") ||
+			strings.HasPrefix(rawType, "double") {
+			column.Type = TypeFloat
+		} else if strings.HasPrefix(rawType, "decimal") {
+			column.Type = TypeDecimal
+		} else if strings.HasPrefix(rawType, "enum") {
+			column.Type = TypeEnum
+		} else if strings.HasPrefix(rawType, "set") {
+			column.Type = TypeSet
+		} else if strings.HasPrefix(rawType, "datetime") {
+			column.Type = TypeDatetime
+		} else if strings.HasPrefix(rawType, "timestamp") {
+			column.Type = TypeTimestamp
+		} else if strings.HasPrefix(rawType, "time") {
+			column.Type = TypeTime
+		} else if "date" == rawType {
+			column.Type = TypeDate
+		} else if strings.HasPrefix(rawType, "bit") {
+			column.Type = TypeBit
+		} else if strings.HasPrefix(rawType, "json") {
+			column.Type = TypeJson
+		} else if strings.Contains(rawType, "mediumint") {
+			column.Type = TypeMediumInt
+		} else if strings.Contains(rawType, "int") || strings.HasPrefix(rawType, "year") {
+			column.Type = TypeNumber
+		} else {
+			column.Type = TypeString
+		}
 
 		t.Columns = append(t.Columns, column)
 		t.columnMap[column.Name] = &t.Columns[len(t.Columns)-1]
 	}
+	t.ReplaceSqlPrefix()
 
 	return &t, nil
 }

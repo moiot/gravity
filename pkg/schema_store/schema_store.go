@@ -3,7 +3,6 @@ package schema_store
 import (
 	"fmt"
 	"strings"
-
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -40,19 +39,30 @@ func (col Column) EqualsDefault(value interface{}) bool {
 	return false
 }
 
-func (col Column) IsTimestamp() bool {
-	return strings.Contains(strings.ToLower(col.ColType), "timestamp")
-}
+type ColumnType = int
 
-func (col Column) IsDatetime() bool {
-	return strings.Contains(strings.ToLower(col.ColType), "datetime")
-}
+const (
+	TypeNumber    ColumnType = iota + 1 // tinyint, smallint, int, bigint, year
+	TypeMediumInt                       // medium int
+	TypeFloat                           // float, double
+	TypeEnum                            // enum
+	TypeSet                             // set
+	TypeString                          // other
+	TypeDatetime                        // datetime
+	TypeTimestamp                       // timestamp
+	TypeDate                            // date
+	TypeTime                            // time
+	TypeBit                             // bit
+	TypeJson                            // json
+	TypeDecimal                         // decimal
+)
 
 // Column
 type Column struct {
 	//Idx          int               `json:"idx"`
 	Name         string            `json:"name"`
-	ColType      string            `json:"col_type"`
+	Type         ColumnType        `json:"type"`
+	RawType      string            `json:"raw_type"`
 	DefaultVal   ColumnValueString `json:"default_value_string"`
 	IsNullable   bool              `json:"is_nullable"`
 	IsUnsigned   bool              `json:"is_unsigned"`
@@ -70,6 +80,7 @@ type Table struct {
 	PrimaryKeyColumns  []Column            `json:"primary_key_columns"`
 	UniqueKeyColumnMap map[string][]string `json:"unique_key_columns"`
 	columnMap          map[string]*Column
+	replaceSqlPrefix   string
 	once               sync.Once
 }
 
@@ -93,6 +104,19 @@ func (t *Table) ColumnNames() []string {
 	return names
 }
 
+func (t *Table) ReplaceSqlPrefix() string {
+	t.once.Do(func() {
+		columnNames := make([]string, 0, len(t.Columns))
+		for _, column := range t.Columns {
+			columnName := column.Name
+			//columnIdx := column.Idx
+			columnNames = append(columnNames, fmt.Sprintf("`%s`", columnName))
+		}
+		t.replaceSqlPrefix = fmt.Sprintf("REPLACE INTO `%s`.`%s` (%s) VALUES", t.Schema, t.Name, strings.Join(columnNames, ","))
+	})
+	return t.replaceSqlPrefix
+}
+
 func (t *Table) Column(col string) (c *Column, ok bool) {
 	t.once.Do(func() {
 		if t.columnMap == nil {
@@ -113,19 +137,6 @@ func (t *Table) MustColumn(col string) *Column {
 		logrus.Fatalf("can't find column %s", col)
 	}
 	return c
-}
-
-func Deserialize(raw interface{}, column Column) interface{} {
-	// fix issue: https://github.com/siddontang/go-mysql/issues/242
-	if raw == nil {
-		return nil
-	}
-
-	if column.ColType == "text" {
-		return string(raw.([]uint8))
-	} else {
-		return raw
-	}
 }
 
 type SchemaStore interface {

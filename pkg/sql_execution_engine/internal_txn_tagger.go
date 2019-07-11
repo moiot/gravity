@@ -20,6 +20,7 @@ import (
 	"database/sql"
 
 	"github.com/juju/errors"
+
 	"github.com/moiot/gravity/pkg/utils"
 )
 
@@ -46,13 +47,8 @@ func ExecWithInternalTxnTag(
 	}
 
 	if !internalTxnTaggerCfg.TagInternalTxn {
-		result, err := db.Exec(newQuery, args...)
-		if err != nil {
-			return errors.Annotatef(err, "query: %v, args: %v", query, args)
-		}
-
-		logOperation(query, args, result)
-		return nil
+		_, err := db.Exec(newQuery, args...)
+		return errors.Annotatef(err, "query: %v, args: %v", query, args)
 	}
 
 	//
@@ -63,17 +59,16 @@ func ExecWithInternalTxnTag(
 		return errors.Trace(err)
 	}
 
-	result, err := txn.Exec(utils.GenerateTxnTagSQL(pipelineName))
+	_, err = txn.Exec(utils.GenerateTxnTagSQL(pipelineName))
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	result, err = txn.Exec(query, args...)
+	_, err = txn.Exec(query, args...)
 	if err != nil {
 		txn.Rollback()
 		return errors.Annotatef(err, "query: %v, args: %+v", query, args)
 	}
 
-	logOperation(query, args, result)
 	return errors.Trace(txn.Commit())
 }

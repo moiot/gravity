@@ -212,6 +212,28 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				tmp.Table.Schema = model.CIStr{
 					O: targetSchema,
 				}
+
+				//handle create table like if the referenced table has been renamed
+				if tmp.ReferTable != nil {
+					var refSchema string
+					var refTable string
+					found := false
+					for _, route := range output.routes {
+						if route.Match(&core.Msg{
+							Database: tmp.ReferTable.Name.O,
+							Table:    tmp.ReferTable.Schema.O,
+						}) {
+							found = true
+							refSchema, refTable = route.GetTarget(msg.Database, msg.Table)
+							break
+						}
+					}
+					if found {
+						tmp.ReferTable.Schema = model.CIStr{O: refSchema}
+						tmp.ReferTable.Name = model.CIStr{O: refTable}
+					}
+				}
+
 				tmp.IfNotExists = true
 				stmt := restore(&tmp)
 				err := output.executeDDL(targetSchema, stmt)

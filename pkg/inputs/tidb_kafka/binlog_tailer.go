@@ -21,7 +21,6 @@ import (
 	"github.com/moiot/gravity/pkg/position_cache"
 	pb "github.com/moiot/gravity/pkg/protocol/tidb"
 	"github.com/moiot/gravity/pkg/sarama_cluster"
-	"github.com/moiot/gravity/pkg/schema_store"
 	"github.com/moiot/gravity/pkg/utils"
 )
 
@@ -230,28 +229,6 @@ func (t *BinlogTailer) AfterMsgCommit(msg *core.Msg) error {
 
 	t.consumer.MarkPartitionOffset(kMsg.Topic, kMsg.Partition, kMsg.Offset, "")
 	return nil
-}
-
-func buildTableDef(table *pb.Table) *schema_store.Table {
-	ret := &schema_store.Table{
-		Schema: *table.SchemaName,
-		Name:   *table.TableName,
-	}
-
-	for i, c := range table.ColumnInfo {
-		ret.Columns = append(ret.Columns, schema_store.Column{
-			//Idx:          i,
-			Name:         c.Name,
-			ColType:      c.MysqlType,
-			IsPrimaryKey: c.IsPrimaryKey,
-		})
-
-		if c.IsPrimaryKey {
-			ret.PrimaryKeyColumns = append(ret.PrimaryKeyColumns, ret.Columns[i])
-		}
-	}
-
-	return ret
 }
 
 func deserialize(raw *pb.Column, colType string) interface{} {

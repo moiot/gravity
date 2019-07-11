@@ -122,7 +122,7 @@ func (scheduler *batchScheduler) Configure(pipelineName string, configData map[s
 		return errors.Trace(err)
 	}
 
-	if schedulerConfig.NrRetries <= 0 {
+	if schedulerConfig.NrRetries < 0 {
 		schedulerConfig.NrRetries = DefaultNrRetries
 	}
 
@@ -220,7 +220,12 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 
 				if scheduler.syncOutput != nil {
 					err := retry.Do(func() error {
-						return scheduler.syncOutput.Execute(msgBatch)
+						err := scheduler.syncOutput.Execute(msgBatch)
+						if err != nil {
+							metrics.SchedulerRetryCounter.WithLabelValues(core.PipelineName).Add(1)
+							log.Warnf("error execute sync output, retry. %v", err)
+						}
+						return err
 					}, scheduler.cfg.NrRetries, scheduler.cfg.RetrySleep)
 
 					if err != nil {
@@ -447,15 +452,17 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 					for _, h := range m.OutputDepHashes {
 						latches[h.H] += 1
 					}
-					if m.AfterAckCallback == nil {
-						m.AfterAckCallback = defaultCB
-					} else {
-						oldCB := m.AfterAckCallback
-						m.AfterAckCallback = func(message *core.Msg) error {
-							if err := defaultCB(message); err != nil {
-								return errors.Trace(err)
+					if len(m.OutputDepHashes) > 0 {
+						if m.AfterAckCallback == nil {
+							m.AfterAckCallback = defaultCB
+						} else {
+							oldCB := m.AfterAckCallback
+							m.AfterAckCallback = func(message *core.Msg) error {
+								if err := defaultCB(message); err != nil {
+									return errors.Trace(err)
+								}
+								return errors.Trace(oldCB(message))
 							}
-							return errors.Trace(oldCB(message))
 						}
 					}
 					if len(curBatch) == flushLen {
@@ -502,7 +509,7 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 			}
 		}
 
-		ticker := time.NewTicker(100 * time.Millisecond)
+		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 
 		for {

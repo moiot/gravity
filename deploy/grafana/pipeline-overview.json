@@ -49,6 +49,66 @@
   "links": [],
   "panels": [
     {
+      "alert": {
+        "conditions": [
+          {
+            "evaluator": {
+              "params": [
+                180
+              ],
+              "type": "gt"
+            },
+            "operator": {
+              "type": "and"
+            },
+            "query": {
+              "params": [
+                "A",
+                "5m",
+                "now"
+              ]
+            },
+            "reducer": {
+              "params": [],
+              "type": "last"
+            },
+            "type": "query"
+          },
+          {
+            "evaluator": {
+              "params": [
+                60
+              ],
+              "type": "gt"
+            },
+            "operator": {
+              "type": "or"
+            },
+            "query": {
+              "params": [
+                "A",
+                "5m",
+                "now"
+              ]
+            },
+            "reducer": {
+              "params": [],
+              "type": "avg"
+            },
+            "type": "query"
+          }
+        ],
+        "executionErrorState": "alerting",
+        "frequency": "60s",
+        "handler": 1,
+        "name": "Event Time Low Watermark (E2E Latency) alert",
+        "noDataState": "alerting",
+        "notifications": [
+          {
+            "id": 122
+          }
+        ]
+      },
       "aliasColors": {},
       "bars": false,
       "dashLength": 10,
@@ -57,7 +117,7 @@
       "fill": 1,
       "gridPos": {
         "h": 9,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 0
       },
@@ -70,6 +130,8 @@
         "min": false,
         "rightSide": true,
         "show": true,
+        "sort": "current",
+        "sortDesc": true,
         "total": false,
         "values": true
       },
@@ -94,7 +156,15 @@
           "refId": "A"
         }
       ],
-      "thresholds": [],
+      "thresholds": [
+        {
+          "colorMode": "critical",
+          "fill": true,
+          "line": true,
+          "op": "gt",
+          "value": 180
+        }
+      ],
       "timeFrom": null,
       "timeShift": null,
       "title": "Event Time Low Watermark (E2E Latency)",
@@ -135,6 +205,43 @@
       }
     },
     {
+      "alert": {
+        "conditions": [
+          {
+            "evaluator": {
+              "params": [
+                60
+              ],
+              "type": "gt"
+            },
+            "operator": {
+              "type": "and"
+            },
+            "query": {
+              "params": [
+                "A",
+                "5m",
+                "now"
+              ]
+            },
+            "reducer": {
+              "params": [],
+              "type": "avg"
+            },
+            "type": "query"
+          }
+        ],
+        "executionErrorState": "alerting",
+        "frequency": "60s",
+        "handler": 1,
+        "name": "Process Time Low Watermark (Internal Latency) alert",
+        "noDataState": "alerting",
+        "notifications": [
+          {
+            "id": 122
+          }
+        ]
+      },
       "aliasColors": {},
       "bars": false,
       "dashLength": 10,
@@ -143,9 +250,9 @@
       "fill": 1,
       "gridPos": {
         "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 0
+        "w": 24,
+        "x": 0,
+        "y": 9
       },
       "id": 4,
       "legend": {
@@ -156,6 +263,8 @@
         "min": false,
         "rightSide": true,
         "show": true,
+        "sort": "current",
+        "sortDesc": true,
         "total": false,
         "values": true
       },
@@ -180,7 +289,15 @@
           "refId": "A"
         }
       ],
-      "thresholds": [],
+      "thresholds": [
+        {
+          "colorMode": "critical",
+          "fill": true,
+          "line": true,
+          "op": "gt",
+          "value": 60
+        }
+      ],
       "timeFrom": null,
       "timeShift": null,
       "title": "Process Time Low Watermark (Internal Latency)",
@@ -228,10 +345,10 @@
       "datasource": "${DS_GRAVITY}",
       "fill": 1,
       "gridPos": {
-        "h": 9,
-        "w": 12,
+        "h": 8,
+        "w": 24,
         "x": 0,
-        "y": 9
+        "y": 18
       },
       "id": 6,
       "legend": {
@@ -242,6 +359,8 @@
         "min": false,
         "rightSide": true,
         "show": true,
+        "sort": "current",
+        "sortDesc": true,
         "total": false,
         "values": true
       },
@@ -314,10 +433,10 @@
       "datasource": "${DS_GRAVITY}",
       "fill": 1,
       "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 9
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 26
       },
       "id": 8,
       "legend": {
@@ -328,6 +447,8 @@
         "min": false,
         "rightSide": true,
         "show": true,
+        "sort": "current",
+        "sortDesc": true,
         "total": false,
         "values": true
       },
@@ -400,10 +521,10 @@
       "datasource": "${DS_GRAVITY}",
       "fill": 1,
       "gridPos": {
-        "h": 9,
-        "w": 12,
+        "h": 10,
+        "w": 24,
         "x": 0,
-        "y": 18
+        "y": 36
       },
       "id": 10,
       "legend": {
@@ -414,6 +535,8 @@
         "min": false,
         "rightSide": true,
         "show": true,
+        "sort": "current",
+        "sortDesc": true,
         "total": false,
         "values": true
       },
@@ -479,7 +602,6 @@
       }
     }
   ],
-  "refresh": "10s",
   "schemaVersion": 16,
   "style": "dark",
   "tags": [],
@@ -516,7 +638,7 @@
     ]
   },
   "timezone": "",
-  "title": "Gravity Pipeline Overview 2",
+  "title": "Gravity Pipeline Overview",
   "uid": "oyM8DUuiz",
-  "version": 3
+  "version": 10
 }

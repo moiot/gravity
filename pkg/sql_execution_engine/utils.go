@@ -40,15 +40,6 @@ func GenerateSingleDeleteSQL(msg *core.Msg, tableDef *schema_store.Table) (strin
 }
 
 func GenerateReplaceSQLWithMultipleValues(msgBatch []*core.Msg, tableDef *schema_store.Table) (string, []interface{}, error) {
-	columnNames := make([]string, 0, len(tableDef.Columns))
-	for _, column := range tableDef.Columns {
-		columnName := column.Name
-		//columnIdx := column.Idx
-		columnNames = append(columnNames, fmt.Sprintf("`%s`", columnName))
-	}
-
-	sqlPrefix := fmt.Sprintf("REPLACE INTO `%s`.`%s` (%s) VALUES", tableDef.Schema, tableDef.Name, strings.Join(columnNames, ","))
-
 	// Generate place holders and args
 	batchPlaceHolders, args, err := PlaceHoldersAndArgsFromEncodedData(msgBatch, tableDef)
 	if err != nil {
@@ -56,7 +47,7 @@ func GenerateReplaceSQLWithMultipleValues(msgBatch []*core.Msg, tableDef *schema
 	}
 
 	finalPlaceHolders := strings.Join(batchPlaceHolders, ",")
-	s := []string{sqlPrefix, finalPlaceHolders}
+	s := []string{tableDef.ReplaceSqlPrefix(), finalPlaceHolders}
 	return strings.Join(s, " "), args, nil
 }
 
@@ -106,7 +97,7 @@ func GetSingleSqlPlaceHolderAndArgWithEncodedData(msg *core.Msg, tableDef *schem
 			if !ok {
 				placeHolders = append(placeHolders, "DEFAULT")
 			} else {
-				args = append(args, adjustArgs(columnData, tableDef.MustColumn(columnName)))
+				args = append(args, adjustArgs(columnData, &column))
 				placeHolders = append(placeHolders, "?")
 			}
 		}
@@ -224,7 +215,7 @@ func adjustArgs(arg interface{}, column *schema_store.Column) interface{} {
 	if arg == nil {
 		return arg
 	}
-	if column.IsDatetime() { // datetime is in utc and should ignore location
+	if column.Type == schema_store.TypeDatetime { // datetime is in utc and should ignore location
 		// zero value will be string
 		t, ok := arg.(time.Time)
 		if ok && !t.IsZero() {
@@ -270,18 +261,4 @@ func NewEngineExecutor(pipelineName string, engineName string, db *sql.DB, data 
 	}
 
 	return executor
-}
-
-// Only log delete operation for now.
-func logOperation(query string, args []interface{}, result sql.Result) {
-	if !strings.HasPrefix(query, "DELETE") {
-		return
-	}
-
-	nrDeleted, err := result.RowsAffected()
-	if err != nil {
-		logrus.Warnf("[logOperation]: %v", err.Error())
-	}
-
-	logrus.Debugf("[logOperation] singleDelete %s. args: %+v. rows affected: %d", query, args, nrDeleted)
 }
