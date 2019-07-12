@@ -11,12 +11,11 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/consts"
+	"github.com/moiot/gravity/pkg/env"
 	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mongo/gtm"
 	"github.com/moiot/gravity/pkg/utils"
 )
-
-var PipelineName string
 
 type MsgType string
 
@@ -117,7 +116,7 @@ func (msg *Msg) BeforeWindowMoveForward() {
 		}
 	}
 	close(msg.Done)
-	metrics.InputAfterCommitHistogram.WithLabelValues(PipelineName).Observe(time.Since(start).Seconds())
+	metrics.InputAfterCommitHistogram.WithLabelValues(env.PipelineName).Observe(time.Since(start).Seconds())
 }
 
 func (msg *Msg) EventTime() time.Time {

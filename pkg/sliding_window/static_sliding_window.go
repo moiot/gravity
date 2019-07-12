@@ -6,10 +6,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/metrics"
-
 	log "github.com/sirupsen/logrus"
+
+	"github.com/moiot/gravity/pkg/env"
+	"github.com/moiot/gravity/pkg/metrics"
 )
 
 const ProcessDelayWarningThreshold = 30
@@ -178,14 +178,14 @@ func (w *staticSlidingWindow) reportMetrics() {
 			if seconds > ProcessDelayWarningThreshold {
 				log.Warnf("[sliding_window] item not ack after %f seconds. %s", seconds, w.nextItemToCommit)
 			}
-			metrics.End2EndProcessTimeHistogram.WithLabelValues(core.PipelineName).Observe(seconds)
+			metrics.End2EndProcessTimeHistogram.WithLabelValues(env.PipelineName).Observe(seconds)
 
 			// EventTime can be seen as the end to end duration of event process time.
-			metrics.End2EndEventTimeHistogram.WithLabelValues(core.PipelineName).Observe(time.Since(watermark.EventTime).Seconds())
+			metrics.End2EndEventTimeHistogram.WithLabelValues(env.PipelineName).Observe(time.Since(watermark.EventTime).Seconds())
 
-			metrics.QueueLength.WithLabelValues(core.PipelineName, "sliding-window-waiting-chan", w.name).Set(float64(len(w.waitingItemC)))
-			metrics.QueueLength.WithLabelValues(core.PipelineName, "sliding-window-ready-chan", w.name).Set(float64(len(w.readyC)))
-			metrics.QueueLength.WithLabelValues(core.PipelineName, "sliding-window-ready-heap", w.name).Set(float64(atomic.LoadInt64(&w.heapSize)))
+			metrics.QueueLength.WithLabelValues(env.PipelineName, "sliding-window-waiting-chan", w.name).Set(float64(len(w.waitingItemC)))
+			metrics.QueueLength.WithLabelValues(env.PipelineName, "sliding-window-ready-chan", w.name).Set(float64(len(w.readyC)))
+			metrics.QueueLength.WithLabelValues(env.PipelineName, "sliding-window-ready-heap", w.name).Set(float64(atomic.LoadInt64(&w.heapSize)))
 
 		case <-w.closeC:
 			ticker.Stop()

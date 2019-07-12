@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/moiot/gravity/pkg/metrics"
-
 	"github.com/juju/errors"
 
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/env"
+	"github.com/moiot/gravity/pkg/metrics"
 )
 
 const FirstSequenceNumber = 1
@@ -38,8 +38,8 @@ type defaultEmitter struct {
 
 func (e *defaultEmitter) Emit(msg *core.Msg) error {
 	msg.EnterEmitter = time.Now()
-	metrics.Input2EmitterCounter.WithLabelValues(core.PipelineName).Add(1)
-	metrics.InputHistogram.WithLabelValues(core.PipelineName).Observe(msg.EnterEmitter.Sub(msg.Start).Seconds())
+	metrics.Input2EmitterCounter.WithLabelValues(env.PipelineName).Add(1)
+	metrics.InputHistogram.WithLabelValues(env.PipelineName).Observe(msg.EnterEmitter.Sub(msg.Start).Seconds())
 
 	if msg.InputStreamKey == nil {
 		return errors.Errorf("[emitter] InputStreamKey nil")
@@ -76,12 +76,12 @@ func (e *defaultEmitter) Emit(msg *core.Msg) error {
 
 	sn := gen.Next()
 	msg.InputSequence = &sn
-	metrics.Emitter2SchedulerCounter.WithLabelValues(core.PipelineName).Add(1)
+	metrics.Emitter2SchedulerCounter.WithLabelValues(env.PipelineName).Add(1)
 	if err := e.msgSubmitter.SubmitMsg(msg); err != nil {
 		return errors.Trace(err)
 	}
 	msg.LeaveEmitter = time.Now()
-	metrics.EmitterHistogram.WithLabelValues(core.PipelineName).Observe(msg.LeaveEmitter.Sub(msg.EnterEmitter).Seconds())
+	metrics.EmitterHistogram.WithLabelValues(env.PipelineName).Observe(msg.LeaveEmitter.Sub(msg.EnterEmitter).Seconds())
 	return nil
 }
 
