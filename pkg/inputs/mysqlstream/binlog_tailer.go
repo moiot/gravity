@@ -9,10 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/moiot/gravity/pkg/position_repos"
-
-	"github.com/moiot/gravity/pkg/inputs/helper"
-
 	"github.com/juju/errors"
 	"github.com/pingcap/parser"
 	"github.com/prometheus/client_golang/prometheus"
@@ -24,10 +20,13 @@ import (
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/env"
+	"github.com/moiot/gravity/pkg/inputs/helper"
 	"github.com/moiot/gravity/pkg/inputs/helper/binlog_checker"
 	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mysql_test"
 	"github.com/moiot/gravity/pkg/position_cache"
+	"github.com/moiot/gravity/pkg/position_repos"
 	"github.com/moiot/gravity/pkg/schema_store"
 	"github.com/moiot/gravity/pkg/utils"
 )
@@ -574,9 +573,9 @@ func (tailer *BinlogTailer) Wait() {
 func (tailer *BinlogTailer) AppendMsgTxnBuffer(msg *core.Msg) {
 	var c prometheus.Counter
 	if msg.Type == core.MsgDML {
-		c = metrics.InputCounter.WithLabelValues(core.PipelineName, msg.Database, msg.Table, string(msg.Type), string(msg.DmlMsg.Operation))
+		c = metrics.InputCounter.WithLabelValues(env.PipelineName, msg.Database, msg.Table, string(msg.Type), string(msg.DmlMsg.Operation))
 	} else {
-		c = metrics.InputCounter.WithLabelValues(core.PipelineName, msg.Database, msg.Table, string(msg.Type), "")
+		c = metrics.InputCounter.WithLabelValues(env.PipelineName, msg.Database, msg.Table, string(msg.Type), "")
 	}
 	c.Add(1)
 	// do not send messages without router to the system

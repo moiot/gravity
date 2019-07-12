@@ -3,13 +3,14 @@ package app
 import (
 	"sync"
 
+	rpcplugin "github.com/hashicorp/go-plugin"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 
-	rpcplugin "github.com/hashicorp/go-plugin"
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/emitter"
+	"github.com/moiot/gravity/pkg/env"
 	"github.com/moiot/gravity/pkg/filters"
 	_ "github.com/moiot/gravity/pkg/inputs"
 	_ "github.com/moiot/gravity/pkg/outputs"
@@ -104,7 +105,7 @@ func ParsePlugins(pipelineConfig config.PipelineConfigV3) (*Server, error) {
 }
 
 func NewServer(pipelineConfig config.PipelineConfigV3) (*Server, error) {
-	core.PipelineName = pipelineConfig.PipelineName
+	env.PipelineName = pipelineConfig.PipelineName
 	server, err := ParsePlugins(pipelineConfig)
 	if err != nil {
 		return nil, err

@@ -12,6 +12,7 @@ import (
 
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/env"
 	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/sliding_window"
@@ -137,7 +138,7 @@ func (scheduler *batchScheduler) Configure(pipelineName string, configData map[s
 	}
 
 	if schedulerConfig.HealthyThreshold > 0 {
-		sliding_window.DefaultHealthyThreshold = float64(schedulerConfig.HealthyThreshold)
+		sliding_window.HealthyThreshold = float64(schedulerConfig.HealthyThreshold)
 	}
 
 	scheduler.cfg = &schedulerConfig
@@ -162,7 +163,14 @@ func (scheduler *batchScheduler) Healthy() bool {
 			return false
 		}
 	}
-	return len(scheduler.slidingWindows) > 0
+
+	duration := time.Since(env.StartTime)
+	if len(scheduler.slidingWindows) == 0 && duration.Seconds() > sliding_window.HealthyThreshold {
+		log.Warnf("[batchScheduler.Healthy] no window for %s", duration)
+		return false
+	} else {
+		return true
+	}
 }
 
 func (scheduler *batchScheduler) Start(output core.Output) error {
@@ -216,13 +224,13 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 
 				// should not take ctl message into account
 				WorkerPoolJobBatchSizeGauge.WithLabelValues(scheduler.pipelineName, workerName).Set(float64(len(msgBatch)))
-				metrics.Scheduler2OutputCounter.WithLabelValues(core.PipelineName).Add(float64(len(msgBatch)))
+				metrics.Scheduler2OutputCounter.WithLabelValues(env.PipelineName).Add(float64(len(msgBatch)))
 
 				if scheduler.syncOutput != nil {
 					err := retry.Do(func() error {
 						err := scheduler.syncOutput.Execute(msgBatch)
 						if err != nil {
-							metrics.SchedulerRetryCounter.WithLabelValues(core.PipelineName).Add(1)
+							metrics.SchedulerRetryCounter.WithLabelValues(env.PipelineName).Add(1)
 							log.Warnf("error execute sync output, retry. %v", err)
 						}
 						return err
@@ -296,14 +304,14 @@ func (scheduler *batchScheduler) SubmitMsg(msg *core.Msg) error {
 		err = scheduler.dispatchMsg(msg)
 		msg.LeaveSubmitter = time.Now()
 	}
-	metrics.SchedulerSubmitHistogram.WithLabelValues(core.PipelineName).Observe(msg.LeaveSubmitter.Sub(msg.EnterScheduler).Seconds())
+	metrics.SchedulerSubmitHistogram.WithLabelValues(env.PipelineName).Observe(msg.LeaveSubmitter.Sub(msg.EnterScheduler).Seconds())
 	return err
 }
 
 func (scheduler *batchScheduler) AckMsg(msg *core.Msg) error {
 	if msg.Type != core.MsgCtl { // control msg doesn't enter output
 		msg.EnterAcker = time.Now()
-		metrics.OutputHistogram.WithLabelValues(core.PipelineName).Observe(msg.EnterAcker.Sub(msg.EnterOutput).Seconds())
+		metrics.OutputHistogram.WithLabelValues(env.PipelineName).Observe(msg.EnterAcker.Sub(msg.EnterOutput).Seconds())
 	}
 
 	if msg.AfterAckCallback != nil {
@@ -325,8 +333,8 @@ func (scheduler *batchScheduler) AckMsg(msg *core.Msg) error {
 
 	if msg.Type != core.MsgCtl {
 		msg.LeaveScheduler = time.Now()
-		metrics.SchedulerTotalHistogram.WithLabelValues(core.PipelineName).Observe(msg.LeaveScheduler.Sub(msg.EnterScheduler).Seconds())
-		metrics.SchedulerAckHistogram.WithLabelValues(core.PipelineName).Observe(msg.LeaveScheduler.Sub(msg.EnterAcker).Seconds())
+		metrics.SchedulerTotalHistogram.WithLabelValues(env.PipelineName).Observe(msg.LeaveScheduler.Sub(msg.EnterScheduler).Seconds())
+		metrics.SchedulerAckHistogram.WithLabelValues(env.PipelineName).Observe(msg.LeaveScheduler.Sub(msg.EnterAcker).Seconds())
 	}
 	return nil
 }
@@ -499,10 +507,10 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 			queueLen := len(c)
 			latchQLen := len(tableLatchC)
 
-			metrics.QueueLength.WithLabelValues(core.PipelineName, "table-queue", key).Set(float64(queueLen))
-			metrics.QueueLength.WithLabelValues(core.PipelineName, "table-buffer", key).Set(float64(len(batch)))
-			metrics.QueueLength.WithLabelValues(core.PipelineName, "table-latch", key).Set(float64(len(latches)))
-			metrics.QueueLength.WithLabelValues(core.PipelineName, "table-latch-ack", key).Set(float64(latchQLen))
+			metrics.QueueLength.WithLabelValues(env.PipelineName, "table-queue", key).Set(float64(queueLen))
+			metrics.QueueLength.WithLabelValues(env.PipelineName, "table-buffer", key).Set(float64(len(batch)))
+			metrics.QueueLength.WithLabelValues(env.PipelineName, "table-latch", key).Set(float64(len(latches)))
+			metrics.QueueLength.WithLabelValues(env.PipelineName, "table-latch-ack", key).Set(float64(latchQLen))
 
 			if len(batch) >= scheduler.cfg.MaxBatchPerWorker || ((queueLen+latchQLen) == 0 && len(batch) > 0) {
 				flushFunc()

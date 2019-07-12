@@ -16,6 +16,7 @@ import (
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/env"
 	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/outputs/routers"
 	"github.com/moiot/gravity/pkg/registry"
@@ -408,7 +409,7 @@ func splitMsgBatchWithDelete(msgBatch []*core.Msg) [][]*core.Msg {
 }
 
 func (output *MySQLOutput) executeDDL(targetSchema, stmt string) error {
-	stmt = consts.DDLTag + fmt.Sprintf("/*%s*/", core.PipelineName) + stmt
+	stmt = consts.DDLTag + fmt.Sprintf("/*%s*/", env.PipelineName) + stmt
 	if targetSchema != "" {
 		tx, err := output.db.Begin()
 		if err != nil {

@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/env"
 	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mysql"
 	"github.com/moiot/gravity/pkg/schema_store"
@@ -63,7 +64,7 @@ func NewMsg(
 	msg.Phase = core.Phase{
 		Start: scanTime,
 	}
-	metrics.InputCounter.WithLabelValues(core.PipelineName, msg.Database, msg.Table, string(msg.Type), string(dmlMsg.Operation)).Add(1)
+	metrics.InputCounter.WithLabelValues(env.PipelineName, msg.Database, msg.Table, string(msg.Type), string(dmlMsg.Operation)).Add(1)
 	return &msg
 }
 
@@ -89,7 +90,7 @@ func NewCreateTableMsg(parser *parser.Parser, table *schema_store.Table, createT
 	msg.Phase = core.Phase{
 		Start: time.Now(),
 	}
-	metrics.InputCounter.WithLabelValues(core.PipelineName, msg.Database, msg.Table, string(msg.Type), "create-table").Add(1)
+	metrics.InputCounter.WithLabelValues(env.PipelineName, msg.Database, msg.Table, string(msg.Type), "create-table").Add(1)
 	return &msg
 }
 
@@ -114,6 +115,6 @@ func NewCloseInputStreamMsg(tableDef *schema_store.Table) *core.Msg {
 		InputStreamKey: utils.NewStringPtr(utils.TableIdentity(tableDef.Schema, tableDef.Name)),
 		Done:           make(chan struct{}),
 	}
-	metrics.InputCounter.WithLabelValues(core.PipelineName, msg.Database, msg.Table, string(msg.Type), "").Add(1)
+	metrics.InputCounter.WithLabelValues(env.PipelineName, msg.Database, msg.Table, string(msg.Type), "").Add(1)
 	return &msg
 }

@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-var DefaultHealthyThreshold float64 = 60
+var HealthyThreshold float64 = 60
 
 type WindowItem interface {
 	SequenceNumber() int64
@@ -20,7 +20,7 @@ type Watermark struct {
 }
 
 func (w Watermark) Healthy() bool {
-	return time.Since(w.ProcessTime).Seconds() < DefaultHealthyThreshold
+	return time.Since(w.ProcessTime).Seconds() < HealthyThreshold
 }
 
 type Window interface {

@@ -23,6 +23,7 @@ import (
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
 	"github.com/moiot/gravity/pkg/core"
+	_ "github.com/moiot/gravity/pkg/env"
 	"github.com/moiot/gravity/pkg/logutil"
 	"github.com/moiot/gravity/pkg/utils"
 )
