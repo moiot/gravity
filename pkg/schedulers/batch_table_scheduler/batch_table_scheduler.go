@@ -520,6 +520,8 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 					round++
 					if len(scheduler.workerQueues[queueIdx]) < scheduler.cfg.QueueSize/2 {
 						flushFunc()
+					} else {
+						// worker queue has many items pending, try to accumulate message in the batch.
 					}
 				}
 			}
