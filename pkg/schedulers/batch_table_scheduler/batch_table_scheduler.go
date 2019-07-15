@@ -512,8 +512,18 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 			metrics.QueueLength.WithLabelValues(env.PipelineName, "table-latch", key).Set(float64(len(latches)))
 			metrics.QueueLength.WithLabelValues(env.PipelineName, "table-latch-ack", key).Set(float64(latchQLen))
 
-			if len(batch) >= scheduler.cfg.MaxBatchPerWorker || ((queueLen+latchQLen) == 0 && len(batch) > 0) {
-				flushFunc()
+			if len(batch) > 0 {
+				if len(batch) >= scheduler.cfg.MaxBatchPerWorker {
+					flushFunc()
+				} else if (queueLen + latchQLen) == 0 {
+					queueIdx := round % uint(scheduler.cfg.NrWorker)
+					round++
+					if len(scheduler.workerQueues[queueIdx]) < scheduler.cfg.QueueSize/2 {
+						flushFunc()
+					} else {
+						// worker queue has many items pending, try to accumulate message in the batch.
+					}
+				}
 			}
 		}
 
