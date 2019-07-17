@@ -7,3 +7,5 @@ RUN cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo "Asia/Shanghai" 
 WORKDIR /
 
 COPY bin/gravity-linux-amd64 /gravity
+
+CMD /gravity -config=/etc/gravity/config.toml

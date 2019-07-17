@@ -25,7 +25,7 @@ This document takes synchronizing the data of the local MySQL instance and data 
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8
     ```
 
-## Step 2: Compile (TODO: Download binary from GitHub after it is open sourced)
+## Step 2: Compile (optional, docker image is ready for use)
 
 [Configure the Go environment](https://golang.org/doc/install) and compile:
 
@@ -38,13 +38,13 @@ cd gravity && make
 
 ```
 
-## Step 3: Synchronize data 
+## Step 3: Write config file 
 
 You can choose to synchronize data between two MySQL clusters or from MySQL to Kafka.
 
 - Synchronize data between two MySQL clusters
 
-    1. Create the configuration file, as shown in the following file `mysql2mysql.toml`:
+    Create the configuration file, as shown in the following file `config.toml`:
 
         ```toml
         # name (required)
@@ -89,17 +89,9 @@ You can choose to synchronize data between two MySQL clusters or from MySQL to K
         target-table = "test_target_table"
         ```
 
-    2. Enable `gravity`.
-
-        ```bash
-        bin/gravity -config mysql2mysql.toml
-        ```
-
-    3. After the incremental synchronization between `test_source_table` and `test_target_table` begins, you can insert data in the source cluster and then you will see the change in the target cluster.
-
 - Synchronize data from MySQL to Kafka
 
-    1. Create the configuration file, as shown in the following file `mysql2kafka.toml`:
+    Create the configuration file, as shown in the following file `config.toml`:
 
         ```toml
         
@@ -134,10 +126,12 @@ You can choose to synchronize data between two MySQL clusters or from MySQL to K
         dml-topic = "test"
         ```
 
-    2. Enable `gravity`:
-
-        ```bash
-        bin/gravity -config mysql2kafka.toml
-        ```
-
-    3. The data mutation of `test`.`test_source_table` table in the MySQL cluster is sent to `test` of Kafka.
+## Step 4: Start Gravity
+From binary
+```bash
+bin/gravity -config mysql2mysql.toml
+```
+or docker
+```bash
+docker run -v ${PWD}/config.toml:/etc/gravity/config.toml -d --net=host moiot/gravity:latest
+```
