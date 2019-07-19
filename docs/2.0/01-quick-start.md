@@ -19,7 +19,7 @@ CREATE TABLE `test`.`test_target_table` (
 ```
 
 
-#### 编译 (TODO: 开源后直接从 github 下载 binary)
+#### 编译（可选，可以直接用 docker）
 
 首先，[配置好 Go 语言环境](https://golang.org/doc/install) 并编译
 
@@ -36,7 +36,7 @@ cd gravity && make
 
 #### MySQL 到 MySQL 同步
 
-创建如下配置文件 `mysql2mysql.toml`
+创建如下配置文件 `config.toml`
 
 ```toml
 # name 必填
@@ -76,17 +76,9 @@ target-schema = "test"
 target-table = "test_target_table"
 ```
 
-启动 `gravity`
-
-```bash
-bin/gravity -config mysql2mysql.toml
-```
-
-`test_source_table` 和 `test_target_table` 之间的同步已经开始，现在可以在源端插入数据，然后在目标端会看到相应的变化。
-
 #### MySQL 到 Kafka
 
-创建如下配置文件 `mysql2kafka.toml`
+创建如下配置文件 `config.toml`
 
 ```toml
 name = "mysql2kafkaDemo"
@@ -119,10 +111,12 @@ match-table = "test_source_table"
 dml-topic = "test"
 ```
 
-启动 `gravity`
-
+## 启动 gravity
+从编译完的程序
 ```bash
-bin/gravity -config mysql2kafka.toml
+bin/gravity -config mysql2mysql.toml
 ```
-
-MySQL 源库的 `test`.`test_source_table` 这个表的数据变更会发送到 Kafka 的 `test` 这个 topic。
+从 docker
+```bash
+docker run -v ${PWD}/config.toml:/etc/gravity/config.toml -d --net=host moiot/gravity:latest
+```
