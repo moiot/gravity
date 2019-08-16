@@ -24,12 +24,23 @@ import (
 
 // DBConfig is the DB configuration.
 type DBConfig struct {
-	Host                   string        `toml:"host" json:"host" mapstructure:"host"`
-	Location               string        `toml:"location" json:"location" mapstructure:"location"`
-	Username               string        `toml:"username" json:"username" mapstructure:"username"`
-	Password               string        `toml:"password" json:"password" mapstructure:"password"`
-	Port                   int           `toml:"port" json:"port" mapstructure:"port"`
-	Schema                 string        `toml:"schema" json:"schema" mapstructure:"schema"`
+	Host     string `toml:"host" json:"host" mapstructure:"host"`
+	Location string `toml:"location" json:"location" mapstructure:"location"`
+	Username string `toml:"username" json:"username" mapstructure:"username"`
+	Password string `toml:"password" json:"password" mapstructure:"password"`
+	Port     int    `toml:"port" json:"port" mapstructure:"port"`
+	Schema   string `toml:"schema" json:"schema" mapstructure:"schema"`
+	// Timeout for establishing connections, aka dial timeout.
+	// The value must be a decimal number with a unit suffix ("ms", "s", "m", "h"), such as "30s", "0.5m" or "1m30s".
+	Timeout string `toml:"timeout" json:"timeout" mapstructure:"timeout"`
+	// I/O read timeout.
+	// The value must be a decimal number with a unit suffix ("ms", "s", "m", "h"), such as "30s", "0.5m" or "1m30s".
+	ReadTimeout string `toml:"read-timeout" json:"read-timeout" mapstructure:"read-timeout"`
+
+	// I/O write timeout.
+	// The value must be a decimal number with a unit suffix ("ms", "s", "m", "h"), such as "30s", "0.5m" or "1m30s".
+	WriteTimeout string `toml:"write-timeout" json:"write-timeout" mapstructure:"write-timeout"`
+
 	MaxIdle                int           `toml:"max-idle" json:"max-idle" mapstructure:"max-idle"`
 	MaxOpen                int           `toml:"max-open" json:"max-open" mapstructure:"max-open"`
 	MaxLifeTimeDurationStr string        `toml:"max-life-time-duration" json:"max-life-time-duration" mapstructure:"max-life-time-duration"`
@@ -64,6 +75,18 @@ func (dbc *DBConfig) ValidateAndSetDefault() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+	}
+
+	if dbc.Timeout == "" {
+		dbc.Timeout = "5s"
+	}
+
+	if dbc.ReadTimeout == "" {
+		dbc.ReadTimeout = "5s"
+	}
+
+	if dbc.WriteTimeout == "" {
+		dbc.WriteTimeout = "5s"
 	}
 
 	return nil
