@@ -271,8 +271,8 @@ func CreateDBConnection(cfg *config.DBConfig) (*sql.DB, error) {
 		return nil, errors.Trace(err)
 	}
 
-	dbDSN := fmt.Sprintf(`%s:%s@tcp(%s:%d)/%s?interpolateParams=true&readTimeout=%s&parseTime=true&collation=utf8mb4_general_ci`,
-		cfg.Username, cfg.Password, cfg.Host, cfg.Port, url.QueryEscape(cfg.Schema), "30s")
+	dbDSN := fmt.Sprintf(`%s:%s@tcp(%s:%d)/%s?interpolateParams=true&timeout=%s&readTimeout=%s&writeTimeout=%s&parseTime=true&collation=utf8mb4_general_ci`,
+		cfg.Username, cfg.Password, cfg.Host, cfg.Port, url.QueryEscape(cfg.Schema), cfg.Timeout, cfg.ReadTimeout, cfg.WriteTimeout)
 	if cfg.Location != "" {
 		dbDSN += "&loc=" + url.QueryEscape(cfg.Location)
 	}
