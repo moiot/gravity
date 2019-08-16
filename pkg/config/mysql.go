@@ -82,11 +82,11 @@ func (dbc *DBConfig) ValidateAndSetDefault() error {
 	}
 
 	if dbc.ReadTimeout == "" {
-		dbc.Timeout = "5s"
+		dbc.ReadTimeout = "5s"
 	}
 
 	if dbc.WriteTimeout == "" {
-		dbc.Timeout = "5s"
+		dbc.WriteTimeout = "5s"
 	}
 
 	return nil
