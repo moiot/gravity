@@ -18,38 +18,50 @@ func IsEventBelongsToMyself(event *replication.RowsEvent, pipelineName string) b
 	panic("type conversion failed for internal table")
 }
 
-func extractSchemaNameFromDDLQueryEvent(p *parser.Parser, ev *replication.QueryEvent) (db, table string, node ast.StmtNode) {
+func extractSchemaNameFromDDLQueryEvent(p *parser.Parser, ev *replication.QueryEvent) (db, table []string, node []ast.StmtNode) {
 	stmt, err := p.ParseOneStmt(string(ev.Query), "", "")
 	if err != nil {
 		log.Errorf("sql parser: %s. error: %v", string(ev.Query), err.Error())
-		return string(ev.Schema), "", nil
+		return []string{string(ev.Schema)}, []string{""}, nil
 	}
-
-	node = stmt
 
 	switch v := stmt.(type) {
 	case *ast.CreateDatabaseStmt:
-		db = v.Name
+		db = append(db, v.Name)
+		table = append(table, "")
+		node = append(node, stmt)
 	case *ast.DropDatabaseStmt:
-		db = v.Name
+		db = append(db, v.Name)
+		table = append(table, "")
+		node = append(node, stmt)
 	case *ast.CreateTableStmt:
-		db = v.Table.Schema.String()
-		table = v.Table.Name.String()
+		db = append(db, v.Table.Schema.String())
+		table = append(table, v.Table.Name.String())
+		node = append(node, stmt)
 	case *ast.DropTableStmt:
-		if len(v.Tables) > 1 {
-			log.Fatalf("only support single drop table right now: %v", string(ev.Query))
+		for i := range v.Tables {
+			db = append(db, v.Tables[i].Schema.String())
+			table = append(table, v.Tables[i].Name.String())
+			copy := *v
+			copy.Tables = nil
+			copy.Tables = append(copy.Tables, v.Tables[i])
+			node = append(node, &copy)
 		}
-		db = v.Tables[0].Schema.String()
-		table = v.Tables[0].Name.String()
 	case *ast.AlterTableStmt:
-		db = v.Table.Schema.String()
-		table = v.Table.Name.String()
+		db = append(db, v.Table.Schema.String())
+		table = append(table, v.Table.Name.String())
+		node = append(node, stmt)
 	case *ast.TruncateTableStmt:
-		db = v.Table.Schema.String()
-		table = v.Table.Name.String()
+		db = append(db, v.Table.Schema.String())
+		table = append(table, v.Table.Name.String())
+		node = append(node, stmt)
+	default:
+		db = append(db, "")
+		table = append(table, "")
+		node = append(node, stmt)
 	}
-	if db == "" {
-		db = string(ev.Schema)
+	if len(db) == 1 && db[0] == "" {
+		db[0] = string(ev.Schema)
 	}
 	return
 }

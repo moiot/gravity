@@ -1222,6 +1222,8 @@ func TestMySQLDDL(t *testing.T) {
 		"CREATE TABLE IF NOT EXISTS tn4 like tn3",
 
 		"create table `abc`(`id` int(11),  PRIMARY KEY (`id`)) ENGINE=InnoDB",
+
+		"drop table tn3, tn4",
 	}
 
 	for _, ddl := range ddls {

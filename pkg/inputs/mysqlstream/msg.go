@@ -341,8 +341,7 @@ func NewDDLMsg(
 	ast ast.StmtNode,
 	ddlSQL string,
 	ts int64,
-	received time.Time,
-	position config.MySQLBinlogPosition) *core.Msg {
+	received time.Time) *core.Msg {
 
 	return &core.Msg{
 		Phase: core.Phase{
@@ -354,7 +353,7 @@ func NewDDLMsg(
 		Table:               table,
 		DdlMsg:              &core.DDLMsg{Statement: ddlSQL, AST: ast},
 		Done:                make(chan struct{}),
-		InputContext:        inputContext{op: ddl, position: position},
+		InputContext:        inputContext{op: ddl},
 		InputStreamKey:      utils.NewStringPtr(inputStreamKey),
 		AfterCommitCallback: callback,
 	}
