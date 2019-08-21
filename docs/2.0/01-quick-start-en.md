@@ -135,3 +135,7 @@ or docker
 ```bash
 docker run -v ${PWD}/config.toml:/etc/gravity/config.toml -d --net=host moiot/gravity:latest
 ```
+
+## Step 5: Monitoring
+Gravity uses [Prometheus](https://prometheus.io) and [Grafana](https://grafana.com/) for monitoring. 
+The running port(default 8080) provides standard prometheus metrics endpoint(/metrics). Grafana Dashboards are available under deploy/grafana folder in the source tree.

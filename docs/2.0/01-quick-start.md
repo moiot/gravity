@@ -120,3 +120,8 @@ bin/gravity -config mysql2mysql.toml
 ```bash
 docker run -v ${PWD}/config.toml:/etc/gravity/config.toml -d --net=host moiot/gravity:latest
 ```
+
+## 监控
+Gravity 使用 [Prometheus](https://prometheus.io) 和 [Grafana](https://grafana.com/) 实现监控功能。
+在运行端口（默认8080）上提供了 Prometheus 标准的指标抓取路径`/metrics`。
+在源码路径`deploy/grafana`下提供了 Grafana dashboard 供导入。 
