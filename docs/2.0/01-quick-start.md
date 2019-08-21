@@ -25,14 +25,13 @@ CREATE TABLE `test`.`test_target_table` (
 
 
 ```bash
-mkdir -p $GOPATH/src/github.com/moiot/ && cd $GOPATH/src/github.com/moiot/
-
 git clone https://github.com/moiot/gravity.git
 
 cd gravity && make
-
 ```
 
+Gravity 使用了 [go mod](https://github.com/golang/go/wiki/Modules)，墙内用户建议设置 `export GOPROXY=https://goproxy.io` 或其他代理。
+将代码克隆到 GOPATH 路径下的用户需要设置 `export GO111MODULE=on`。
 
 #### MySQL 到 MySQL 同步
 

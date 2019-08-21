@@ -30,12 +30,9 @@ This document takes synchronizing the data of the local MySQL instance and data 
 [Configure the Go environment](https://golang.org/doc/install) and compile:
 
 ```bash
-mkdir -p $GOPATH/src/github.com/moiot/ && cd $GOPATH/src/github.com/moiot/
-
 git clone https://github.com/moiot/gravity.git
 
 cd gravity && make
-
 ```
 
 ## Step 3: Write config file 
