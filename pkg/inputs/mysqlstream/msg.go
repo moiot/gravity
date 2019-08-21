@@ -294,7 +294,7 @@ func NewDeleteMsgs(
 
 	for rowIndex, row := range ev.Rows {
 		if len(row) != len(columns) {
-			return nil, errors.Errorf("delete %s.%s columns and data mismatch in length: %d vs %d",
+			log.Warnf("delete %s.%s columns and data mismatch in length: %d vs %d",
 				tableDef.Schema, tableDef.Name, len(columns), len(row))
 		}
 		msg := core.Msg{
