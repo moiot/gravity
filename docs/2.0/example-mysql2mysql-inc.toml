@@ -8,6 +8,8 @@
 # 来匹配 filter 和 output 的路由，filter/output 里的每一个 match 函数
 # 都匹配才算满足匹配规则
 #
+name = "mysql2mysqlDemo"
+version = "1.0"
 
 [input]
 type = "mysql"

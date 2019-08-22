@@ -6,22 +6,18 @@ import (
 	"time"
 
 	"github.com/OneOfOne/xxhash"
-
-	"github.com/moiot/gravity/pkg/config"
-
-	"github.com/mitchellh/hashstructure"
-
-	"github.com/pingcap/parser/ast"
-
-	"github.com/moiot/gravity/pkg/mysql"
-	"github.com/moiot/gravity/pkg/utils"
-
+	"github.com/cznic/mathutil"
 	"github.com/juju/errors"
+	"github.com/mitchellh/hashstructure"
+	"github.com/pingcap/parser/ast"
 	"github.com/siddontang/go-mysql/replication"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/mysql"
 	"github.com/moiot/gravity/pkg/schema_store"
+	"github.com/moiot/gravity/pkg/utils"
 )
 
 type binlogOp string
@@ -313,7 +309,7 @@ func NewDeleteMsgs(
 		dmlMsg.Operation = core.Delete
 
 		data := make(map[string]interface{})
-		for i := 0; i < len(columns); i++ {
+		for i := 0; i < mathutil.Min(len(row), len(columns)); i++ {
 			data[columns[i].Name] = deserialize(row[i], columns[i])
 		}
 		dmlMsg.Data = data

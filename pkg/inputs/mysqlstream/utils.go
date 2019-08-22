@@ -22,7 +22,7 @@ func extractSchemaNameFromDDLQueryEvent(p *parser.Parser, ev *replication.QueryE
 	stmt, err := p.ParseOneStmt(string(ev.Query), "", "")
 	if err != nil {
 		log.Errorf("sql parser: %s. error: %v", string(ev.Query), err.Error())
-		return []string{string(ev.Schema)}, []string{""}, nil
+		return []string{string(ev.Schema)}, []string{""}, []ast.StmtNode{nil}
 	}
 
 	switch v := stmt.(type) {
@@ -42,10 +42,10 @@ func extractSchemaNameFromDDLQueryEvent(p *parser.Parser, ev *replication.QueryE
 		for i := range v.Tables {
 			db = append(db, v.Tables[i].Schema.String())
 			table = append(table, v.Tables[i].Name.String())
-			copy := *v
-			copy.Tables = nil
-			copy.Tables = append(copy.Tables, v.Tables[i])
-			node = append(node, &copy)
+			dropTableStmt := *v
+			dropTableStmt.Tables = nil
+			dropTableStmt.Tables = append(dropTableStmt.Tables, v.Tables[i])
+			node = append(node, &dropTableStmt)
 		}
 	case *ast.AlterTableStmt:
 		db = append(db, v.Table.Schema.String())

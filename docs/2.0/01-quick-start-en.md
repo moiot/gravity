@@ -30,12 +30,9 @@ This document takes synchronizing the data of the local MySQL instance and data 
 [Configure the Go environment](https://golang.org/doc/install) and compile:
 
 ```bash
-mkdir -p $GOPATH/src/github.com/moiot/ && cd $GOPATH/src/github.com/moiot/
-
 git clone https://github.com/moiot/gravity.git
 
 cd gravity && make
-
 ```
 
 ## Step 3: Write config file 
@@ -135,3 +132,7 @@ or docker
 ```bash
 docker run -v ${PWD}/config.toml:/etc/gravity/config.toml -d --net=host moiot/gravity:latest
 ```
+
+## Step 5: Monitoring
+Gravity uses [Prometheus](https://prometheus.io) and [Grafana](https://grafana.com/) for monitoring. 
+The running port(default 8080) provides standard prometheus metrics endpoint(/metrics). Grafana Dashboards are available under deploy/grafana folder in the source tree.
