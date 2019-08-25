@@ -1248,7 +1248,7 @@ func TestMySQLDDL(t *testing.T) {
 
 	server.Close()
 
-	_, err = sourceDB.Exec(fmt.Sprintf("select * from `%s`.`abc2`", targetDBName))
+	_, err = targetDB.Exec(fmt.Sprintf("select * from `%s`.`abc2`", targetDBName))
 	r.NoError(err)
 }
 
