@@ -1,0 +1,86 @@
+[output]
+type = "esmodel"
+
+[output.config]
+# 忽略 400（bad request）返回
+# 当索引名不规范、解析错误时，Elasticsearch 会返回 400 错误
+# 默认为 false，即遇到失败时会抛出异常，必须人工处理。设置为 true 时会忽略这些请求
+ignore-bad-request = true
+
+#
+# 目标端 Elasticsearch 配置
+# - 必选
+#
+[output.config.server]
+# 连接的 Elasticsearch 地址，必选
+urls = ["http://127.0.0.1:9200"]
+# 是否进行节点嗅探，默认为 false
+sniff = false
+# 超时时间，默认为 1000ms
+timeout = 500
+
+#
+# 目标端鉴权配置
+# - 可选
+#
+[output.config.server.auth]
+username = ""
+password = ""
+
+
+[[output.config.routes]]
+match-schema = "polaris_project_manage"
+# 主表
+match-table = "ppm_pri_issue"
+#主键列，默认为id
+pk-column = "id"
+#索引名
+index-name="issue_index"
+#包含的列，默认全部
+include-column = ["id", "title"]
+#排除的列，默认没有
+exclude-column = ["is_delete"]
+
+# 列名转义策略
+[output.config.routes.convert-column]
+project_object_type_id = "projectObjectTypeId"
+
+
+[[output.config.routes.one-one]]
+match-schema = "polaris_project_manage"
+match-table = "ppm_pri_issue_detail"
+#主键列
+pk-column = "id"
+#外键列
+fk-column = "issue_id"
+#包含的列，默认全部
+include-column = ["id", "title"]
+#排除的列，默认没有
+exclude-column = ["is_delete"]
+# 模式，1：子对象，2索引平铺
+mode = 1
+# 属性对象名，模式为1时有效，默认为源表名驼峰结构
+property-name = "issueDetail"
+# 属性前缀，模式为2时有效，默认为源表名驼峰结构
+property-pre = "idt"
+
+
+[output.config.routes.one-one.convert-column]
+story_point = "storyPoint"
+
+[[output.config.routes.one-more]]
+match-schema = "polaris_project_manage"
+match-table = "ppm_pri_issue_relation"
+#主键列
+pk-column = "id"
+#外键列
+fk-column = "issue_id"
+#包含的列，默认全部
+include-column = ["id", "title"]
+#排除的列，默认没有
+exclude-column = ["is_delete"]
+# 属性对象名，默认为源表名驼峰结构
+property-name = "issueDetail"
+
+[output.config.routes.one-more.convert-column]
+relation_id = "relationId"
