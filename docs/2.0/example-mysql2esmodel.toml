@@ -36,6 +36,8 @@ match-table = "ppm_pri_issue"
 pk-column = "id"
 #索引名
 index-name="issue_index"
+#类型名
+type-name="issue"
 #包含的列，默认全部
 include-column = ["id", "title"]
 #排除的列，默认没有

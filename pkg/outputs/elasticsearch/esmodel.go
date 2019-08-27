@@ -40,7 +40,7 @@ func (output *EsModelOutput) Configure(pipelineName string, data map[string]inte
 	output.pipelineName = pipelineName
 
 	// setup plugin config
-	pluginConfig := ElasticsearchPluginConfig{}
+	pluginConfig := EsModelPluginConfig{}
 
 	err := mapstructure.Decode(data, &pluginConfig)
 	if err != nil {
@@ -48,19 +48,19 @@ func (output *EsModelOutput) Configure(pipelineName string, data map[string]inte
 	}
 
 	if pluginConfig.ServerConfig == nil {
-		return errors.Errorf("empty elasticsearch config")
+		return errors.Errorf("empty esmodel config")
 	}
 
 	if len(pluginConfig.ServerConfig.URLs) == 0 {
-		return errors.Errorf("empty elasticsearch urls")
+		return errors.Errorf("empty esmodel urls")
 	}
 	output.config = &pluginConfig
 
-	routes, err := routers.NewElasticsearchRoutes(pluginConfig.Routes)
+	routes, err := routers.NewEsModelRoutes(pluginConfig.Routes)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	output.router = routers.ElasticsearchRouter(routes)
+	output.router = routers.EsModelRouter(routes)
 	return nil
 }
 
@@ -121,7 +121,7 @@ func (output *EsModelOutput) Execute(msgs []*core.Msg) error {
 			}
 		}
 
-		index := route.TargetIndex
+		index := route.IndexName
 		if index == "" {
 			index = genIndexName(msg.Table)
 		}
@@ -129,12 +129,12 @@ func (output *EsModelOutput) Execute(msgs []*core.Msg) error {
 		if msg.DmlMsg.Operation == core.Delete {
 			req = elastic.NewBulkDeleteRequest().
 				Index(index).
-				Type(route.TargetType).
+				Type(route.TypeName).
 				Id(genDocID(msg))
 		} else {
 			req = elastic.NewBulkIndexRequest().
 				Index(index).
-				Type(route.TargetType).
+				Type(route.TypeName).
 				Id(genDocID(msg)).
 				Doc(msg.DmlMsg.Data)
 		}

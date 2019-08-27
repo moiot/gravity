@@ -33,6 +33,7 @@ type EsModelOneOneRoute struct {
 
 type EsModelRoute struct {
 	IndexName string
+	TypeName  string
 	EsModelBaseRoute
 	IgnoreNoPrimaryKey bool
 
@@ -73,6 +74,12 @@ func NewEsModelRoutes(configData []map[string]interface{}) ([]*EsModelRoute, err
 			return nil, err
 		}
 		route.IndexName = indexName
+
+		typeName, err := getString(routeConfig, "type-name", "")
+		if err != nil {
+			return nil, err
+		}
+		route.TypeName = typeName
 
 		ignoreNoPrimaryKey, err := getBool(routeConfig, "ignore-no-primary-key", false)
 		if err != nil {
