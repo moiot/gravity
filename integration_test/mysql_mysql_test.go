@@ -1224,6 +1224,8 @@ func TestMySQLDDL(t *testing.T) {
 		"create table `abc`(`id` int(11),  PRIMARY KEY (`id`)) ENGINE=InnoDB",
 
 		"drop table tn3, tn4",
+
+		fmt.Sprintf("create table `%s`.`abc2` like `%s`.`abc`", sourceDBName, sourceDBName),
 	}
 
 	for _, ddl := range ddls {
@@ -1245,6 +1247,9 @@ func TestMySQLDDL(t *testing.T) {
 	<-server.Input.Done()
 
 	server.Close()
+
+	_, err = targetDB.Exec(fmt.Sprintf("select * from `%s`.`abc2`", targetDBName))
+	r.NoError(err)
 }
 
 func TestMySQLDDLNoRoute(t *testing.T) {
