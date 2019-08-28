@@ -28,6 +28,18 @@ func getInt(data map[string]interface{}, key string, defaultVal int) (int, error
 	return valInt, nil
 }
 
+func getInt64(data map[string]interface{}, key string, defaultVal int64) (int64, error) {
+	val, ok := data[key]
+	if !ok {
+		return defaultVal, nil
+	}
+	valInt, ok := val.(int64)
+	if !ok {
+		return defaultVal, errors.Errorf("%s is invalid", key)
+	}
+	return valInt, nil
+}
+
 func getBool(data map[string]interface{}, key string, defaultVal bool) (bool, error) {
 	val, ok := data[key]
 	if !ok {

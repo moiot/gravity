@@ -1,38 +1,43 @@
-package elasticsearch
+package esmodel
 
 import (
 	"context"
+	"fmt"
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/metrics"
+	"github.com/moiot/gravity/pkg/outputs/elasticsearch"
 	"github.com/moiot/gravity/pkg/outputs/routers"
 	"github.com/moiot/gravity/pkg/registry"
-	"github.com/olivere/elastic"
+	"github.com/olivere/elastic/v7"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"time"
 )
 
 const (
-	EsModelName = "esmodel"
+	Name = "esmodel"
 )
 
-type EsModelPluginConfig struct {
-	ServerConfig     *ElasticsearchServerConfig `mapstructure:"server" json:"server"`
-	Routes           []map[string]interface{}   `mapstructure:"routes" json:"routes"`
-	IgnoreBadRequest bool                       `mapstructure:"ignore-bad-request" json:"ignore-bad-request"`
+var (
+	esModelIndexMap = map[EsModelIndex]map[string][]string{}
+)
+
+type EsModelIndex struct {
+	TypeName  string
+	IndexName string
 }
 
 type EsModelOutput struct {
 	pipelineName string
-	config       *EsModelPluginConfig
+	config       *elasticsearch.ElasticsearchPluginConfig
 	client       *elastic.Client
 	router       routers.EsModelRouter
 }
 
 func init() {
-	registry.RegisterPlugin(registry.OutputPlugin, EsModelName, &EsModelOutput{}, false)
+	registry.RegisterPlugin(registry.OutputPlugin, Name, &EsModelOutput{}, false)
 }
 
 func (output *EsModelOutput) Configure(pipelineName string, data map[string]interface{}) error {
@@ -40,7 +45,7 @@ func (output *EsModelOutput) Configure(pipelineName string, data map[string]inte
 	output.pipelineName = pipelineName
 
 	// setup plugin config
-	pluginConfig := EsModelPluginConfig{}
+	pluginConfig := elasticsearch.ElasticsearchPluginConfig{}
 
 	err := mapstructure.Decode(data, &pluginConfig)
 	if err != nil {
@@ -57,9 +62,12 @@ func (output *EsModelOutput) Configure(pipelineName string, data map[string]inte
 	output.config = &pluginConfig
 
 	routes, err := routers.NewEsModelRoutes(pluginConfig.Routes)
+	fmt.Printf("sss %v \n", err)
 	if err != nil {
 		return errors.Trace(err)
 	}
+
+	fmt.Printf("sss %v \n", routes)
 	output.router = routers.EsModelRouter(routes)
 	return nil
 }
@@ -101,44 +109,54 @@ func (output *EsModelOutput) Close() {
 }
 
 func (output *EsModelOutput) Execute(msgs []*core.Msg) error {
+
 	var reqs []elastic.BulkableRequest
 	for _, msg := range msgs {
 		// only support dml message
+
 		if msg.DmlMsg == nil {
 			continue
 		}
 
-		route, ok := output.router.Match(msg)
+		fmt.Printf("msg %v. \n", msg)
+
+		// 可能匹配多条索引规则
+		routes, ok := output.router.Match(msg)
 		if !ok {
 			continue
 		}
+		fmt.Printf("msg2 %v. \n", msg)
 
-		if len(msg.DmlMsg.Pks) == 0 {
-			if route.IgnoreNoPrimaryKey {
-				continue
-			} else {
-				return errors.Errorf("[output_elasticsearch] Table must have at least one primary key, database: %s, table: %s.", msg.Database, msg.Table)
+		for _, route := range *routes {
+
+			if len(msg.DmlMsg.Pks) == 0 {
+				if route.IgnoreNoPrimaryKey {
+					continue
+				} else {
+					return errors.Errorf("[output_esmodel] Table must have at least one primary key, database: %s, table: %s.", msg.Database, msg.Table)
+				}
 			}
-		}
 
-		index := route.IndexName
-		if index == "" {
-			index = genIndexName(msg.Table)
+			index := route.IndexName
+			if index == "" {
+				return errors.Errorf("[output_esmodel] elasticsearch index name not exist, database: %s, table: %s.", msg.Database, msg.Table)
+			}
+
+			var req elastic.BulkableRequest
+			if msg.DmlMsg.Operation == core.Delete {
+				req = elastic.NewBulkDeleteRequest().
+					Index(index).
+					Type(route.TypeName).
+					Id(genDocID(msg))
+			} else {
+				req = elastic.NewBulkIndexRequest().
+					Index(index).
+					Type(route.TypeName).
+					Id(genDocID(msg)).
+					Doc(msg.DmlMsg.Data)
+			}
+			reqs = append(reqs, req)
 		}
-		var req elastic.BulkableRequest
-		if msg.DmlMsg.Operation == core.Delete {
-			req = elastic.NewBulkDeleteRequest().
-				Index(index).
-				Type(route.TypeName).
-				Id(genDocID(msg))
-		} else {
-			req = elastic.NewBulkIndexRequest().
-				Index(index).
-				Type(route.TypeName).
-				Id(genDocID(msg)).
-				Doc(msg.DmlMsg.Data)
-		}
-		reqs = append(reqs, req)
 	}
 	return output.sendBulkRequests(reqs)
 }
@@ -156,6 +174,7 @@ func (output *EsModelOutput) sendBulkRequests(reqs []elastic.BulkableRequest) er
 
 	for _, item := range bulkResponse.Items {
 		for action, result := range item {
+			fmt.Printf("es %v %v. \n", action, result)
 			if output.isSuccessful(result, action) {
 				// tags: [pipelineName, index, action(index/create/delete/update), status(200/400)].
 				// indices created in 6.x only allow a single-type per index, so we don't need the type as a tag.
@@ -183,4 +202,27 @@ func (output *EsModelOutput) isSuccessful(result *elastic.BulkResponseItem, acti
 	return (result.Status >= 200 && result.Status <= 299) ||
 		(result.Status == http.StatusNotFound && action == "delete") || // delete but not found, just ignore it.
 		(result.Status == http.StatusBadRequest && output.config.IgnoreBadRequest) // ignore index not found, parse error, etc.
+}
+
+/**
+检查设置索引
+*/
+func (output *EsModelOutput) checkAndSetIndex(msg *core.Msg, route *routers.EsModelRoute) bool {
+
+	//esIndex := EsModelIndex{
+	//	TypeName: route.TypeName,
+	//	IndexName: route.IndexName,
+	//}
+	//
+	//
+
+	return true
+
+}
+
+/**
+列名转义索引名
+*/
+func transPropName(cloumn string) string {
+	return ""
 }

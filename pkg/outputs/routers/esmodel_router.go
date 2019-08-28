@@ -1,22 +1,29 @@
 package routers
 
 import (
+	"fmt"
 	"github.com/juju/errors"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/matchers"
 )
 
 const (
-	EsModelOneModeObject = 1
-	EsModelOneModeExtend = 2
+	EsModelOneModeObject = int64(1)
+	EsModelOneModeExtend = int64(2)
+
+	EsTypeMappingObject = "object"
+	EsTypeMappingNested = "nested"
 )
 
 type EsModelBaseRoute struct {
 	RouteMatchers
-	ConvertColumn *map[string]string
-	ExcludeColumn *[]string
-	IncludeColumn *[]string
-	PkColumn      string
+	DataBase         string
+	Table            string
+	PkColumn         string
+	ConvertColumn    *map[string]string
+	ExcludeColumn    *[]string
+	IncludeColumn    *[]string
+	IndexTypeMapping *map[string]string
 }
 
 type EsModelOneMoreRoute struct {
@@ -27,7 +34,7 @@ type EsModelOneMoreRoute struct {
 
 type EsModelOneOneRoute struct {
 	EsModelOneMoreRoute
-	Mode        int
+	Mode        int64
 	PropertyPre string
 }
 
@@ -48,11 +55,47 @@ func (r EsModelRouter) Exists(msg *core.Msg) bool {
 	return ok
 }
 
-func (r EsModelRouter) Match(msg *core.Msg) (*EsModelRoute, bool) {
+func match(database string, table string, msg *core.Msg) bool {
+	fmt.Printf("%s, %s, %v \n", database, table, msg)
+	if database == msg.Database && table == msg.Table {
+		return true
+	}
+	return false
+}
+
+func (r EsModelRouter) Match(msg *core.Msg) (*[]*EsModelRoute, bool) {
+	routes := make([]*EsModelRoute, 0, 3)
+	// 不做模糊匹配
+	fmt.Printf(" %v \n", r)
 	for _, route := range r {
-		if route.Match(msg) {
-			return route, true
+		if match(route.DataBase, route.Table, msg) {
+			routes = append(routes, route)
+			continue
 		}
+		mtype := false
+		if route.OneOne != nil {
+			for _, r := range *route.OneOne {
+				if match(r.DataBase, r.Table, msg) {
+					routes = append(routes, route)
+					mtype = true
+					break
+				}
+			}
+		}
+		if mtype {
+			continue
+		}
+		if route.OneMore != nil {
+			for _, r := range *route.OneMore {
+				if match(r.DataBase, r.Table, msg) {
+					routes = append(routes, route)
+					break
+				}
+			}
+		}
+	}
+	if len(routes) > 0 {
+		return &routes, true
 	}
 	return nil, false
 }
@@ -121,7 +164,7 @@ func NewEsModelOneOneRoutes(routeConfig map[string]interface{}) ([]*EsModelOneOn
 		}
 		oneRouter.EsModelOneMoreRoute = *moreRouter
 
-		mode, err := getInt(v, "mode", EsModelOneModeObject)
+		mode, err := getInt64(v, "mode", EsModelOneModeObject)
 		if err != nil {
 			return nil, err
 		}
@@ -185,17 +228,32 @@ func NewEsModelOneMoreRoute(routeConfig map[string]interface{}, moreRoute *EsMod
 
 func NewEsModelBaseRoute(routeConfig map[string]interface{}, baseRoute *EsModelBaseRoute) (*EsModelBaseRoute, error) {
 
+	baseRoute.PkColumn = ""
+	baseRoute.IndexTypeMapping = &map[string]string{}
+
 	matchers, err := matchers.NewMatchers(routeConfig)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	baseRoute.AllMatchers = matchers
 
-	pkColumn, err := getString(routeConfig, "pk-column", "id")
+	database, err := getString(routeConfig, "match-schema", "")
 	if err != nil {
 		return nil, err
 	}
-	baseRoute.PkColumn = pkColumn
+	if database == "" {
+		return nil, errors.Errorf("%s match-schema is nil", baseRoute.AllMatchers)
+	}
+	baseRoute.DataBase = database
+
+	table, err := getString(routeConfig, "match-table", "")
+	if err != nil {
+		return nil, err
+	}
+	if table == "" {
+		return nil, errors.Errorf("%s match-table is nil", baseRoute.AllMatchers)
+	}
+	baseRoute.Table = table
 
 	excludeColumn, err := getListString(routeConfig, "exclude-column", []string{})
 	if err != nil {
