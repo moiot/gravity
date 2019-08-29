@@ -17,7 +17,7 @@ func genDocID(msg *core.Msg, fk string) string {
 	return ""
 }
 
-func genDocIDDeleteUpdate(msg *core.Msg, fk string) string {
+func genDocIDBySon(msg *core.Msg, fk string) string {
 	return fmt.Sprint(msg.DmlMsg.Old[fk])
 }
 
@@ -52,7 +52,12 @@ func Capitalize(str string) string {
 	return upperStr
 }
 
-func printJsonEncodef(format string, data interface{}) {
-	bs, _ := json.Marshal(data)
-	fmt.Printf(format, string(bs))
+func printJsonEncodef(format string, data ...interface{}) {
+	jsons := make([]interface{}, 0, 1)
+	for _, v := range data {
+		bs, _ := json.Marshal(v)
+		jsons = append(jsons, string(bs))
+	}
+
+	fmt.Printf(format, jsons...)
 }

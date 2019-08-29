@@ -252,7 +252,7 @@ func getSonDeleteMsgs(msgs *[]*core.Msg) *[]*core.Msg {
 		*msgs = append(*(msgs), &msg)
 	}
 
-	id := 2
+	id := 3
 	msg2 := core.Msg{
 		Type:     core.MsgDML,
 		Host:     "192.168.1.148",
@@ -262,14 +262,14 @@ func getSonDeleteMsgs(msgs *[]*core.Msg) *[]*core.Msg {
 		DdlMsg: &core.DDLMsg{},
 		DmlMsg: &core.DMLMsg{
 			Operation: core.Delete,
-			Data: map[string]interface{}{
+			Old: map[string]interface{}{
 				"id":         id,
 				"student_id": int64(6),
 				"name":       "student_parent2-name-" + strconv.Itoa(6),
 				"introduce":  "detail-introduce-" + strconv.Itoa(6),
 			},
 			Pks: map[string]interface{}{
-				"id": int64(6),
+				"id": id,
 			},
 		},
 		Timestamp: time.Now(),
@@ -285,7 +285,7 @@ func TestCapitalize3(t *testing.T) {
 	//msgs = getMainInsertMsgs(msgs)
 	//msgs = getSonInsertMsgs(msgs)
 	//msgs = getMainDeleteMsgs(msgs)
-	//msgs = getSonDeleteMsgs(msgs)
+	msgs = getSonDeleteMsgs(msgs)
 
 	//id := 2
 	//msg2 := core.Msg{

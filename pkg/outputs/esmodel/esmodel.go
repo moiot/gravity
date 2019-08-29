@@ -2,7 +2,6 @@ package esmodel
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/juju/errors"
@@ -344,12 +343,11 @@ func (output *EsModelOutput) deleteOneOne(msg *core.Msg, route *routers.EsModelR
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
 		RetryOnConflict(route.RetryCount).
-		Id(genDocIDDeleteUpdate(msg, routeOne.FkColumn)).
+		Id(genDocIDBySon(msg, routeOne.FkColumn)).
 		Doc(data).
 		Upsert(data)
 
 	printJsonEncodef("delete oneone obj json: %s \n", data)
-
 	if routers.EsModelVersion6 == route.EsVer {
 		req = req.Type(route.TypeName)
 	}
@@ -358,12 +356,10 @@ func (output *EsModelOutput) deleteOneOne(msg *core.Msg, route *routers.EsModelR
 
 func (output *EsModelOutput) deleteOneMore(msg *core.Msg, route *routers.EsModelRoute, routeMore *routers.EsModelOneMoreRoute) *elastic.BulkUpdateRequest {
 
+	docId := genDocIDBySon(msg, routeMore.FkColumn)
+
 	k, v := genPrimary(msg)
-	data := &map[string]interface{}{
-		routeMore.PropertyName: transMsgData(&msg.DmlMsg.Old, routeMore.IncludeColumn, routeMore.ExcludeColumn, routeMore.ConvertColumn, "", true),
-	}
 	params := map[string]interface{}{}
-	params["message"] = (*data)[routeMore.PropertyName]
 	params["field"] = routeMore.PropertyName
 	params["value"] = v
 	params["key"] = k
@@ -371,12 +367,10 @@ func (output *EsModelOutput) deleteOneMore(msg *core.Msg, route *routers.EsModel
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
 		RetryOnConflict(route.RetryCount).
-		Id(genDocIDDeleteUpdate(msg, routeMore.FkColumn)).
-		Doc(data).
-		Upsert(data).
-		Script(elastic.NewScriptStored(esModelInsertListScriptName).Params(params))
+		Id(docId).
+		Script(elastic.NewScriptStored(esModelDeleteListScriptName).Params(params))
 
-	printJsonEncodef("delete onemore obj json: %s \n", data)
+	printJsonEncodef("delete onemore obj %s json: %s \n", docId, params)
 	if routers.EsModelVersion6 == route.EsVer {
 		req = req.Type(route.TypeName)
 	}
@@ -407,7 +401,7 @@ func (output *EsModelOutput) updateMain(msg *core.Msg, route *routers.EsModelRou
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
 		RetryOnConflict(route.RetryCount).
-		Id(genDocIDDeleteUpdate(msg, ""))
+		Id(genDocIDBySon(msg, ""))
 	if routers.EsModelVersion6 == route.EsVer {
 		req = req.Type(route.TypeName)
 	}
@@ -419,7 +413,7 @@ func (output *EsModelOutput) updateOneOne(msg *core.Msg, route *routers.EsModelR
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
 		RetryOnConflict(route.RetryCount).
-		Id(genDocIDDeleteUpdate(msg, routeOne.FkColumn))
+		Id(genDocIDBySon(msg, routeOne.FkColumn))
 	if routers.EsModelVersion6 == route.EsVer {
 		req = req.Type(route.TypeName)
 	}
@@ -441,7 +435,7 @@ func (output *EsModelOutput) updateOneMore(msg *core.Msg, route *routers.EsModel
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
 		RetryOnConflict(route.RetryCount).
-		Id(genDocIDDeleteUpdate(msg, routeMore.FkColumn)).
+		Id(genDocIDBySon(msg, routeMore.FkColumn)).
 		Upsert(data).
 		Script(elastic.NewScriptStored(esModelInsertListScriptName).Params(params))
 
