@@ -1,3 +1,24 @@
+# name 必填
+name = "mysql2esmodelDemo"
+
+# 内部用于保存位点、心跳等事项的库名，默认为 _gravity
+internal-db-name = "_gravity"
+
+#
+# Input 插件的定义，此处定义使用 mysql
+#
+[input]
+type = "mysql"
+mode = "replication"
+[input.config.source]
+host = "192.168.1.148"
+username = "root"
+password = "mysqldev"
+port = 3306
+max-idle = 10
+max-open = 10
+
+
 [output]
 type = "esmodel"
 
@@ -13,7 +34,7 @@ ignore-bad-request = true
 #
 [output.config.server]
 # 连接的 Elasticsearch 地址，必选
-urls = ["http://127.0.0.1:9200"]
+urls = ["http://192.168.1.152:9200"]
 # 是否进行节点嗅探，默认为 false
 sniff = false
 # 超时时间，默认为 1000ms
@@ -32,12 +53,18 @@ password = ""
 match-schema = "polaris_project_manage"
 # 主表
 match-table = "ppm_pri_issue"
-#主键列，默认为id
-pk-column = "id"
 #索引名
 index-name="issue_index"
-#类型名
+#类型名，es7该项无效
 type-name="issue"
+#es版本，支持7和6
+es-ver=7
+#分片数
+shards-num=1
+#副本数
+replicas-num=1
+#失败重试次数
+retry-count=3
 #包含的列，默认全部
 include-column = ["id", "title"]
 #排除的列，默认没有
@@ -51,8 +78,6 @@ project_object_type_id = "projectObjectTypeId"
 [[output.config.routes.one-one]]
 match-schema = "polaris_project_manage"
 match-table = "ppm_pri_issue_detail"
-#主键列
-pk-column = "id"
 #外键列
 fk-column = "issue_id"
 #包含的列，默认全部
@@ -66,15 +91,12 @@ property-name = "issueDetail"
 # 属性前缀，模式为2时有效，默认为源表名驼峰结构
 property-pre = "idt"
 
-
 [output.config.routes.one-one.convert-column]
 story_point = "storyPoint"
 
 [[output.config.routes.one-more]]
 match-schema = "polaris_project_manage"
 match-table = "ppm_pri_issue_relation"
-#主键列
-pk-column = "id"
 #外键列
 fk-column = "issue_id"
 #包含的列，默认全部
@@ -82,7 +104,8 @@ include-column = ["id", "title"]
 #排除的列，默认没有
 exclude-column = ["is_delete"]
 # 属性对象名，默认为源表名驼峰结构
-property-name = "issueDetail"
+property-name = "issueRelations"
 
 [output.config.routes.one-more.convert-column]
 relation_id = "relationId"
+

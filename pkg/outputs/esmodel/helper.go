@@ -1,19 +1,31 @@
 package esmodel
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/olivere/elastic/v7"
-	"strings"
 )
 
-func genDocID(msg *core.Msg) string {
-	pks := []string{}
-	for _, v := range msg.DmlMsg.Pks {
-		pks = append(pks, fmt.Sprint(v))
+func genDocID(msg *core.Msg, fk string) string {
+
+	if fk != "" {
+		return fmt.Sprint(msg.DmlMsg.Data[fk])
 	}
-	return strings.Join(pks, "_")
+	for _, v := range msg.DmlMsg.Pks {
+		return fmt.Sprint(v)
+	}
+	return ""
+}
+
+func genDocIDDeleteUpdate(msg *core.Msg, fk string) string {
+	return fmt.Sprint(msg.DmlMsg.Old[fk])
+}
+
+func genPrimary(msg *core.Msg) (string, interface{}) {
+	for k, v := range msg.DmlMsg.Pks {
+		return k, v
+	}
+	return "", ""
 }
 
 func marshalError(err *elastic.ErrorDetails) string {
@@ -38,4 +50,9 @@ func Capitalize(str string) string {
 		}
 	}
 	return upperStr
+}
+
+func printJsonEncodef(format string, data interface{}) {
+	bs, _ := json.Marshal(data)
+	fmt.Printf(format, string(bs))
 }

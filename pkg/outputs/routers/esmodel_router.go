@@ -1,29 +1,37 @@
 package routers
 
 import (
-	"fmt"
 	"github.com/juju/errors"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/matchers"
+	"strconv"
 )
 
 const (
-	EsModelOneModeObject = int64(1)
-	EsModelOneModeExtend = int64(2)
+	EsModelOneOneObject = int64(1)
+	EsModelOneOneExtend = int64(2)
 
-	EsTypeMappingObject = "object"
-	EsTypeMappingNested = "nested"
+	EsModelTypeMappingObject = "object"
+	EsModelTypeMappingNested = "nested"
+
+	EsModelVersion7 = int64(7)
+	EsModelVersion6 = int64(6)
+
+	EsModelRelationMain    = 1
+	EsModelRelationOneOne  = 2
+	EsModelRelationOneMore = 3
 )
 
 type EsModelBaseRoute struct {
 	RouteMatchers
-	DataBase         string
-	Table            string
-	PkColumn         string
-	ConvertColumn    *map[string]string
-	ExcludeColumn    *[]string
-	IncludeColumn    *[]string
-	IndexTypeMapping *map[string]string
+	DataBase      string
+	Table         string
+	PkColumn      string
+	ConvertColumn *map[string]string
+	ExcludeColumn *map[string]string
+	IncludeColumn *map[string]string
+
+	RouteType int
 }
 
 type EsModelOneMoreRoute struct {
@@ -39,13 +47,17 @@ type EsModelOneOneRoute struct {
 }
 
 type EsModelRoute struct {
-	IndexName string
-	TypeName  string
 	EsModelBaseRoute
-	IgnoreNoPrimaryKey bool
 
-	OneOne  *[]*EsModelOneOneRoute
-	OneMore *[]*EsModelOneMoreRoute
+	IndexName          string
+	TypeName           string
+	ShardsNum          int64
+	ReplicasNum        int64
+	EsVer              int64
+	RetryCount         int
+	IgnoreNoPrimaryKey bool
+	OneOne             *[]*EsModelOneOneRoute
+	OneMore            *[]*EsModelOneMoreRoute
 }
 
 type EsModelRouter []*EsModelRoute
@@ -55,27 +67,17 @@ func (r EsModelRouter) Exists(msg *core.Msg) bool {
 	return ok
 }
 
-func match(database string, table string, msg *core.Msg) bool {
-	fmt.Printf("%s, %s, %v \n", database, table, msg)
-	if database == msg.Database && table == msg.Table {
-		return true
-	}
-	return false
-}
-
 func (r EsModelRouter) Match(msg *core.Msg) (*[]*EsModelRoute, bool) {
 	routes := make([]*EsModelRoute, 0, 3)
-	// 不做模糊匹配
-	fmt.Printf(" %v \n", r)
 	for _, route := range r {
-		if match(route.DataBase, route.Table, msg) {
+		if route.Match(msg) {
 			routes = append(routes, route)
 			continue
 		}
 		mtype := false
 		if route.OneOne != nil {
 			for _, r := range *route.OneOne {
-				if match(r.DataBase, r.Table, msg) {
+				if r.Match(msg) {
 					routes = append(routes, route)
 					mtype = true
 					break
@@ -87,7 +89,7 @@ func (r EsModelRouter) Match(msg *core.Msg) (*[]*EsModelRoute, bool) {
 		}
 		if route.OneMore != nil {
 			for _, r := range *route.OneMore {
-				if match(r.DataBase, r.Table, msg) {
+				if r.Match(msg) {
 					routes = append(routes, route)
 					break
 				}
@@ -111,6 +113,7 @@ func NewEsModelRoutes(configData []map[string]interface{}) ([]*EsModelRoute, err
 			return nil, err
 		}
 		route.EsModelBaseRoute = *baseRouter
+		route.RouteType = EsModelRelationMain
 
 		indexName, err := getString(routeConfig, "index-name", "")
 		if err != nil {
@@ -123,6 +126,35 @@ func NewEsModelRoutes(configData []map[string]interface{}) ([]*EsModelRoute, err
 			return nil, err
 		}
 		route.TypeName = typeName
+
+		shardsNum, err := getInt64(routeConfig, "shards-num", int64(1))
+		if err != nil {
+			return nil, err
+		}
+		route.ShardsNum = shardsNum
+
+		replicasNum, err := getInt64(routeConfig, "replicas-num", int64(0))
+		if err != nil {
+			return nil, err
+		}
+		route.ReplicasNum = replicasNum
+
+		esVer, err := getInt64(routeConfig, "es-ver", EsModelVersion7)
+		if err != nil {
+			return nil, err
+		}
+		route.EsVer = esVer
+
+		retry, err := getInt64(routeConfig, "retry-count", 3)
+		if err != nil {
+			return nil, err
+		}
+		ret := strconv.FormatInt(retry, 10)
+		re, err := strconv.Atoi(ret)
+		if err != nil {
+			return nil, err
+		}
+		route.RetryCount = re
 
 		ignoreNoPrimaryKey, err := getBool(routeConfig, "ignore-no-primary-key", false)
 		if err != nil {
@@ -164,17 +196,24 @@ func NewEsModelOneOneRoutes(routeConfig map[string]interface{}) ([]*EsModelOneOn
 		}
 		oneRouter.EsModelOneMoreRoute = *moreRouter
 
-		mode, err := getInt64(v, "mode", EsModelOneModeObject)
-		if err != nil {
-			return nil, err
-		}
-		oneRouter.Mode = mode
+		oneRouter.RouteType = EsModelRelationOneOne
 
-		ppre, err := getString(v, "property-pre", "id")
+		ppre, err := getString(v, "property-pre", "")
 		if err != nil {
 			return nil, err
 		}
 		oneRouter.PropertyPre = ppre
+
+		mode, err := getInt64(v, "mode", EsModelOneOneObject)
+		if err != nil {
+			return nil, err
+		}
+		if mode == EsModelOneOneExtend && "" == oneRouter.PropertyPre {
+			return nil, errors.Errorf("EsModelOneOneExtend mode property-pre is nil")
+		} else if "" == oneRouter.PropertyName {
+			return nil, errors.Errorf("property-name is nil")
+		}
+		oneRouter.Mode = mode
 
 		oneRouters = append(oneRouters, oneRouter)
 	}
@@ -229,7 +268,7 @@ func NewEsModelOneMoreRoute(routeConfig map[string]interface{}, moreRoute *EsMod
 func NewEsModelBaseRoute(routeConfig map[string]interface{}, baseRoute *EsModelBaseRoute) (*EsModelBaseRoute, error) {
 
 	baseRoute.PkColumn = ""
-	baseRoute.IndexTypeMapping = &map[string]string{}
+	baseRoute.RouteType = EsModelRelationOneMore
 
 	matchers, err := matchers.NewMatchers(routeConfig)
 	if err != nil {
@@ -259,13 +298,13 @@ func NewEsModelBaseRoute(routeConfig map[string]interface{}, baseRoute *EsModelB
 	if err != nil {
 		return nil, err
 	}
-	baseRoute.ExcludeColumn = &excludeColumn
+	baseRoute.ExcludeColumn = transList2Map(&excludeColumn)
 
 	includeColumn, err := getListString(routeConfig, "include-column", []string{})
 	if err != nil {
 		return nil, err
 	}
-	baseRoute.IncludeColumn = &includeColumn
+	baseRoute.IncludeColumn = transList2Map(&includeColumn)
 
 	convertColumn, err := getMapString(routeConfig, "convert-column", map[string]string{})
 	if err != nil {
@@ -274,4 +313,15 @@ func NewEsModelBaseRoute(routeConfig map[string]interface{}, baseRoute *EsModelB
 	baseRoute.ConvertColumn = &convertColumn
 
 	return baseRoute, nil
+}
+
+func transList2Map(list *[]string) *map[string]string {
+	m := &map[string]string{}
+	if list == nil || len(*list) <= 0 {
+		return m
+	}
+	for _, v := range *list {
+		(*m)[v] = v
+	}
+	return m
 }
