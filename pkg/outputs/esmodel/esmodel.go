@@ -288,7 +288,7 @@ func (output *EsModelOutput) insertOneMore(msg *core.Msg, route *routers.EsModel
 	params["field"] = routeMore.PropertyName
 	params["value"] = v
 	params["key"] = k
-	printJsonEncodef("create onemore obj docId: %s, json: %s, paramgs: %s \n", docId, data, params)
+	printJsonEncodef("create onemore obj docId: %s, json: %s, params: %s \n", docId, data, params)
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
