@@ -50,62 +50,79 @@ password = ""
 
 
 [[output.config.routes]]
-match-schema = "polaris_project_manage"
+match-schema = "test"
 # 主表
-match-table = "ppm_pri_issue"
+match-table = "student"
 #索引名
-index-name="issue_index"
+index-name="student_index"
 #类型名，es7该项无效
-type-name="issue"
-#es版本，支持7和6
-es-ver=7
+type-name="student"
 #分片数
 shards-num=1
 #副本数
-replicas-num=1
+replicas-num=0
 #失败重试次数
 retry-count=3
 #包含的列，默认全部
-include-column = ["id", "title"]
+include-column = []
 #排除的列，默认没有
-exclude-column = ["is_delete"]
+exclude-column = []
 
 # 列名转义策略
 [output.config.routes.convert-column]
-project_object_type_id = "projectObjectTypeId"
+name = "studentName"
 
 
 [[output.config.routes.one-one]]
-match-schema = "polaris_project_manage"
-match-table = "ppm_pri_issue_detail"
+match-schema = "test"
+match-table = "student_detail"
 #外键列
-fk-column = "issue_id"
+fk-column = "student_id"
 #包含的列，默认全部
-include-column = ["id", "title"]
+include-column = []
 #排除的列，默认没有
-exclude-column = ["is_delete"]
+exclude-column = []
+# 模式，1：子对象，2索引平铺
+mode = 2
+# 属性对象名，模式为1时有效，默认为源表名驼峰结构
+property-name = "studentDetail"
+# 属性前缀，模式为2时有效，默认为源表名驼峰结构
+property-pre = "sd_"
+
+[output.config.routes.one-one.convert-column]
+introduce = "introduceInfo"
+
+[[output.config.routes.one-one]]
+match-schema = "test"
+match-table = "student_class"
+#外键列
+fk-column = "student_id"
+#包含的列，默认全部
+include-column = []
+#排除的列，默认没有
+exclude-column = []
 # 模式，1：子对象，2索引平铺
 mode = 1
 # 属性对象名，模式为1时有效，默认为源表名驼峰结构
-property-name = "issueDetail"
+property-name = "studentClass"
 # 属性前缀，模式为2时有效，默认为源表名驼峰结构
-property-pre = "idt"
+property-pre = "sc_"
 
 [output.config.routes.one-one.convert-column]
-story_point = "storyPoint"
+name = "className"
 
 [[output.config.routes.one-more]]
-match-schema = "polaris_project_manage"
-match-table = "ppm_pri_issue_relation"
+match-schema = "test"
+match-table = "student_parent"
 #外键列
-fk-column = "issue_id"
+fk-column = "student_id"
 #包含的列，默认全部
-include-column = ["id", "title"]
+include-column = []
 #排除的列，默认没有
-exclude-column = ["is_delete"]
+exclude-column = []
 # 属性对象名，默认为源表名驼峰结构
-property-name = "issueRelations"
+property-name = "studentParent"
 
 [output.config.routes.one-more.convert-column]
-relation_id = "relationId"
+name = "parentName"
 
