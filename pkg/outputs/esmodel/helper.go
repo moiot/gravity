@@ -3,8 +3,9 @@ package esmodel
 import (
 	"fmt"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/utils"
 	"github.com/olivere/elastic/v7"
-	"github.com/prometheus/common/log"
+	log "github.com/sirupsen/logrus"
 )
 
 func genDocID(msg *core.Msg, fk string) string {
@@ -67,6 +68,8 @@ func printJsonEncodef(format string, data ...interface{}) {
 		}
 	}
 
-	fmt.Printf(format, jsons...)
+	if utils.Version == "None" {
+		fmt.Printf(format+"\n", jsons...)
+	}
 	log.Infof(format, jsons...)
 }
