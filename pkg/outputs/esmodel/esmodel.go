@@ -535,6 +535,9 @@ func (output *EsModelOutput) checkAndSetIndex(route *routers.EsModelRoute) error
 	mapp := map[string]interface{}{}
 
 	if mappings != nil {
+
+		printJsonEncodef("exist mapping %s \n", mappings)
+
 		if mapping, ok := mappings[route.IndexName]; ok {
 			// mapping已存在
 			if route.EsVer == routers.EsModelVersion7 {
