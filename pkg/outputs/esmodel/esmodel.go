@@ -651,8 +651,9 @@ check es 脚本
 */
 func (output *EsModelOutput) checkEsScript() error {
 	for k, v := range esModelScripts {
-		resp, err := output.client.DeleteScript().Id(k).Do(context.Background())
-		fmt.Println(resp)
+		//删除脚本
+		//resp, err := output.client.DeleteScript().Id(k).Do(context.Background())
+		//fmt.Println(resp)
 
 		getResp, err := output.client.GetScript().Id(k).Do(context.Background())
 		if err != nil || !getResp.Found {
