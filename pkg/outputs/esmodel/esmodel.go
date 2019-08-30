@@ -536,9 +536,10 @@ func (output *EsModelOutput) checkAndSetIndex(route *routers.EsModelRoute) error
 
 	if mappings != nil {
 
-		printJsonEncodef("exist mapping %s", mappings)
+		printJsonEncodef("exist mappings %s", mappings)
 
 		if mapping, ok := mappings[route.IndexName]; ok {
+			printJsonEncodef("exist mapping %s", mapping)
 			// mapping已存在
 			if route.EsVer == routers.EsModelVersion7 {
 				mapp = (mapping.(map[string]interface{}))["mappings"].(map[string]interface{})["properties"].(map[string]interface{})
@@ -618,7 +619,7 @@ func (output *EsModelOutput) createIndex(route *routers.EsModelRoute, mapping *m
 		return errors.Errorf("create mapping convert json fail. index %s type %s mapping %v. ", route.IndexName, route.TypeName, index)
 	}
 	printJsonEncodef("create index %s mapping json: %s ", route.IndexName, index)
-	createIndex, err := output.client.CreateIndex(route.IndexName).BodyString(jstr).Do(context.Background())
+	createIndex, err := output.client.CreateIndex(route.IndexName).BodyString(jstr).Timeout("5s").Do(context.Background())
 	if err != nil {
 		return errors.Errorf("create %s index %s type fail. err: %v.", route.IndexName, route.TypeName, err)
 	}
@@ -634,17 +635,17 @@ func (output *EsModelOutput) createIndex(route *routers.EsModelRoute, mapping *m
 func (output *EsModelOutput) updateIndex(route *routers.EsModelRoute, mapping *map[string]interface{}) error {
 	jstr, err := json.MarshalToString(mapping)
 	if err != nil {
-		return errors.Errorf("create mapping convert json fail. index %s type %s mapping %v. ", route.IndexName, route.TypeName, mapping)
+		return errors.Errorf("update mapping convert json fail. index %s type %s mapping %v. ", route.IndexName, route.TypeName, mapping)
 	}
 	printJsonEncodef("update index %s mapping json: %s  ", route.IndexName, jstr)
 
-	updateIndex, err := output.client.PutMapping().Index(route.IndexName).BodyString(jstr).Do(context.Background())
+	updateIndex, err := output.client.PutMapping().Index(route.IndexName).BodyString(jstr).Timeout("5s").Do(context.Background())
 
 	if err != nil {
 		return errors.Errorf("update %s index %s type fail. err: %v.", route.IndexName, route.TypeName, err)
 	}
 	if !updateIndex.Acknowledged {
-		return errors.Errorf("create %s index %s type fail. ", route.IndexName, route.TypeName)
+		return errors.Errorf("update %s index %s type fail. ", route.IndexName, route.TypeName)
 	}
 	return nil
 }
