@@ -25,14 +25,14 @@ const (
 	if(ctx._source.containsKey(params.field)){
 	    Map it= ctx._source.get(params.field).find(item -> item.get(params.key) == params.value);
 	    if(it != null && !it.isEmpty()){
-	        ctx._source.get(params.field).removeIf(item -> item.get(params.key) == params.value)
+	        ctx._source.get(params.field).removeIf(item -> item.get(params.key) == params.value);
 	    }
-	    ctx._source.get(params.field).add(params.message)
+	    ctx._source.get(params.field).add(params.message);
 	}else{
 	    ctx._source.put(params.field,[params.message])
 	}
 	*/
-	esModelInsertListScript = "if(ctx._source.containsKey(params.field)){Map it= ctx._source.get(params.field).find(item -> item.get(params.key) == params.value);if(it != null && !it.isEmpty()){ctx._source.get(params.field).removeIf(item -> item.get(params.key) == params.value)}ctx._source.get(params.field).add(params.message)}else{ctx._source.put(params.field,[params.message])}"
+	esModelInsertListScript = "if(ctx._source.containsKey(params.field)){Map it= ctx._source.get(params.field).find(item -> item.get(params.key) == params.value);if(it != null && !it.isEmpty()){ctx._source.get(params.field).removeIf(item -> item.get(params.key) == params.value);}ctx._source.get(params.field).add(params.message);}else{ctx._source.put(params.field,[params.message]);}"
 
 	esModelUpdateListScriptName = "GravityEsModelListUpdateScript"
 	/**
@@ -280,11 +280,12 @@ func (output *EsModelOutput) insertOneMore(msg *core.Msg, route *routers.EsModel
 	docId := genDocID(msg, routeMore.FkColumn)
 
 	k, v := genPrimary(msg)
+	message := transMsgData(&msg.DmlMsg.Data, routeMore.IncludeColumn, routeMore.ExcludeColumn, routeMore.ConvertColumn, "", false)
 	data := &map[string]interface{}{
-		routeMore.PropertyName: transMsgData(&msg.DmlMsg.Data, routeMore.IncludeColumn, routeMore.ExcludeColumn, routeMore.ConvertColumn, "", false),
+		routeMore.PropertyName: []interface{}{message},
 	}
 	params := map[string]interface{}{}
-	params["message"] = (*data)[routeMore.PropertyName]
+	params["message"] = message
 	params["field"] = routeMore.PropertyName
 	params["value"] = v
 	params["key"] = k
@@ -445,13 +446,14 @@ func (output *EsModelOutput) updateOneMore(msg *core.Msg, route *routers.EsModel
 
 	docId := genDocIDBySon(msg, routeMore.FkColumn)
 	k, v := genPrimary(msg)
+	message := transMsgData(&msg.DmlMsg.Data, routeMore.IncludeColumn, routeMore.ExcludeColumn, routeMore.ConvertColumn, "", false)
 	data := &map[string]interface{}{
-		routeMore.PropertyName: transMsgData(&msg.DmlMsg.Data, routeMore.IncludeColumn, routeMore.ExcludeColumn, routeMore.ConvertColumn, "", false),
+		routeMore.PropertyName: []interface{}{message},
 	}
 	params := map[string]interface{}{}
-	params["message"] = (*data)[routeMore.PropertyName]
+	params["message"] = message
 	// updates 可以仅传改动的map，暂不考虑
-	params["updates"] = (*data)[routeMore.PropertyName]
+	params["updates"] = message
 	params["field"] = routeMore.PropertyName
 	params["value"] = v
 	params["key"] = k
@@ -649,8 +651,8 @@ check es 脚本
 */
 func (output *EsModelOutput) checkEsScript() error {
 	for k, v := range esModelScripts {
-		//resp, err := output.client.DeleteScript().Id(k).Do(context.Background())
-		//fmt.Println(resp)
+		resp, err := output.client.DeleteScript().Id(k).Do(context.Background())
+		fmt.Println(resp)
 
 		getResp, err := output.client.GetScript().Id(k).Do(context.Background())
 		if err != nil || !getResp.Found {
