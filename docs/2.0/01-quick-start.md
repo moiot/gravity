@@ -25,14 +25,13 @@ CREATE TABLE `test`.`test_target_table` (
 
 
 ```bash
-mkdir -p $GOPATH/src/github.com/moiot/ && cd $GOPATH/src/github.com/moiot/
-
 git clone https://github.com/moiot/gravity.git
 
 cd gravity && make
-
 ```
 
+Gravity 使用了 [go mod](https://github.com/golang/go/wiki/Modules)，中国大陆地区用户建议设置 `export GOPROXY=https://goproxy.io` 或其他代理。
+将代码克隆到 GOPATH 路径下的用户需要设置 `export GO111MODULE=on`。
 
 #### MySQL 到 MySQL 同步
 
@@ -120,3 +119,8 @@ bin/gravity -config mysql2mysql.toml
 ```bash
 docker run -v ${PWD}/config.toml:/etc/gravity/config.toml -d --net=host moiot/gravity:latest
 ```
+
+## 监控
+Gravity 使用 [Prometheus](https://prometheus.io) 和 [Grafana](https://grafana.com/) 实现监控功能。
+在运行端口（默认8080）上提供了 Prometheus 标准的指标抓取路径`/metrics`。
+在源码路径`deploy/grafana`下提供了 Grafana dashboard 供导入。 

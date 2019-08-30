@@ -219,13 +219,14 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					var refSchema string
 					var refTable string
 					found := false
+					fakeMsg := core.Msg{
+						Database: tmp.ReferTable.Schema.O,
+						Table:    tmp.ReferTable.Name.O,
+					}
 					for _, route := range output.routes {
-						if route.Match(&core.Msg{
-							Database: tmp.ReferTable.Name.O,
-							Table:    tmp.ReferTable.Schema.O,
-						}) {
+						if route.Match(&fakeMsg) {
 							found = true
-							refSchema, refTable = route.GetTarget(msg.Database, msg.Table)
+							refSchema, refTable = route.GetTarget(fakeMsg.Database, fakeMsg.Table)
 							break
 						}
 					}

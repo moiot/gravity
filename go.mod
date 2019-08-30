@@ -5,7 +5,7 @@ require (
 	github.com/OneOfOne/xxhash v1.2.5
 	github.com/Shopify/sarama v1.19.0
 	github.com/coreos/etcd v3.3.10+incompatible
-	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548 // indirect
+	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548
 	github.com/denisenkom/go-mssqldb v0.0.0-20190412130859-3b1d194e553a // indirect
 	github.com/erikstmartin/go-testdb v0.0.0-20160219214506-8d10e4a1bae5 // indirect
 	github.com/fsnotify/fsnotify v1.4.7

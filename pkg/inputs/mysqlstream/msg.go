@@ -6,22 +6,18 @@ import (
 	"time"
 
 	"github.com/OneOfOne/xxhash"
-
-	"github.com/moiot/gravity/pkg/config"
-
-	"github.com/mitchellh/hashstructure"
-
-	"github.com/pingcap/parser/ast"
-
-	"github.com/moiot/gravity/pkg/mysql"
-	"github.com/moiot/gravity/pkg/utils"
-
+	"github.com/cznic/mathutil"
 	"github.com/juju/errors"
+	"github.com/mitchellh/hashstructure"
+	"github.com/pingcap/parser/ast"
 	"github.com/siddontang/go-mysql/replication"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/core"
+	"github.com/moiot/gravity/pkg/mysql"
 	"github.com/moiot/gravity/pkg/schema_store"
+	"github.com/moiot/gravity/pkg/utils"
 )
 
 type binlogOp string
@@ -294,7 +290,7 @@ func NewDeleteMsgs(
 
 	for rowIndex, row := range ev.Rows {
 		if len(row) != len(columns) {
-			return nil, errors.Errorf("delete %s.%s columns and data mismatch in length: %d vs %d",
+			log.Warnf("delete %s.%s columns and data mismatch in length: %d vs %d",
 				tableDef.Schema, tableDef.Name, len(columns), len(row))
 		}
 		msg := core.Msg{
@@ -313,7 +309,7 @@ func NewDeleteMsgs(
 		dmlMsg.Operation = core.Delete
 
 		data := make(map[string]interface{})
-		for i := 0; i < len(columns); i++ {
+		for i := 0; i < mathutil.Min(len(row), len(columns)); i++ {
 			data[columns[i].Name] = deserialize(row[i], columns[i])
 		}
 		dmlMsg.Data = data
@@ -341,8 +337,7 @@ func NewDDLMsg(
 	ast ast.StmtNode,
 	ddlSQL string,
 	ts int64,
-	received time.Time,
-	position config.MySQLBinlogPosition) *core.Msg {
+	received time.Time) *core.Msg {
 
 	return &core.Msg{
 		Phase: core.Phase{
@@ -354,7 +349,7 @@ func NewDDLMsg(
 		Table:               table,
 		DdlMsg:              &core.DDLMsg{Statement: ddlSQL, AST: ast},
 		Done:                make(chan struct{}),
-		InputContext:        inputContext{op: ddl, position: position},
+		InputContext:        inputContext{op: ddl},
 		InputStreamKey:      utils.NewStringPtr(inputStreamKey),
 		AfterCommitCallback: callback,
 	}
