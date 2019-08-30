@@ -36,12 +36,12 @@ func getConfig() *config.Config {
 }
 
 func getMainInsertMsgs(msgs *[]*core.Msg) *[]*core.Msg {
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 15; i++ {
 		msg := core.Msg{
 			Type: core.MsgDML,
 
 			Host:     "192.168.1.148",
-			Database: "test_database",
+			Database: "test",
 			Table:    "student",
 
 			DdlMsg: &core.DDLMsg{},
@@ -70,7 +70,7 @@ func getSonInsertMsgs(msgs *[]*core.Msg) *[]*core.Msg {
 		msg := core.Msg{
 			Type:     core.MsgDML,
 			Host:     "192.168.1.148",
-			Database: "test_database",
+			Database: "test",
 			Table:    "student_detail",
 
 			DdlMsg: &core.DDLMsg{},
@@ -91,11 +91,11 @@ func getSonInsertMsgs(msgs *[]*core.Msg) *[]*core.Msg {
 		*msgs = append(*(msgs), &msg)
 	}
 
-	for i := 3; i < 7; i++ {
+	for i := 5; i < 10; i++ {
 		msg := core.Msg{
 			Type:     core.MsgDML,
 			Host:     "192.168.1.148",
-			Database: "test_database",
+			Database: "test",
 			Table:    "student_class",
 
 			DdlMsg: &core.DDLMsg{},
@@ -117,12 +117,12 @@ func getSonInsertMsgs(msgs *[]*core.Msg) *[]*core.Msg {
 	}
 
 	id := 1
-	for i := 6; i < 8; i++ {
+	for i := 10; i < 15; i++ {
 		id += 1
 		msg := core.Msg{
 			Type:     core.MsgDML,
 			Host:     "192.168.1.148",
-			Database: "test_database",
+			Database: "test",
 			Table:    "student_parent",
 
 			DdlMsg: &core.DDLMsg{},
@@ -146,7 +146,7 @@ func getSonInsertMsgs(msgs *[]*core.Msg) *[]*core.Msg {
 		msg2 := core.Msg{
 			Type:     core.MsgDML,
 			Host:     "192.168.1.148",
-			Database: "test_database",
+			Database: "test",
 			Table:    "student_parent",
 
 			DdlMsg: &core.DDLMsg{},
@@ -171,12 +171,12 @@ func getSonInsertMsgs(msgs *[]*core.Msg) *[]*core.Msg {
 }
 
 func getMainDeleteMsgs(msgs *[]*core.Msg) *[]*core.Msg {
-	for i := 5; i < 7; i++ {
+	for i := 1; i < 2; i++ {
 		msg := core.Msg{
 			Type: core.MsgDML,
 
 			Host:     "192.168.1.148",
-			Database: "test_database",
+			Database: "test",
 			Table:    "student",
 
 			DdlMsg: &core.DDLMsg{},
@@ -205,7 +205,7 @@ func getSonDeleteMsgs(msgs *[]*core.Msg) *[]*core.Msg {
 			Type: core.MsgDML,
 
 			Host:     "192.168.1.148",
-			Database: "test_database",
+			Database: "test",
 			Table:    "student_detail",
 
 			DdlMsg: &core.DDLMsg{},
@@ -231,7 +231,7 @@ func getSonDeleteMsgs(msgs *[]*core.Msg) *[]*core.Msg {
 			Type: core.MsgDML,
 
 			Host:     "192.168.1.148",
-			Database: "test_database",
+			Database: "test",
 			Table:    "student_class",
 
 			DdlMsg: &core.DDLMsg{},
@@ -252,11 +252,11 @@ func getSonDeleteMsgs(msgs *[]*core.Msg) *[]*core.Msg {
 		*msgs = append(*(msgs), &msg)
 	}
 
-	id := 3
+	id := 2
 	msg2 := core.Msg{
 		Type:     core.MsgDML,
 		Host:     "192.168.1.148",
-		Database: "test_database",
+		Database: "test",
 		Table:    "student_parent",
 
 		DdlMsg: &core.DDLMsg{},
@@ -264,7 +264,140 @@ func getSonDeleteMsgs(msgs *[]*core.Msg) *[]*core.Msg {
 			Operation: core.Delete,
 			Old: map[string]interface{}{
 				"id":         id,
-				"student_id": int64(6),
+				"student_id": int64(10),
+				"name":       "student_parent2-name-" + strconv.Itoa(6),
+				"introduce":  "detail-introduce-" + strconv.Itoa(6),
+			},
+			Pks: map[string]interface{}{
+				"id": id,
+			},
+		},
+		Timestamp: time.Now(),
+	}
+	*msgs = append(*(msgs), &msg2)
+
+	return msgs
+}
+
+func getMainUpdateMsgs(msgs *[]*core.Msg) *[]*core.Msg {
+	for i := 6; i < 7; i++ {
+		msg := core.Msg{
+			Type: core.MsgDML,
+
+			Host:     "192.168.1.148",
+			Database: "test",
+			Table:    "student",
+
+			DdlMsg: &core.DDLMsg{},
+			DmlMsg: &core.DMLMsg{
+				Operation: core.Update,
+				Data: map[string]interface{}{
+					"id":       int64(i),
+					"name":     "updatename-" + strconv.Itoa(i),
+					"age":      i + 10,
+					"birthday": time.Now(),
+				},
+				Old: map[string]interface{}{
+					"id":       int64(i),
+					"name":     "name-" + strconv.Itoa(i),
+					"age":      i,
+					"birthday": time.Now(),
+				},
+				Pks: map[string]interface{}{
+					"id": int64(i),
+				},
+			},
+			Timestamp: time.Now(),
+		}
+		*msgs = append(*(msgs), &msg)
+	}
+	return msgs
+}
+
+func getSonUpdateMsgs(msgs *[]*core.Msg) *[]*core.Msg {
+	for i := 3; i < 4; i++ {
+		msg := core.Msg{
+			Type: core.MsgDML,
+
+			Host:     "192.168.1.148",
+			Database: "test",
+			Table:    "student_detail",
+
+			DdlMsg: &core.DDLMsg{},
+			DmlMsg: &core.DMLMsg{
+				Operation: core.Update,
+				Data: map[string]interface{}{
+					"id":         int64(i),
+					"student_id": int64(i),
+					"name":       "update-detail-name-" + strconv.Itoa(i),
+					"introduce":  "update-detail-introduce-" + strconv.Itoa(i),
+				},
+				Old: map[string]interface{}{
+					"id":         int64(i),
+					"student_id": int64(i),
+					"name":       "detail-name-" + strconv.Itoa(i),
+					"introduce":  "detail-introduce-" + strconv.Itoa(i),
+				},
+				Pks: map[string]interface{}{
+					"id": int64(i),
+				},
+			},
+			Timestamp: time.Now(),
+		}
+		*msgs = append(*(msgs), &msg)
+	}
+
+	for i := 6; i < 7; i++ {
+		msg := core.Msg{
+			Type: core.MsgDML,
+
+			Host:     "192.168.1.148",
+			Database: "test",
+			Table:    "student_class",
+
+			DdlMsg: &core.DDLMsg{},
+			DmlMsg: &core.DMLMsg{
+				Operation: core.Update,
+				Data: map[string]interface{}{
+					"id":            int64(i),
+					"student_id":    int64(i),
+					"name":          "update-class-name-" + strconv.Itoa(i),
+					"student_count": 20 + i,
+				},
+				Old: map[string]interface{}{
+					"id":            int64(i),
+					"student_id":    int64(i),
+					"name":          "class-name-" + strconv.Itoa(i),
+					"student_count": 20 + i,
+				},
+				Pks: map[string]interface{}{
+					"id": int64(i),
+				},
+			},
+			Timestamp: time.Now(),
+		}
+		*msgs = append(*(msgs), &msg)
+	}
+
+	id := 4
+	msg2 := core.Msg{
+		Type:     core.MsgDML,
+		Host:     "192.168.1.148",
+		Database: "test",
+		Table:    "student_parent",
+
+		DdlMsg: &core.DDLMsg{},
+		DmlMsg: &core.DMLMsg{
+			Operation: core.Update,
+			Data: map[string]interface{}{
+				"id":         id,
+				"student_id": int64(11),
+				"name":       "update-student_parent2-name-" + strconv.Itoa(6),
+				"introduce":  "update-detail-introduce-" + strconv.Itoa(6),
+			},
+			Old: map[string]interface{}{
+				"id":         id,
+				"student_id": int64(11),
 				"name":       "student_parent2-name-" + strconv.Itoa(6),
 				"introduce":  "detail-introduce-" + strconv.Itoa(6),
 			},
@@ -285,13 +418,15 @@ func TestCapitalize3(t *testing.T) {
 	//msgs = getMainInsertMsgs(msgs)
 	//msgs = getSonInsertMsgs(msgs)
 	//msgs = getMainDeleteMsgs(msgs)
-	msgs = getSonDeleteMsgs(msgs)
+	//msgs = getSonDeleteMsgs(msgs)
+	//msgs = getMainUpdateMsgs(msgs)
+	//msgs = getSonUpdateMsgs(msgs)
 
 	//id := 2
 	//msg2 := core.Msg{
 	//	Type: core.MsgDML,
 	//	Host:     "192.168.1.148",
-	//	Database: "test_database",
+	//	Database: "test",
 	//	Table:    "student_parent",
 	//
 	//	DdlMsg: &core.DDLMsg{},

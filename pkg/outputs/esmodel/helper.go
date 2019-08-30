@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/olivere/elastic/v7"
+	"github.com/prometheus/common/log"
 )
 
 func genDocID(msg *core.Msg, fk string) string {
@@ -55,9 +56,17 @@ func Capitalize(str string) string {
 func printJsonEncodef(format string, data ...interface{}) {
 	jsons := make([]interface{}, 0, 1)
 	for _, v := range data {
-		bs, _ := json.Marshal(v)
-		jsons = append(jsons, string(bs))
+		switch v.(type) {
+		case string:
+			jsons = append(jsons, v)
+			break
+		default:
+			bs, _ := json.Marshal(v)
+			jsons = append(jsons, string(bs))
+			break
+		}
 	}
 
 	fmt.Printf(format, jsons...)
+	log.Infof(format, jsons...)
 }

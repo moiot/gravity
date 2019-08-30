@@ -14,8 +14,8 @@ const (
 	EsModelTypeMappingObject = "object"
 	EsModelTypeMappingNested = "nested"
 
-	EsModelVersion7 = int64(7)
-	EsModelVersion6 = int64(6)
+	EsModelVersion7 = "7"
+	EsModelVersion6 = "6"
 
 	EsModelRelationMain    = 1
 	EsModelRelationOneOne  = 2
@@ -53,7 +53,7 @@ type EsModelRoute struct {
 	TypeName           string
 	ShardsNum          int64
 	ReplicasNum        int64
-	EsVer              int64
+	EsVer              string
 	RetryCount         int
 	IgnoreNoPrimaryKey bool
 	OneOne             *[]*EsModelOneOneRoute
@@ -138,12 +138,6 @@ func NewEsModelRoutes(configData []map[string]interface{}) ([]*EsModelRoute, err
 			return nil, err
 		}
 		route.ReplicasNum = replicasNum
-
-		esVer, err := getInt64(routeConfig, "es-ver", EsModelVersion7)
-		if err != nil {
-			return nil, err
-		}
-		route.EsVer = esVer
 
 		retry, err := getInt64(routeConfig, "retry-count", 3)
 		if err != nil {

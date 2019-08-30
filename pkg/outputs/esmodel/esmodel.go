@@ -152,6 +152,8 @@ func (output *EsModelOutput) Start() error {
 	}
 	output.client = client
 
+	output.getEsVersion()
+
 	for _, v := range output.router {
 		if err = output.checkAndSetIndex(v); err != nil {
 			log.Errorf("check set index fail. route: %v .", v)
@@ -185,6 +187,8 @@ func (output *EsModelOutput) Execute(msgs []*core.Msg) error {
 		}
 
 		for _, route := range *routes {
+
+			printJsonEncodef("msg table %s, oper %s, data: %s, old: %s \n", msg.Table, msg.DmlMsg.Operation, msg.DmlMsg.Data, msg.DmlMsg.Old)
 
 			if len(msg.DmlMsg.Pks) == 0 {
 				if route.IgnoreNoPrimaryKey {
@@ -233,16 +237,16 @@ func (output *EsModelOutput) insertMsg(msg *core.Msg, route *routers.EsModelRout
 }
 
 func (output *EsModelOutput) insertMain(msg *core.Msg, route *routers.EsModelRoute) *elastic.BulkUpdateRequest {
-
+	docId := genDocID(msg, "")
 	data := transMsgData(&msg.DmlMsg.Data, route.IncludeColumn, route.ExcludeColumn, route.ConvertColumn, "", false)
+	printJsonEncodef("create obj docId: %s, json: %s \n", docId, data)
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
 		RetryOnConflict(route.RetryCount).
-		Id(genDocID(msg, "")).
+		Id(docId).
 		Doc(data).
 		Upsert(data)
-	printJsonEncodef("create obj json: %s \n", data)
 	if routers.EsModelVersion6 == route.EsVer {
 		req = req.Type(route.TypeName)
 	}
@@ -250,6 +254,7 @@ func (output *EsModelOutput) insertMain(msg *core.Msg, route *routers.EsModelRou
 }
 
 func (output *EsModelOutput) insertOneOne(msg *core.Msg, route *routers.EsModelRoute, routeOne *routers.EsModelOneOneRoute) *elastic.BulkUpdateRequest {
+	docId := genDocID(msg, routeOne.FkColumn)
 
 	data := &map[string]interface{}{}
 	if routeOne.Mode == routers.EsModelOneOneObject {
@@ -257,14 +262,14 @@ func (output *EsModelOutput) insertOneOne(msg *core.Msg, route *routers.EsModelR
 	} else {
 		data = transMsgData(&msg.DmlMsg.Data, routeOne.IncludeColumn, routeOne.ExcludeColumn, routeOne.ConvertColumn, routeOne.PropertyPre, false)
 	}
+	printJsonEncodef("create oneone obj docId: %s, json: %s \n", docId, data)
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
 		RetryOnConflict(route.RetryCount).
-		Id(genDocID(msg, routeOne.FkColumn)).
+		Id(docId).
 		Doc(data).
 		Upsert(data)
-	printJsonEncodef("create oneone obj json: %s \n", data)
 	if routers.EsModelVersion6 == route.EsVer {
 		req = req.Type(route.TypeName)
 	}
@@ -272,6 +277,7 @@ func (output *EsModelOutput) insertOneOne(msg *core.Msg, route *routers.EsModelR
 }
 
 func (output *EsModelOutput) insertOneMore(msg *core.Msg, route *routers.EsModelRoute, routeMore *routers.EsModelOneMoreRoute) *elastic.BulkUpdateRequest {
+	docId := genDocID(msg, routeMore.FkColumn)
 
 	k, v := genPrimary(msg)
 	data := &map[string]interface{}{
@@ -282,16 +288,14 @@ func (output *EsModelOutput) insertOneMore(msg *core.Msg, route *routers.EsModel
 	params["field"] = routeMore.PropertyName
 	params["value"] = v
 	params["key"] = k
+	printJsonEncodef("create onemore obj docId: %s, json: %s, paramgs: %s \n", docId, data, params)
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
 		RetryOnConflict(route.RetryCount).
-		Id(genDocID(msg, routeMore.FkColumn)).
+		Id(docId).
 		Upsert(data).
 		Script(elastic.NewScriptStored(esModelInsertListScriptName).Params(params))
-
-	printJsonEncodef("create onemore obj json: %s \n", data)
-	printJsonEncodef("create onemore obj params: %s \n", params)
 
 	if routers.EsModelVersion6 == route.EsVer {
 		req = req.Type(route.TypeName)
@@ -319,12 +323,12 @@ func (output *EsModelOutput) deleteMsg(msg *core.Msg, route *routers.EsModelRout
 }
 
 func (output *EsModelOutput) deleteMain(msg *core.Msg, route *routers.EsModelRoute) *elastic.BulkDeleteRequest {
+	docId := genDocID(msg, "")
+	printJsonEncodef("delete obj docId: %s, json: %s \n", docId, msg.DmlMsg.Old)
 
 	req := elastic.NewBulkDeleteRequest().
 		Index(route.IndexName).
-		Id(genDocID(msg, ""))
-
-	printJsonEncodef("delete obj json: %s \n", msg.DmlMsg.Old)
+		Id(docId)
 	if routers.EsModelVersion6 == route.EsVer {
 		req = req.Type(route.TypeName)
 	}
@@ -332,22 +336,22 @@ func (output *EsModelOutput) deleteMain(msg *core.Msg, route *routers.EsModelRou
 }
 
 func (output *EsModelOutput) deleteOneOne(msg *core.Msg, route *routers.EsModelRoute, routeOne *routers.EsModelOneOneRoute) *elastic.BulkUpdateRequest {
-
+	docId := genDocIDBySon(msg, routeOne.FkColumn)
 	data := &map[string]interface{}{}
 	if routeOne.Mode == routers.EsModelOneOneObject {
 		(*data)[routeOne.PropertyName] = nil
 	} else {
 		data = transMsgData(&msg.DmlMsg.Old, routeOne.IncludeColumn, routeOne.ExcludeColumn, routeOne.ConvertColumn, routeOne.PropertyPre, true)
 	}
+	printJsonEncodef("delete oneone obj docId: %s , json: %s \n", docId, data)
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
 		RetryOnConflict(route.RetryCount).
-		Id(genDocIDBySon(msg, routeOne.FkColumn)).
+		Id(docId).
 		Doc(data).
 		Upsert(data)
 
-	printJsonEncodef("delete oneone obj json: %s \n", data)
 	if routers.EsModelVersion6 == route.EsVer {
 		req = req.Type(route.TypeName)
 	}
@@ -398,10 +402,16 @@ func (output *EsModelOutput) updateMsg(msg *core.Msg, route *routers.EsModelRout
 
 func (output *EsModelOutput) updateMain(msg *core.Msg, route *routers.EsModelRoute) *elastic.BulkUpdateRequest {
 
+	docId := genDocID(msg, "")
+	data := transMsgData(&msg.DmlMsg.Data, route.IncludeColumn, route.ExcludeColumn, route.ConvertColumn, "", false)
+	printJsonEncodef("update main obj %s json: %s \n", docId, data)
+
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
 		RetryOnConflict(route.RetryCount).
-		Id(genDocIDBySon(msg, ""))
+		Id(docId).
+		Doc(data).
+		Upsert(data)
 	if routers.EsModelVersion6 == route.EsVer {
 		req = req.Type(route.TypeName)
 	}
@@ -410,10 +420,21 @@ func (output *EsModelOutput) updateMain(msg *core.Msg, route *routers.EsModelRou
 
 func (output *EsModelOutput) updateOneOne(msg *core.Msg, route *routers.EsModelRoute, routeOne *routers.EsModelOneOneRoute) *elastic.BulkUpdateRequest {
 
+	docId := genDocIDBySon(msg, routeOne.FkColumn)
+	data := &map[string]interface{}{}
+	if routeOne.Mode == routers.EsModelOneOneObject {
+		(*data)[routeOne.PropertyName] = transMsgData(&msg.DmlMsg.Data, routeOne.IncludeColumn, routeOne.ExcludeColumn, routeOne.ConvertColumn, routeOne.PropertyPre, false)
+	} else {
+		data = transMsgData(&msg.DmlMsg.Data, routeOne.IncludeColumn, routeOne.ExcludeColumn, routeOne.ConvertColumn, routeOne.PropertyPre, false)
+	}
+
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
 		RetryOnConflict(route.RetryCount).
-		Id(genDocIDBySon(msg, routeOne.FkColumn))
+		Id(docId).
+		Doc(data).
+		Upsert(data)
+	printJsonEncodef("update main obj %s json: %s \n", docId, data)
 	if routers.EsModelVersion6 == route.EsVer {
 		req = req.Type(route.TypeName)
 	}
@@ -422,12 +443,15 @@ func (output *EsModelOutput) updateOneOne(msg *core.Msg, route *routers.EsModelR
 
 func (output *EsModelOutput) updateOneMore(msg *core.Msg, route *routers.EsModelRoute, routeMore *routers.EsModelOneMoreRoute) *elastic.BulkUpdateRequest {
 
+	docId := genDocIDBySon(msg, routeMore.FkColumn)
 	k, v := genPrimary(msg)
 	data := &map[string]interface{}{
-		routeMore.PropertyName: transMsgData(&msg.DmlMsg.Old, routeMore.IncludeColumn, routeMore.ExcludeColumn, routeMore.ConvertColumn, "", true),
+		routeMore.PropertyName: transMsgData(&msg.DmlMsg.Data, routeMore.IncludeColumn, routeMore.ExcludeColumn, routeMore.ConvertColumn, "", false),
 	}
 	params := map[string]interface{}{}
 	params["message"] = (*data)[routeMore.PropertyName]
+	// updates 可以仅传改动的map，暂不考虑
+	params["updates"] = (*data)[routeMore.PropertyName]
 	params["field"] = routeMore.PropertyName
 	params["value"] = v
 	params["key"] = k
@@ -437,8 +461,9 @@ func (output *EsModelOutput) updateOneMore(msg *core.Msg, route *routers.EsModel
 		RetryOnConflict(route.RetryCount).
 		Id(genDocIDBySon(msg, routeMore.FkColumn)).
 		Upsert(data).
-		Script(elastic.NewScriptStored(esModelInsertListScriptName).Params(params))
+		Script(elastic.NewScriptStored(esModelUpdateListScriptName).Params(params))
 
+	printJsonEncodef("update main obj %s json: %s, params: %s. \n", docId, data, params)
 	if routers.EsModelVersion6 == route.EsVer {
 		req = req.Type(route.TypeName)
 	}
@@ -463,6 +488,7 @@ func (output *EsModelOutput) sendBulkRequests(reqs []elastic.BulkableRequest) er
 				// indices created in 6.x only allow a single-type per index, so we don't need the type as a tag.
 				var status int
 				if result.Status == http.StatusBadRequest {
+					printJsonEncodef("[output_elasticsearch] The remote server returned an error: (400) Bad request, index: %s, details: %s.", result.Index, marshalError(result.Error))
 					log.Warnf("[output_elasticsearch] The remote server returned an error: (400) Bad request, index: %s, details: %s.", result.Index, marshalError(result.Error))
 					status = http.StatusBadRequest
 				} else {
@@ -472,8 +498,10 @@ func (output *EsModelOutput) sendBulkRequests(reqs []elastic.BulkableRequest) er
 				metrics.OutputCounter.WithLabelValues(output.pipelineName, result.Index, action, string(status), "").Add(1)
 			} else if result.Status == http.StatusTooManyRequests {
 				// when the server returns 429, it must be that all requests have failed.
+				printJsonEncodef("[output_elasticsearch] The remote server returned an error: (429) Too Many Requests.")
 				return errors.Errorf("[output_elasticsearch] The remote server returned an error: (429) Too Many Requests.")
 			} else {
+				printJsonEncodef("[output_elasticsearch] Received an error from server, status: [%d], index: %s, details: %s.", result.Status, result.Index, marshalError(result.Error))
 				return errors.Errorf("[output_elasticsearch] Received an error from server, status: [%d], index: %s, details: %s.", result.Status, result.Index, marshalError(result.Error))
 			}
 		}
@@ -507,7 +535,11 @@ func (output *EsModelOutput) checkAndSetIndex(route *routers.EsModelRoute) error
 	if mappings != nil {
 		if mapping, ok := mappings[route.IndexName]; ok {
 			// mapping已存在
-			mapp = (mapping.(map[string]interface{}))["mappings"].(map[string]interface{})["properties"].(map[string]interface{})
+			if route.EsVer == routers.EsModelVersion7 {
+				mapp = (mapping.(map[string]interface{}))["mappings"].(map[string]interface{})["properties"].(map[string]interface{})
+			} else {
+				mapp = (mapping.(map[string]interface{}))["mappings"].(map[string]interface{})[route.TypeName].(map[string]interface{})["properties"].(map[string]interface{})
+			}
 			mappingExist = true
 		}
 	} else {
@@ -580,8 +612,7 @@ func (output *EsModelOutput) createIndex(route *routers.EsModelRoute, mapping *m
 	if err != nil {
 		return errors.Errorf("create mapping convert json fail. index %s type %s mapping %v. ", route.IndexName, route.TypeName, index)
 	}
-
-	fmt.Printf("create index %s mapping json: %s \n ", route.IndexName, jstr)
+	printJsonEncodef("create index %s mapping json: %s \n ", route.IndexName, index)
 	createIndex, err := output.client.CreateIndex(route.IndexName).BodyString(jstr).Do(context.Background())
 	if err != nil {
 		return errors.Errorf("create %s index %s type fail. err: %v.", route.IndexName, route.TypeName, err)
@@ -600,7 +631,7 @@ func (output *EsModelOutput) updateIndex(route *routers.EsModelRoute, mapping *m
 	if err != nil {
 		return errors.Errorf("create mapping convert json fail. index %s type %s mapping %v. ", route.IndexName, route.TypeName, mapping)
 	}
-	fmt.Printf("update index %s mapping json: %s \n ", route.IndexName, jstr)
+	printJsonEncodef("update index %s mapping json: %s \n ", route.IndexName, jstr)
 
 	updateIndex, err := output.client.PutMapping().Index(route.IndexName).BodyString(jstr).Do(context.Background())
 
@@ -618,8 +649,8 @@ check es 脚本
 */
 func (output *EsModelOutput) checkEsScript() error {
 	for k, v := range esModelScripts {
-		resp, err := output.client.DeleteScript().Id(k).Do(context.Background())
-		fmt.Println(resp)
+		//resp, err := output.client.DeleteScript().Id(k).Do(context.Background())
+		//fmt.Println(resp)
 
 		getResp, err := output.client.GetScript().Id(k).Do(context.Background())
 		if err != nil || !getResp.Found {
@@ -655,6 +686,29 @@ func (output *EsModelOutput) checkEsScript() error {
 	}
 
 	return nil
+}
+
+/**
+获取es版本
+*/
+func (output *EsModelOutput) getEsVersion() error {
+	url := output.config.ServerConfig.URLs[0]
+	v, err := output.client.ElasticsearchVersion(url)
+	if err != nil {
+		return err
+	}
+	if v == "" {
+		return errors.Errorf(" get elasticsearch version fail. url: %s ", url)
+	}
+	printJsonEncodef("elasticsearch version %s. \n", v)
+	vs := v[0:1]
+	if vs == routers.EsModelVersion7 || vs == routers.EsModelVersion6 {
+		for _, r := range output.router {
+			r.EsVer = vs
+		}
+		return nil
+	}
+	return errors.Errorf(" elasticsearch version not support. version: %s ", v)
 }
 
 /**
