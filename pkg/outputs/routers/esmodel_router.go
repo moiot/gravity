@@ -63,8 +63,26 @@ type EsModelRoute struct {
 type EsModelRouter []*EsModelRoute
 
 func (r EsModelRouter) Exists(msg *core.Msg) bool {
-	_, ok := r.Match(msg)
-	return ok
+	for _, route := range r {
+		if route.Match(msg) {
+			return true
+		}
+		if route.OneOne != nil {
+			for _, r := range *route.OneOne {
+				if r.Match(msg) {
+					return true
+				}
+			}
+		}
+		if route.OneMore != nil {
+			for _, r := range *route.OneMore {
+				if r.Match(msg) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func (r EsModelRouter) Match(msg *core.Msg) (*[]*EsModelRoute, bool) {
