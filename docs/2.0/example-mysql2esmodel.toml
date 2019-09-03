@@ -84,9 +84,9 @@ include-column = []
 exclude-column = []
 # 模式，1：子对象，2索引平铺
 mode = 2
-# 属性对象名，模式为1时有效，默认为源表名驼峰结构
+# 属性对象名，模式为1时有效
 property-name = "studentDetail"
-# 属性前缀，模式为2时有效，默认为源表名驼峰结构
+# 属性前缀，模式为2时有效
 property-pre = "sd_"
 
 [output.config.routes.one-one.convert-column]
@@ -103,9 +103,9 @@ include-column = []
 exclude-column = []
 # 模式，1：子对象，2索引平铺
 mode = 1
-# 属性对象名，模式为1时有效，默认为源表名驼峰结构
+# 属性对象名，模式为1时有效
 property-name = "studentClass"
-# 属性前缀，模式为2时有效，默认为源表名驼峰结构
+# 属性前缀，模式为2时有效
 property-pre = "sc_"
 
 [output.config.routes.one-one.convert-column]
@@ -120,7 +120,7 @@ fk-column = "student_id"
 include-column = []
 #排除的列，默认没有
 exclude-column = []
-# 属性对象名，默认为源表名驼峰结构
+# 属性对象名
 property-name = "studentParent"
 
 [output.config.routes.one-more.convert-column]
