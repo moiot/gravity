@@ -284,7 +284,7 @@ exclude-column = []
 mode = 2
 # Property object name, valid when mode is 1.
 property-name = "studentDetail"
-# Attribute prefix, valid when mode is 2.
+# Attribute prefix, can be ignored when mode is 1.
 property-pre = "sd_"
 
 # columns convert strategy
@@ -300,7 +300,7 @@ include-column = []
 exclude-column = []
 mode = 1
 property-name = "studentClass"
-property-pre = "sc_"
+property-pre = ""
 
 [output.config.routes.one-one.convert-column]
 name = "className"

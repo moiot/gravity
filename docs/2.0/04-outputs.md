@@ -291,7 +291,7 @@ exclude-column = []
 mode = 2
 # 属性对象名，模式为1时有效
 property-name = "studentDetail"
-# 属性前缀，模式为2时有效
+# 属性前缀，模式为1时可以不填
 property-pre = "sd_"
 
 [output.config.routes.one-one.convert-column]
@@ -310,8 +310,8 @@ exclude-column = []
 mode = 1
 # 属性对象名，模式为1时有效
 property-name = "studentClass"
-# 属性前缀，模式为2时有效
-property-pre = "sc_"
+# 属性前缀，模式为1时可以不填
+property-pre = ""
 
 [output.config.routes.one-one.convert-column]
 name = "className"
