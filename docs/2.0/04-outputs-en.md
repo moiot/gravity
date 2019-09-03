@@ -208,7 +208,7 @@ ignore-no-primary-key = false
 ### `esmodel` configuration
 
 
-重要：
+Important notices：
 
 - this plugin is still in beta
 - it supports Elasticsearch version 7.x and 6.x
