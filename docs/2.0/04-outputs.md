@@ -209,3 +209,128 @@ target-type = "_doc" # 默认为 'doc'
 # 默认为 false，如果收到的 DML 消息没有主键，会抛出异常。设置为 true 则忽略这些消息
 ignore-no-primary-key = false
 ```
+
+### EsModel
+
+
+重要：
+
+- 这个插件还处于 Beta 阶段
+- 目前支持 7.x 和 6.x 版本的 Elasticsearch
+- 支持动态创建索引
+- 支持一对一，一对多表关系
+- 暂不支持多对多关系
+
+配置示例：
+```toml
+
+[output]
+type = "esmodel"
+
+[output.config]
+# 忽略 400（bad request）返回
+# 当索引名不规范、解析错误时，Elasticsearch 会返回 400 错误
+# 默认为 false，即遇到失败时会抛出异常，必须人工处理。设置为 true 时会忽略这些请求
+ignore-bad-request = true
+
+#
+# 目标端 Elasticsearch 配置
+# - 必选
+#
+[output.config.server]
+# 连接的 Elasticsearch 地址，必选
+urls = ["http://192.168.1.152:9200"]
+# 是否进行节点嗅探，默认为 false
+sniff = false
+# 超时时间，默认为 1000ms
+timeout = 500
+
+#
+# 目标端鉴权配置
+# - 可选
+#
+[output.config.server.auth]
+username = ""
+password = ""
+
+
+[[output.config.routes]]
+match-schema = "test"
+# 主表
+match-table = "student"
+#索引名
+index-name="student_index"
+#类型名，es7该项无效
+type-name="student"
+#分片数
+shards-num=1
+#副本数
+replicas-num=0
+#失败重试次数
+retry-count=3
+#包含的列，默认全部
+include-column = []
+#排除的列，默认没有
+exclude-column = []
+
+# 列名转义策略
+[output.config.routes.convert-column]
+name = "studentName"
+
+
+[[output.config.routes.one-one]]
+match-schema = "test"
+match-table = "student_detail"
+#外键列
+fk-column = "student_id"
+#包含的列，默认全部
+include-column = []
+#排除的列，默认没有
+exclude-column = []
+# 模式，1：子对象，2索引平铺
+mode = 2
+# 属性对象名，模式为1时有效
+property-name = "studentDetail"
+# 属性前缀，模式为1时可以不填
+property-pre = "sd_"
+
+[output.config.routes.one-one.convert-column]
+introduce = "introduceInfo"
+
+[[output.config.routes.one-one]]
+match-schema = "test"
+match-table = "student_class"
+#外键列
+fk-column = "student_id"
+#包含的列，默认全部
+include-column = []
+#排除的列，默认没有
+exclude-column = []
+# 模式，1：子对象，2索引平铺
+mode = 1
+# 属性对象名，模式为1时有效
+property-name = "studentClass"
+# 属性前缀，模式为1时可以不填
+property-pre = ""
+
+[output.config.routes.one-one.convert-column]
+name = "className"
+
+[[output.config.routes.one-many]]
+match-schema = "test"
+match-table = "student_parent"
+#外键列
+fk-column = "student_id"
+#包含的列，默认全部
+include-column = []
+#排除的列，默认没有
+exclude-column = []
+# 属性对象名
+property-name = "studentParent"
+
+[output.config.routes.one-many.convert-column]
+name = "parentName"
+
+```
+
+

@@ -4,12 +4,10 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/OneOfOne/xxhash v1.2.5
 	github.com/Shopify/sarama v1.19.0
-	github.com/aws/aws-sdk-go v1.16.11 // indirect
 	github.com/coreos/etcd v3.3.10+incompatible
 	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548
 	github.com/denisenkom/go-mssqldb v0.0.0-20190412130859-3b1d194e553a // indirect
 	github.com/erikstmartin/go-testdb v0.0.0-20160219214506-8d10e4a1bae5 // indirect
-	github.com/fortytw2/leaktest v1.3.0 // indirect
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/go-ole/go-ole v1.2.2 // indirect
 	github.com/go-sql-driver/mysql v1.4.0
@@ -29,21 +27,21 @@ require (
 	github.com/juju/testing v0.0.0-20180920084828-472a3e8b2073 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/lib/pq v1.0.0 // indirect
-	github.com/mailru/easyjson v0.0.0-20190403194419-1ea4449da983 // indirect
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
 	github.com/mitchellh/hashstructure v1.0.0
 	github.com/mitchellh/mapstructure v1.1.2
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v0.0.0-20180701023420-4b7aa43c6742 // indirect
 	github.com/olivere/elastic v6.2.17+incompatible
+	github.com/olivere/elastic/v7 v7.0.6
 	github.com/onsi/ginkgo v1.7.0
 	github.com/onsi/gomega v1.4.3
 	github.com/pingcap/errors v0.11.0
 	github.com/pingcap/parser v0.0.0-20190118120648-5958b6fcdb2d
 	github.com/pingcap/tidb v0.0.0-20190118125846-54b6de0880f0
 	github.com/pingcap/tipb v0.0.0-20181126132056-a7fd2aaa9719 // indirect
-	github.com/pkg/errors v0.8.1 // indirect
 	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
+	github.com/prometheus/common v0.2.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/serialx/hashring v0.0.0-20170811022404-6a9381c5a83e
 	github.com/shirou/gopsutil v2.18.12+incompatible // indirect
@@ -62,3 +60,5 @@ require (
 	gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
+
+go 1.13
