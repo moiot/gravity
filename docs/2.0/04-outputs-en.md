@@ -306,7 +306,7 @@ property-pre = ""
 name = "className"
 
 # one-to-more table strategy
-[[output.config.routes.one-more]]
+[[output.config.routes.one-many]]
 match-schema = "test"
 match-table = "student_parent"
 # foreign key column
@@ -319,7 +319,7 @@ exclude-column = []
 property-name = "studentParent"
 
 # columns convert strategy
-[output.config.routes.one-more.convert-column]
+[output.config.routes.one-many.convert-column]
 name = "parentName"
 
 ```

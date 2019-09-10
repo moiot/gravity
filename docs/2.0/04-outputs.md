@@ -316,7 +316,7 @@ property-pre = ""
 [output.config.routes.one-one.convert-column]
 name = "className"
 
-[[output.config.routes.one-more]]
+[[output.config.routes.one-many]]
 match-schema = "test"
 match-table = "student_parent"
 #外键列
@@ -328,7 +328,7 @@ exclude-column = []
 # 属性对象名
 property-name = "studentParent"
 
-[output.config.routes.one-more.convert-column]
+[output.config.routes.one-many.convert-column]
 name = "parentName"
 
 ```

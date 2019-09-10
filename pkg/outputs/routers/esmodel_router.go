@@ -19,7 +19,7 @@ const (
 
 	EsModelRelationMain    = 1
 	EsModelRelationOneOne  = 2
-	EsModelRelationOneMore = 3
+	EsModelRelationOneMany = 3
 )
 
 type EsModelBaseRoute struct {
@@ -34,14 +34,14 @@ type EsModelBaseRoute struct {
 	RouteType int
 }
 
-type EsModelOneMoreRoute struct {
+type EsModelOneManyRoute struct {
 	EsModelBaseRoute
 	FkColumn     string
 	PropertyName string
 }
 
 type EsModelOneOneRoute struct {
-	EsModelOneMoreRoute
+	EsModelOneManyRoute
 	Mode        int64
 	PropertyPre string
 }
@@ -57,7 +57,7 @@ type EsModelRoute struct {
 	RetryCount         int
 	IgnoreNoPrimaryKey bool
 	OneOne             *[]*EsModelOneOneRoute
-	OneMore            *[]*EsModelOneMoreRoute
+	OneMany            *[]*EsModelOneManyRoute
 }
 
 type EsModelRouter []*EsModelRoute
@@ -74,8 +74,8 @@ func (r EsModelRouter) Exists(msg *core.Msg) bool {
 				}
 			}
 		}
-		if route.OneMore != nil {
-			for _, r := range *route.OneMore {
+		if route.OneMany != nil {
+			for _, r := range *route.OneMany {
 				if r.Match(msg) {
 					return true
 				}
@@ -105,8 +105,8 @@ func (r EsModelRouter) Match(msg *core.Msg) (*[]*EsModelRoute, bool) {
 		if mtype {
 			continue
 		}
-		if route.OneMore != nil {
-			for _, r := range *route.OneMore {
+		if route.OneMany != nil {
+			for _, r := range *route.OneMany {
 				if r.Match(msg) {
 					routes = append(routes, route)
 					break
@@ -180,11 +180,11 @@ func NewEsModelRoutes(configData []map[string]interface{}) ([]*EsModelRoute, err
 		}
 		route.OneOne = &oneRouters
 
-		moreRouters, err := NewEsModelOneMoreRoutes(routeConfig)
+		manyRouters, err := NewEsModelOneManyRoutes(routeConfig)
 		if err != nil {
 			return nil, err
 		}
-		route.OneMore = &moreRouters
+		route.OneMany = &manyRouters
 
 		routes = append(routes, &route)
 	}
@@ -202,11 +202,11 @@ func NewEsModelOneOneRoutes(routeConfig map[string]interface{}) ([]*EsModelOneOn
 	for _, v := range ones {
 		oneRouter := &EsModelOneOneRoute{}
 
-		moreRouter, err := NewEsModelOneMoreRoute(v, &oneRouter.EsModelOneMoreRoute)
+		manyRouter, err := NewEsModelOneManyRoute(v, &oneRouter.EsModelOneManyRoute)
 		if err != nil {
 			return nil, err
 		}
-		oneRouter.EsModelOneMoreRoute = *moreRouter
+		oneRouter.EsModelOneManyRoute = *manyRouter
 
 		oneRouter.RouteType = EsModelRelationOneOne
 
@@ -232,55 +232,55 @@ func NewEsModelOneOneRoutes(routeConfig map[string]interface{}) ([]*EsModelOneOn
 	return oneRouters, nil
 }
 
-func NewEsModelOneMoreRoutes(routeConfig map[string]interface{}) ([]*EsModelOneMoreRoute, error) {
+func NewEsModelOneManyRoutes(routeConfig map[string]interface{}) ([]*EsModelOneManyRoute, error) {
 
-	ones, err := getListMap(routeConfig, "one-more", []map[string]interface{}{})
+	ones, err := getListMap(routeConfig, "one-many", []map[string]interface{}{})
 	if err != nil {
 		return nil, err
 	}
-	moreCount := len(ones)
-	moreRouters := make([]*EsModelOneMoreRoute, 0, moreCount)
+	manyCount := len(ones)
+	manyRouters := make([]*EsModelOneManyRoute, 0, manyCount)
 	for _, v := range ones {
-		moreRouter := &EsModelOneMoreRoute{}
-		moreRouter, err := NewEsModelOneMoreRoute(v, moreRouter)
+		manyRouter := &EsModelOneManyRoute{}
+		manyRouter, err := NewEsModelOneManyRoute(v, manyRouter)
 		if err != nil {
 			return nil, err
 		}
-		moreRouters = append(moreRouters, moreRouter)
+		manyRouters = append(manyRouters, manyRouter)
 	}
-	return moreRouters, nil
+	return manyRouters, nil
 }
 
-func NewEsModelOneMoreRoute(routeConfig map[string]interface{}, moreRoute *EsModelOneMoreRoute) (*EsModelOneMoreRoute, error) {
+func NewEsModelOneManyRoute(routeConfig map[string]interface{}, manyRoute *EsModelOneManyRoute) (*EsModelOneManyRoute, error) {
 
-	baseRouter, err := NewEsModelBaseRoute(routeConfig, &moreRoute.EsModelBaseRoute)
+	baseRouter, err := NewEsModelBaseRoute(routeConfig, &manyRoute.EsModelBaseRoute)
 	if err != nil {
 		return nil, err
 	}
-	moreRoute.EsModelBaseRoute = *baseRouter
+	manyRoute.EsModelBaseRoute = *baseRouter
 
 	fkColumn, err := getString(routeConfig, "fk-column", "")
 	if err != nil {
 		return nil, err
 	}
 	if fkColumn == "" {
-		return nil, errors.Errorf("%s fk-column is nil", moreRoute.AllMatchers)
+		return nil, errors.Errorf("%s fk-column is nil", manyRoute.AllMatchers)
 	}
-	moreRoute.FkColumn = fkColumn
+	manyRoute.FkColumn = fkColumn
 
 	pname, err := getString(routeConfig, "property-name", "")
 	if err != nil {
 		return nil, err
 	}
-	moreRoute.PropertyName = pname
+	manyRoute.PropertyName = pname
 
-	return moreRoute, nil
+	return manyRoute, nil
 }
 
 func NewEsModelBaseRoute(routeConfig map[string]interface{}, baseRoute *EsModelBaseRoute) (*EsModelBaseRoute, error) {
 
 	baseRoute.PkColumn = ""
-	baseRoute.RouteType = EsModelRelationOneMore
+	baseRoute.RouteType = EsModelRelationOneMany
 
 	matchers, err := matchers.NewMatchers(routeConfig)
 	if err != nil {

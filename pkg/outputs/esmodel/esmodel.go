@@ -228,9 +228,9 @@ func (output *EsModelOutput) insertMsg(msg *core.Msg, route *routers.EsModelRout
 			reqs = append(reqs, output.insertOneOne(msg, route, r))
 		}
 	}
-	for _, r := range *route.OneMore {
+	for _, r := range *route.OneMany {
 		if r.Match(msg) {
-			reqs = append(reqs, output.insertOneMore(msg, route, r))
+			reqs = append(reqs, output.insertOneMany(msg, route, r))
 		}
 	}
 	return &reqs
@@ -276,20 +276,20 @@ func (output *EsModelOutput) insertOneOne(msg *core.Msg, route *routers.EsModelR
 	return req
 }
 
-func (output *EsModelOutput) insertOneMore(msg *core.Msg, route *routers.EsModelRoute, routeMore *routers.EsModelOneMoreRoute) *elastic.BulkUpdateRequest {
-	docId := genDocID(msg, routeMore.FkColumn)
+func (output *EsModelOutput) insertOneMany(msg *core.Msg, route *routers.EsModelRoute, routeMany *routers.EsModelOneManyRoute) *elastic.BulkUpdateRequest {
+	docId := genDocID(msg, routeMany.FkColumn)
 
 	k, v := genPrimary(msg)
-	message := transMsgData(&msg.DmlMsg.Data, routeMore.IncludeColumn, routeMore.ExcludeColumn, routeMore.ConvertColumn, "", false)
+	message := transMsgData(&msg.DmlMsg.Data, routeMany.IncludeColumn, routeMany.ExcludeColumn, routeMany.ConvertColumn, "", false)
 	data := &map[string]interface{}{
-		routeMore.PropertyName: []interface{}{message},
+		routeMany.PropertyName: []interface{}{message},
 	}
 	params := map[string]interface{}{}
 	params["message"] = message
-	params["field"] = routeMore.PropertyName
+	params["field"] = routeMany.PropertyName
 	params["value"] = v
 	params["key"] = k
-	printJsonEncodef("create onemore obj docId: %s, json: %s, params: %s ", docId, data, params)
+	printJsonEncodef("create onemany obj docId: %s, json: %s, params: %s ", docId, data, params)
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
@@ -315,9 +315,9 @@ func (output *EsModelOutput) deleteMsg(msg *core.Msg, route *routers.EsModelRout
 			reqs = append(reqs, output.deleteOneOne(msg, route, r))
 		}
 	}
-	for _, r := range *route.OneMore {
+	for _, r := range *route.OneMany {
 		if r.Match(msg) {
-			reqs = append(reqs, output.deleteOneMore(msg, route, r))
+			reqs = append(reqs, output.deleteOneMany(msg, route, r))
 		}
 	}
 	return &reqs
@@ -359,13 +359,13 @@ func (output *EsModelOutput) deleteOneOne(msg *core.Msg, route *routers.EsModelR
 	return req
 }
 
-func (output *EsModelOutput) deleteOneMore(msg *core.Msg, route *routers.EsModelRoute, routeMore *routers.EsModelOneMoreRoute) *elastic.BulkUpdateRequest {
+func (output *EsModelOutput) deleteOneMany(msg *core.Msg, route *routers.EsModelRoute, routeMany *routers.EsModelOneManyRoute) *elastic.BulkUpdateRequest {
 
-	docId := genDocIDBySon(msg, routeMore.FkColumn)
+	docId := genDocIDBySon(msg, routeMany.FkColumn)
 
 	k, v := genPrimary(msg)
 	params := map[string]interface{}{}
-	params["field"] = routeMore.PropertyName
+	params["field"] = routeMany.PropertyName
 	params["value"] = v
 	params["key"] = k
 
@@ -375,7 +375,7 @@ func (output *EsModelOutput) deleteOneMore(msg *core.Msg, route *routers.EsModel
 		Id(docId).
 		Script(elastic.NewScriptStored(esModelDeleteListScriptName).Params(params))
 
-	printJsonEncodef("delete onemore obj %s json: %s ", docId, params)
+	printJsonEncodef("delete onemany obj %s json: %s ", docId, params)
 	if routers.EsModelVersion6 == route.EsVer {
 		req = req.Type(route.TypeName)
 	}
@@ -393,9 +393,9 @@ func (output *EsModelOutput) updateMsg(msg *core.Msg, route *routers.EsModelRout
 			reqs = append(reqs, output.updateOneOne(msg, route, r))
 		}
 	}
-	for _, r := range *route.OneMore {
+	for _, r := range *route.OneMany {
 		if r.Match(msg) {
-			reqs = append(reqs, output.updateOneMore(msg, route, r))
+			reqs = append(reqs, output.updateOneMany(msg, route, r))
 		}
 	}
 	return &reqs
@@ -442,26 +442,26 @@ func (output *EsModelOutput) updateOneOne(msg *core.Msg, route *routers.EsModelR
 	return req
 }
 
-func (output *EsModelOutput) updateOneMore(msg *core.Msg, route *routers.EsModelRoute, routeMore *routers.EsModelOneMoreRoute) *elastic.BulkUpdateRequest {
+func (output *EsModelOutput) updateOneMany(msg *core.Msg, route *routers.EsModelRoute, routeMany *routers.EsModelOneManyRoute) *elastic.BulkUpdateRequest {
 
-	docId := genDocIDBySon(msg, routeMore.FkColumn)
+	docId := genDocIDBySon(msg, routeMany.FkColumn)
 	k, v := genPrimary(msg)
-	message := transMsgData(&msg.DmlMsg.Data, routeMore.IncludeColumn, routeMore.ExcludeColumn, routeMore.ConvertColumn, "", false)
+	message := transMsgData(&msg.DmlMsg.Data, routeMany.IncludeColumn, routeMany.ExcludeColumn, routeMany.ConvertColumn, "", false)
 	data := &map[string]interface{}{
-		routeMore.PropertyName: []interface{}{message},
+		routeMany.PropertyName: []interface{}{message},
 	}
 	params := map[string]interface{}{}
 	params["message"] = message
 	// updates 可以仅传改动的map，暂不考虑
 	params["updates"] = message
-	params["field"] = routeMore.PropertyName
+	params["field"] = routeMany.PropertyName
 	params["value"] = v
 	params["key"] = k
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
 		RetryOnConflict(route.RetryCount).
-		Id(genDocIDBySon(msg, routeMore.FkColumn)).
+		Id(genDocIDBySon(msg, routeMany.FkColumn)).
 		Upsert(data).
 		Script(elastic.NewScriptStored(esModelUpdateListScriptName).Params(params))
 
@@ -564,7 +564,7 @@ func (output *EsModelOutput) checkAndSetIndex(route *routers.EsModelRoute) error
 		}
 		needUpdate = true
 	}
-	for _, one := range *route.OneMore {
+	for _, one := range *route.OneMany {
 		if _, ok := mapp[one.PropertyName]; ok {
 			continue
 		}
