@@ -237,6 +237,8 @@ urls = ["http://192.168.1.152:9200"]
 sniff = false
 # http timeout, default is 1000ms
 timeout = 500
+# retry count，default 3 
+retry-count=3
 
 #
 # The basic auth configuration
@@ -259,8 +261,6 @@ type-name="student"
 shards-num=1
 #replicas number
 replicas-num=0
-# retry count
-retry-count=3
 #Included columns, default all
 include-column = []
 #Excluded column, default empty

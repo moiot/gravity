@@ -4,7 +4,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/moiot/gravity/pkg/core"
 	"github.com/moiot/gravity/pkg/matchers"
-	"strconv"
 )
 
 const (
@@ -54,7 +53,6 @@ type EsModelRoute struct {
 	ShardsNum          int64
 	ReplicasNum        int64
 	EsVer              string
-	RetryCount         int
 	IgnoreNoPrimaryKey bool
 	OneOne             *[]*EsModelOneOneRoute
 	OneMany            *[]*EsModelOneManyRoute
@@ -156,17 +154,6 @@ func NewEsModelRoutes(configData []map[string]interface{}) ([]*EsModelRoute, err
 			return nil, err
 		}
 		route.ReplicasNum = replicasNum
-
-		retry, err := getInt64(routeConfig, "retry-count", 3)
-		if err != nil {
-			return nil, err
-		}
-		ret := strconv.FormatInt(retry, 10)
-		re, err := strconv.Atoi(ret)
-		if err != nil {
-			return nil, err
-		}
-		route.RetryCount = re
 
 		ignoreNoPrimaryKey, err := getBool(routeConfig, "ignore-no-primary-key", false)
 		if err != nil {

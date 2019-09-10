@@ -244,6 +244,8 @@ urls = ["http://192.168.1.152:9200"]
 sniff = false
 # 超时时间，默认为 1000ms
 timeout = 500
+#失败重试次数，默认3次
+retry-count=3
 
 #
 # 目标端鉴权配置
@@ -266,8 +268,6 @@ type-name="student"
 shards-num=1
 #副本数
 replicas-num=0
-#失败重试次数
-retry-count=3
 #包含的列，默认全部
 include-column = []
 #排除的列，默认没有
