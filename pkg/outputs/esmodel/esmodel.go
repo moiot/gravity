@@ -56,11 +56,10 @@ const (
 	esModelDeleteListScriptName = "GravityEsModelListDeleteScript"
 	/**
 	if(ctx._source.containsKey(params.field)){
-	  ctx._source.get(params.field).removeIf(item -> item.get(params.key) == params.value)
+		ctx._source.get(params.field).removeIf(item -> item.get(params.key) == params.value);
 	}
 	*/
-	esModelDeleteListScript = "if(ctx._source.containsKey(params.field))" +
-		"{ctx._source.get(params.field).removeIf(item -> item.get(params.key) == params.value)}"
+	esModelDeleteListScript = "if(ctx._source.containsKey(params.field)){ctx._source.get(params.field).removeIf(item -> item.get(params.key) == params.value);}"
 )
 
 var (
@@ -81,9 +80,23 @@ type EsScriptInfo struct {
 	Source string `json:"source"`
 }
 
+type EsModelServerConfig struct {
+	URLs       []string                               `mapstructure:"urls" toml:"urls" json:"urls"`
+	Sniff      bool                                   `mapstructure:"sniff" toml:"sniff" json:"sniff"`
+	Auth       *elasticsearch.ElasticsearchServerAuth `mapstructure:"auth" toml:"auth" json:"auth"`
+	Timeout    int                                    `mapstructure:"timeout" toml:"timeout" json:"timeout"`
+	RetryCount int                                    `mapstructure:"retry-count" toml:"retry-count" json:"retry-count"`
+}
+
+type EsModelPluginConfig struct {
+	ServerConfig     *EsModelServerConfig     `mapstructure:"server" json:"server"`
+	Routes           []map[string]interface{} `mapstructure:"routes" json:"routes"`
+	IgnoreBadRequest bool                     `mapstructure:"ignore-bad-request" json:"ignore-bad-request"`
+}
+
 type EsModelOutput struct {
 	pipelineName string
-	config       *elasticsearch.ElasticsearchPluginConfig
+	config       *EsModelPluginConfig
 	client       *elastic.Client
 	router       routers.EsModelRouter
 }
@@ -97,19 +110,24 @@ func (output *EsModelOutput) Configure(pipelineName string, data map[string]inte
 	output.pipelineName = pipelineName
 
 	// setup plugin config
-	pluginConfig := elasticsearch.ElasticsearchPluginConfig{}
+	pluginConfig := EsModelPluginConfig{}
 
 	err := mapstructure.Decode(data, &pluginConfig)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
+	printJsonEncodef("pluginConfig: %s", pluginConfig)
 	if pluginConfig.ServerConfig == nil {
 		return errors.Errorf("empty esmodel config")
 	}
 
 	if len(pluginConfig.ServerConfig.URLs) == 0 {
 		return errors.Errorf("empty esmodel urls")
+	}
+
+	if pluginConfig.ServerConfig.RetryCount <= 0 {
+		pluginConfig.ServerConfig.RetryCount = 3
 	}
 	output.config = &pluginConfig
 
@@ -243,7 +261,7 @@ func (output *EsModelOutput) insertMain(msg *core.Msg, route *routers.EsModelRou
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
-		RetryOnConflict(route.RetryCount).
+		RetryOnConflict(output.config.ServerConfig.RetryCount).
 		Id(docId).
 		Doc(data).
 		Upsert(data)
@@ -266,7 +284,7 @@ func (output *EsModelOutput) insertOneOne(msg *core.Msg, route *routers.EsModelR
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
-		RetryOnConflict(route.RetryCount).
+		RetryOnConflict(output.config.ServerConfig.RetryCount).
 		Id(docId).
 		Doc(data).
 		Upsert(data)
@@ -293,7 +311,7 @@ func (output *EsModelOutput) insertOneMany(msg *core.Msg, route *routers.EsModel
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
-		RetryOnConflict(route.RetryCount).
+		RetryOnConflict(output.config.ServerConfig.RetryCount).
 		Id(docId).
 		Upsert(data).
 		Script(elastic.NewScriptStored(esModelInsertListScriptName).Params(params))
@@ -348,7 +366,7 @@ func (output *EsModelOutput) deleteOneOne(msg *core.Msg, route *routers.EsModelR
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
-		RetryOnConflict(route.RetryCount).
+		RetryOnConflict(output.config.ServerConfig.RetryCount).
 		Id(docId).
 		Doc(data).
 		Upsert(data)
@@ -371,7 +389,7 @@ func (output *EsModelOutput) deleteOneMany(msg *core.Msg, route *routers.EsModel
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
-		RetryOnConflict(route.RetryCount).
+		RetryOnConflict(output.config.ServerConfig.RetryCount).
 		Id(docId).
 		Script(elastic.NewScriptStored(esModelDeleteListScriptName).Params(params))
 
@@ -409,7 +427,7 @@ func (output *EsModelOutput) updateMain(msg *core.Msg, route *routers.EsModelRou
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
-		RetryOnConflict(route.RetryCount).
+		RetryOnConflict(output.config.ServerConfig.RetryCount).
 		Id(docId).
 		Doc(data).
 		Upsert(data)
@@ -431,7 +449,7 @@ func (output *EsModelOutput) updateOneOne(msg *core.Msg, route *routers.EsModelR
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
-		RetryOnConflict(route.RetryCount).
+		RetryOnConflict(output.config.ServerConfig.RetryCount).
 		Id(docId).
 		Doc(data).
 		Upsert(data)
@@ -460,7 +478,7 @@ func (output *EsModelOutput) updateOneMany(msg *core.Msg, route *routers.EsModel
 
 	req := elastic.NewBulkUpdateRequest().
 		Index(route.IndexName).
-		RetryOnConflict(route.RetryCount).
+		RetryOnConflict(output.config.ServerConfig.RetryCount).
 		Id(genDocIDBySon(msg, routeMany.FkColumn)).
 		Upsert(data).
 		Script(elastic.NewScriptStored(esModelUpdateListScriptName).Params(params))
@@ -687,6 +705,7 @@ func (output *EsModelOutput) checkEsScript() error {
 		if err != nil {
 			return errors.Errorf(" json convert fail. script check fail %s . %v.", k, err)
 		}
+		printJsonEncodef("es script key: %s, script: %s", k, script.Source)
 		if script.Source != v {
 			return errors.Errorf(" script diff fail. script check fail %s . es: %s. sys: %s ", k, script.Source, v)
 		}

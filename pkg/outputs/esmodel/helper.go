@@ -20,7 +20,7 @@ func genDocID(msg *core.Msg, fk string) string {
 }
 
 func genDocIDBySon(msg *core.Msg, fk string) string {
-	return fmt.Sprint(msg.DmlMsg.Old[fk])
+	return fmt.Sprint(msg.DmlMsg.Data[fk])
 }
 
 func genPrimary(msg *core.Msg) (string, interface{}) {
