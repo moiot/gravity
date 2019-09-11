@@ -3,7 +3,6 @@ package esmodel
 import (
 	"fmt"
 	"github.com/moiot/gravity/pkg/core"
-	"github.com/moiot/gravity/pkg/utils"
 	"github.com/olivere/elastic/v7"
 	log "github.com/sirupsen/logrus"
 )
@@ -20,7 +19,7 @@ func genDocID(msg *core.Msg, fk string) string {
 }
 
 func genDocIDBySon(msg *core.Msg, fk string) string {
-	return fmt.Sprint(msg.DmlMsg.Old[fk])
+	return fmt.Sprint(msg.DmlMsg.Data[fk])
 }
 
 func genPrimary(msg *core.Msg) (string, interface{}) {
@@ -68,8 +67,8 @@ func printJsonEncodef(format string, data ...interface{}) {
 		}
 	}
 
-	if utils.Version == "None" {
-		fmt.Printf(format+"\n", jsons...)
-	}
+	//if utils.Version == "None" {
+	fmt.Printf(format+"\n", jsons...)
+	//}
 	log.Infof(format, jsons...)
 }

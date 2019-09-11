@@ -200,9 +200,9 @@ func TestExecute(t *testing.T) {
 	*msgs = append(*(msgs), buildMsg(db, studentParentTable, core.Insert, buildPkMap(parentId4), buildStudentParentDataMap(parentId4, "parent4", studentId3), nil))
 
 	*msgs = append(*(msgs), buildMsg(db, studentTable, core.Delete, buildPkMap(studentId2), nil, nil))
-	*msgs = append(*(msgs), buildMsg(db, studentClassTable, core.Delete, buildPkMap(classId2), nil, nil))
-	*msgs = append(*(msgs), buildMsg(db, studentDetailTable, core.Delete, buildPkMap(detailId1), nil, nil))
-	*msgs = append(*(msgs), buildMsg(db, studentParentTable, core.Delete, buildPkMap(parentId2), nil, nil))
+	*msgs = append(*(msgs), buildMsg(db, studentClassTable, core.Delete, buildPkMap(classId2), buildStudentClassDataMap(classId2, "class2", studentId2), nil))
+	*msgs = append(*(msgs), buildMsg(db, studentDetailTable, core.Delete, buildPkMap(detailId1), buildStudentDetailDataMap(detailId1, "introduce1", studentId1), nil))
+	*msgs = append(*(msgs), buildMsg(db, studentParentTable, core.Delete, buildPkMap(parentId2), buildStudentParentDataMap(parentId2, "parent2", studentId1), nil))
 
 	*msgs = append(*(msgs), buildMsg(db, studentTable, core.Update, buildPkMap(studentId1), buildStudentDataMap(studentId1, "update_name_1", time.Now()), buildStudentDataMap(studentId1, "name_1", time.Now())))
 	*msgs = append(*(msgs), buildMsg(db, studentClassTable, core.Update, buildPkMap(classId1), buildStudentClassDataMap(classId1, "update_class1", studentId1), buildStudentDetailDataMap(detailId1, "introduce1", studentId1)))

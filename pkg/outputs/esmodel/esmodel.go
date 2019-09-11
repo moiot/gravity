@@ -56,11 +56,13 @@ const (
 	esModelDeleteListScriptName = "GravityEsModelListDeleteScript"
 	/**
 	if(ctx._source.containsKey(params.field)){
-	  ctx._source.get(params.field).removeIf(item -> item.get(params.key) == params.value)
+	  Map it= ctx._source.get(params.field).find(item -> item.get(params.key) == params.value);
+	  if(it != null){
+	    ctx._source.get(params.field).removeIf(item -> item.get(params.key) == params.value);
+	  }
 	}
 	*/
-	esModelDeleteListScript = "if(ctx._source.containsKey(params.field))" +
-		"{ctx._source.get(params.field).removeIf(item -> item.get(params.key) == params.value)}"
+	esModelDeleteListScript = "if(ctx._source.containsKey(params.field)){Map it= ctx._source.get(params.field).find(item -> item.get(params.key) == params.value);if(it != null){ctx._source.get(params.field).removeIf(item -> item.get(params.key) == params.value);}}"
 )
 
 var (
@@ -675,8 +677,8 @@ check es 脚本
 func (output *EsModelOutput) checkEsScript() error {
 	for k, v := range esModelScripts {
 		//删除脚本
-		//resp, err := output.client.DeleteScript().Id(k).Do(context.Background())
-		//fmt.Println(resp)
+		resp, err := output.client.DeleteScript().Id(k).Do(context.Background())
+		fmt.Println(resp)
 
 		getResp, err := output.client.GetScript().Id(k).Do(context.Background())
 		if err != nil || !getResp.Found {
@@ -706,6 +708,7 @@ func (output *EsModelOutput) checkEsScript() error {
 		if err != nil {
 			return errors.Errorf(" json convert fail. script check fail %s . %v.", k, err)
 		}
+		printJsonEncodef("es script key: %s, script: %s", k, script.Source)
 		if script.Source != v {
 			return errors.Errorf(" script diff fail. script check fail %s . es: %s. sys: %s ", k, script.Source, v)
 		}
