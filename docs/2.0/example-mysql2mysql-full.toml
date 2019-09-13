@@ -13,7 +13,7 @@ version = "1.0"
 
 [input]
 type = "mysql"
-mode = "stream"
+mode = "replication"
 
 [input.config]
 ignore-bidirectional-data = true
