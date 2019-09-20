@@ -264,6 +264,11 @@ func (tailer *BinlogTailer) Start() error {
 
 				schemaName, tableName := string(ev.Table.Schema), string(ev.Table.Table)
 
+				if schemaName == "mysql" {
+					log.Debugf("ignore change from mysql, table=%s", tableName)
+					continue
+				}
+
 				// dead signal is received from special internal table.
 				// it is only used for test purpose right now.
 				isDeadSignal := mysql_test.IsDeadSignal(schemaName, tableName)
