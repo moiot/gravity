@@ -30,8 +30,8 @@ Gravity account privileges are as follows:
 
 ```sql
 CREATE USER _gravity IDENTIFIED BY 'xxx';
-GRANT SELECT, RELOAD, LOCK TABLES, REPLICATION SLAVE, REPLICATION CLIENT, INSERT, UPDATE, DELETE ON *.* TO 'drc'@'%';
-GRANT ALL PRIVILEGES ON _gravity.* TO 'drc'@'%';
+GRANT SELECT, RELOAD, LOCK TABLES, REPLICATION SLAVE, REPLICATION CLIENT, CREATE, INSERT, UPDATE, DELETE ON *.* TO '_gravity'@'%';
+GRANT ALL PRIVILEGES ON _gravity.* TO '_gravity'@'%';
 ```
 
 ### `mysql` stream configuration file
