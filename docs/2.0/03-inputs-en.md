@@ -51,9 +51,11 @@ ignore-bidirectional-data = false
 #
 [input.config.source]
 host = "127.0.0.1"
-username = "drc"
+username = "_gravity"
 password = ""
 port = 3306
+max-open = 20 # optional, max connections
+max-idle = 20 # optional, suggest to be the same as max-open
 # The time zone of the source MySQL cluster: https://github.com/go-sql-driver/mysql#loc
 location = "Local"
 
@@ -75,7 +77,7 @@ binlog-gtid = "abcd:1-123,egbws:1-234"
 annotation = "/*some_annotataion*/"
 [input.config.source-probe-config.mysql]
 host = "127.0.0.1"
-username = "drc"
+username = "_gravity"
 password = ""
 port = 3306
 ```
@@ -101,9 +103,11 @@ mode = "batch"
 #
 [input.config.source-master]
 host = "127.0.0.1"
-username = "drc"
+username = "_gravity"
 password = ""
 port = 3306
+max-open = 10 # optional, max connections
+max-idle = 10 # optional, suggest to be the same as max-open
 # The time zone of the source MySQL cluster: https://github.com/go-sql-driver/mysql#loc
 location = "Local"
 
@@ -114,9 +118,11 @@ location = "Local"
 #
 [input.config.source-slave]
 host = "127.0.0.1"
-username = "drc"
+username = "_gravity"
 password = ""
 port = 3306
+max-open = 100 # optional, max connections
+max-idle = 100 # optional, suggest to be the same as max-open
 # The time zone of the source MySQL cluster: https://github.com/go-sql-driver/mysql#loc
 location = "Local"
 

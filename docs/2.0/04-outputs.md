@@ -123,6 +123,8 @@ host = "127.0.0.1"
 username = ""
 password = ""
 port = 3306
+max-open = 20 # 可选，最大连接数
+max-idle = 20 # 可选，最大空闲连接数，建议与 max-open 相同
 
 #
 # 目标端 MySQL 路由配置；match-schema, match-table 支持 * 匹配
@@ -152,7 +154,7 @@ use-bidirection = false
 use-bidirection = true
 ```
 
-DRC 在写入目标端 MySQL 的时会打上双向同步的内部标识（通过封装 drc 内部表事务的方式），在源端配置好 `ignore-bidirectional-data` 就可以忽略 DRC 内部的写流量。
+Gravity 在写入目标端 MySQL 的时会打上双向同步的内部标识（通过封装内部表事务的方式），在源端配置好 `ignore-bidirectional-data` 就可以忽略 Gravity 内部的写流量。
 
 ### Elasticsearch
 

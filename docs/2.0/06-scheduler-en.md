@@ -5,7 +5,7 @@ summary: Learn how to configure Scheduler.
 
 # Scheduler Configuration
 
-Currently, DRC supports only one Scheduler plugin:
+Currently, Gravity supports only one Scheduler plugin:
 
 - `batch-table-scheduler`: Guarantees that update operations on the data in the same row defined by the primary key are performed in order.
 
