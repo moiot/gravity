@@ -68,7 +68,7 @@ max-idle = 20 # optional, suggest to be the same as max-open
 
 [output.config.execution-engine]
 use-bidirection = true
-# with following two config enabled, gravity will add /*abc*/ to every statement executed, which useful to hint db proxies
+# with following two config enabled, gravity will add /*abc*/ to every statement executed, which is useful to hint db proxies
 tag-internal-txn = true
 sql-annotation = "abc"
 
