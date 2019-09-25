@@ -68,4 +68,4 @@ type Msg struct {
 
 Gravity Cluster supports cluster deployment on Kubernetes natively. Please see [here](https://github.com/moiot/gravity-operator).
 
-It provides Rest API to create the data synchronization task to report the task status. It manages each DRC task in the Web interface (Gravity Admin).
+It provides Rest API to create the data synchronization task to report the task status. It manages each Gravity task in the Web interface (Gravity Admin).

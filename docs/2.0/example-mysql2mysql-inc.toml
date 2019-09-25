@@ -63,10 +63,14 @@ host = "127.0.0.1"
 username = "root"
 password = ""
 port = 3306
+max-open = 20 # optional, max connections
+max-idle = 20 # optional, suggest to be the same as max-open
 
 [output.config.execution-engine]
 use-bidirection = true
-use-shading-proxy = false
+# with following two config enabled, gravity will add /*abc*/ to every statement executed, which is useful to hint db proxies
+tag-internal-txn = true
+sql-annotation = "abc"
 
 [[output.config.routes]]
 match-schema = "test_db"

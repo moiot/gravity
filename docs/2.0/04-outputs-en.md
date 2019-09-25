@@ -5,7 +5,7 @@ summary: Learn how to configure Output.
 
 # Output Configuration
 
-Currently, DRC supports the following Output plugins:
+Currently, Gravity supports the following Output plugins:
 
 - `async-kafka`: Sends the Input message to Kafka asynchronously.
 - `mysql`: Writes data in MySQL.
@@ -127,6 +127,8 @@ host = "127.0.0.1"
 username = ""
 password = ""
 port = 3306
+max-open = 20 # optional, max connections
+max-idle = 20 # optional, suggest to be the same as max-open
 
 #
 # The routing configuration of the target MySQL cluster. "*" is supported for `match-schema` and `match-table`.
@@ -147,7 +149,7 @@ target-table = "test_target_table"
 use-bidirection = false
 ```
 
-In the above configuration, if `use-bidirection` is set to "true" as follows, DRC gets the internal identifer of bidirectional synchronization when writing data in the MySQL cluster (by enwrapping the DRC internal table transaction). If `ignore-bidirectional-data` is configured in the source cluster, the write traffic in DRC can be ignored.
+In the above configuration, if `use-bidirection` is set to "true" as follows, Gravity gets the internal identifier of bidirectional synchronization when writing data in the MySQL cluster (by wrapping in the Gravity internal table transaction). If `ignore-bidirectional-data` is configured in the source cluster, the write traffic from Gravity can be ignored.
 
 ```toml
 [output.config.execution-engine]

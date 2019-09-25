@@ -55,5 +55,5 @@ type Msg struct {
 
 集群版本的 Gravity 原生支持 Kubernetes 上的集群部署，请查看[这里](https://github.com/moiot/gravity-operator)。
 
-集群版本 DRC 提供 Rest API 创建创建数据同步任务，汇报状态。自带 Web 界面 (DRC Admin) 管理各个 DRC 任务。
+集群版本 Gravity 提供 Rest API 创建创建数据同步任务，汇报状态。自带 Web 界面 (Gravity Admin) 管理各个任务。
 

@@ -1,12 +1,12 @@
 # Configuration
 
-This document introduces how to configure DRC Single Process and DRC Cluster respectively.
+This document introduces how to configure Gravity Single Process and Gravity Cluster respectively.
 
 ## Gravity Single Process
 
 To configure Gravity Single Process, use the configuration file.
 
-Gravity works in the plugin-based mode and each plugin has its own configuration. Currently, DRC supports the configuration file in the `toml` and `json` formats.
+Gravity works in the plugin-based mode and each plugin has its own configuration. Currently, Gravity supports the configuration file in the `toml` and `json` formats.
 
 This section uses the configuration file in the `toml` format to describe configuration rules.
 

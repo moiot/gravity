@@ -51,6 +51,8 @@ host = "127.0.0.1"
 username = "_gravity"
 password = ""
 port = 3306
+max-open = 20 # 可选，最大连接数
+max-idle = 20 # 可选，最大空闲连接数，建议与 max-open 相同
 
 #
 # 开始增量同步的起始位置。

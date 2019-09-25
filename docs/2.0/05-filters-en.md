@@ -7,7 +7,7 @@ summary: Learn how to configure Filters.
 
 Filter defines the column mutation operations on the Input message. It is configured in the array and the system executes each Filter in order.
 
-Currently, DRC supports the following Filter plugins:
+Currently, Gravity supports the following Filter plugins:
 
 - `reject`: A blacklist filter that rejects specific messages.
 - `accept`: A whitelist filter that only accept specific messages.
