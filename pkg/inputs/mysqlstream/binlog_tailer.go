@@ -317,8 +317,7 @@ func (tailer *BinlogTailer) Start() error {
 				// TODO: introduce schema store, so that we won't have stale schema
 				schema, err := tailer.sourceSchemaStore.GetSchema(schemaName)
 				if err != nil {
-					log.Errorf("[binlogTailer] failed GetSchema %v. err: %v.", schemaName, errors.ErrorStack(err))
-					continue
+					log.Fatalf("[binlogTailer] failed GetSchema %v. err: %v.", schemaName, errors.ErrorStack(err))
 				}
 
 				tableDef := schema[tableName]
