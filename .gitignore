@@ -8,7 +8,8 @@ cmd/scratch
 profile
 *.idea
 *.meta
-
+cmd/gravity_test/
+vendor
 
 *_dev.toml
 *_dev.json
