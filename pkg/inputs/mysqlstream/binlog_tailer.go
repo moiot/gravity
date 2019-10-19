@@ -328,7 +328,7 @@ func (tailer *BinlogTailer) Start() error {
 						log.Fatalf("[binlogTailer] failed to get internal traffic table: schemaName: %v, tableName: %v",
 							schemaName, tableName)
 					} else {
-						log.Errorf("[binlogTailer] failed to get table def, schemaName: %v, tableName: %v", schemaName, tableName)
+						log.Warnf("[binlogTailer] failed to get table def, skip this mutation. schemaName: %v, tableName: %v", schemaName, tableName)
 						continue
 					}
 				}
