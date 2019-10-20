@@ -317,8 +317,7 @@ func (tailer *BinlogTailer) Start() error {
 				// TODO: introduce schema store, so that we won't have stale schema
 				schema, err := tailer.sourceSchemaStore.GetSchema(schemaName)
 				if err != nil {
-					log.Errorf("[binlogTailer] failed GetSchema %v. err: %v.", schemaName, errors.ErrorStack(err))
-					continue
+					log.Fatalf("[binlogTailer] failed GetSchema %v. err: %v.", schemaName, errors.ErrorStack(err))
 				}
 
 				tableDef := schema[tableName]
@@ -329,7 +328,7 @@ func (tailer *BinlogTailer) Start() error {
 						log.Fatalf("[binlogTailer] failed to get internal traffic table: schemaName: %v, tableName: %v",
 							schemaName, tableName)
 					} else {
-						log.Errorf("[binlogTailer] failed to get table def, schemaName: %v, tableName: %v", schemaName, tableName)
+						log.Warnf("[binlogTailer] failed to get table def, skip this mutation. schemaName: %v, tableName: %v", schemaName, tableName)
 						continue
 					}
 				}

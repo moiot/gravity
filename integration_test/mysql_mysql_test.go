@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moiot/gravity/pkg/inputs"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/moiot/gravity/pkg/app"
@@ -123,6 +125,76 @@ func TestMySQLToMySQLStream(t *testing.T) {
 	server.Close()
 
 	r.NoError(generator.TestChecksum())
+}
+
+func TestTableNotExists(t *testing.T) {
+	r := require.New(t)
+
+	sourceDBName := strings.ToLower(t.Name()) + "_source"
+	targetDBName := strings.ToLower(t.Name()) + "_target"
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	dbUtil := utils.NewMySQLDB(sourceDB)
+	binlogFilePos, gtid, err := dbUtil.GetMasterStatus()
+	r.NoError(err)
+
+	pipelineConfig := config.PipelineConfigV3{
+		PipelineName: t.Name(),
+		Version:      config.PipelineConfigV3Version,
+		InputPlugin: config.InputConfig{
+			Type: inputs.Mysql,
+			Mode: config.Stream,
+			Config: utils.MustAny2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+				Source: sourceDBConfig,
+				StartPosition: &config.MySQLBinlogPosition{
+					BinLogFileName: binlogFilePos.Name,
+					BinLogFilePos:  binlogFilePos.Pos,
+					BinlogGTID:     gtid.String(),
+				},
+			}),
+		},
+		OutputPlugin: config.GenericPluginConfig{
+			Type: "mysql",
+			Config: utils.MustAny2Map(mysql.MySQLPluginConfig{
+				DBConfig:  targetDBConfig,
+				EnableDDL: true,
+				Routes: []map[string]interface{}{
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "*",
+						"target-schema": targetDBName,
+					},
+				},
+			}),
+		},
+	}
+
+	fullTblName := fmt.Sprintf("`%s`.`t`", sourceDBName)
+	_, err = sourceDB.Exec(fmt.Sprintf("CREATE TABLE %s (`id` int(11) unsigned NOT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", fullTblName))
+	r.NoError(err)
+	_, err = sourceDB.Exec(fmt.Sprintf("insert into %s(id) values (1);", fullTblName))
+	r.NoError(err)
+	_, err = sourceDB.Exec(fmt.Sprintf("drop table %s;", fullTblName))
+	r.NoError(err)
+
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
+	r.NoError(err)
+
+	// start the server
+	server, err := app.NewServer(pipelineConfig)
+	r.NoError(err)
+
+	r.NoError(server.Start())
+
+	server.Input.Wait()
+	server.Close()
 }
 
 func TestMySQLBatch(t *testing.T) {
