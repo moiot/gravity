@@ -314,6 +314,16 @@ func (tailer *BinlogTailer) Start() error {
 					}
 				}
 
+				// do not send messages without router to the system
+				if !consts.IsInternalDBTraffic(schemaName) &&
+					tailer.router != nil &&
+					!tailer.router.Exists(&core.Msg{
+						Database: schemaName,
+						Table:    tableName,
+					}) {
+					continue
+				}
+
 				// TODO: introduce schema store, so that we won't have stale schema
 				schema, err := tailer.sourceSchemaStore.GetSchema(schemaName)
 				if err != nil {
@@ -595,13 +605,6 @@ func (tailer *BinlogTailer) AppendMsgTxnBuffer(msg *core.Msg) {
 		c = metrics.InputCounter.WithLabelValues(env.PipelineName, msg.Database, msg.Table, string(msg.Type), "")
 	}
 	c.Add(1)
-	// do not send messages without router to the system
-	if !consts.IsInternalDBTraffic(msg.Database) &&
-		msg.Type != core.MsgCtl &&
-		tailer.router != nil &&
-		!tailer.router.Exists(msg) {
-		return
-	}
 	tailer.msgTxnBuffer = append(tailer.msgTxnBuffer, msg)
 	metrics.QueueLength.WithLabelValues(tailer.pipelineName, "input-buffer", "").Set(float64(len(tailer.msgTxnBuffer)))
 
