@@ -479,7 +479,7 @@ func (tailer *BinlogTailer) Start() error {
 					log.Fatalf("[binlogTailer] failed to flush position cache, err: %v", errors.ErrorStack(err))
 				}
 
-				log.Infof("[binlogTailer] ddl done with gtid: %v", ev.GSet.String())
+				log.Infof("[binlogTailer] ddl done with gtid: %v, stmt: %s", ev.GSet.String(), string(ev.Query))
 			case *replication.GTIDEvent:
 				// GTID stands for Global Transaction IDentifier
 				// It is composed of two parts:

@@ -98,18 +98,18 @@ func (output *MySQLOutput) Configure(pipelineName string, data map[string]interf
 
 func (output *MySQLOutput) Start() error {
 
-	targetSchemaStore, err := schema_store.NewSimpleSchemaStore(output.cfg.DBConfig)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	output.targetSchemaStore = targetSchemaStore
-
 	db, err := utils.CreateDBConnection(output.cfg.DBConfig)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	output.db = db
+
+	targetSchemaStore, err := schema_store.NewSimpleSchemaStoreFromDBConn(output.db)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	output.targetSchemaStore = targetSchemaStore
 
 	engineInitializer, ok := output.sqlExecutionEnginePlugin.(sql_execution_engine.EngineInitializer)
 	if !ok {
@@ -139,6 +139,35 @@ func (output *MySQLOutput) GetRouter() core.Router {
 	return routers.MySQLRouter(output.routes)
 }
 
+func (output *MySQLOutput) route0(s, t string) (schema, table string) {
+	fakeMsg := core.Msg{
+		Database: s,
+		Table:    t,
+	}
+
+	for _, route := range output.routes {
+		if route.Match(&fakeMsg) {
+			schema, table = route.GetTarget(fakeMsg.Database, fakeMsg.Table)
+			break
+		}
+	}
+
+	return
+}
+
+func toTableName(s, t string) *ast.TableName {
+	return &ast.TableName{
+		Schema: model.CIStr{
+			O: s,
+			L: strings.ToLower(s),
+		},
+		Name: model.CIStr{
+			O: t,
+			L: strings.ToLower(t),
+		},
+	}
+}
+
 // msgs in the same batch should have the same table name
 func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 	var targetTableDef *schema_store.Table
@@ -150,16 +179,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 			continue
 		}
 
-		matched := false
-		var targetSchema string
-		var targetTable string
-		for _, route := range output.routes {
-			if route.Match(msg) {
-				matched = true
-				targetSchema, targetTable = route.GetTarget(msg.Database, msg.Table)
-				break
-			}
-		}
+		targetSchema, targetTable := output.route0(msg.Database, msg.Table)
 
 		switch msg.Type {
 		case core.MsgDDL:
@@ -167,12 +187,14 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				log.Info("[output-mysql] ignore unsupported ddl: ", msg.DdlMsg.Statement)
 				return nil
 			}
+
+			if targetSchema == "" {
+				log.Infof("[output-mysql] ignore no router ddl. schema: %s, table: %s, msg: %s", msg.Database, msg.Table, msg)
+				continue
+			}
+
 			switch node := msg.DdlMsg.AST.(type) {
 			case *ast.CreateDatabaseStmt:
-				if !matched {
-					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
-					return nil
-				}
 				tmp := *node
 				tmp.Name = targetSchema
 				tmp.IfNotExists = true
@@ -185,10 +207,6 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "create-db").Add(1)
 
 			case *ast.DropDatabaseStmt:
-				if !matched {
-					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
-					return nil
-				}
 				tmp := *node
 				tmp.Name = targetSchema
 				tmp.IfExists = true
@@ -201,38 +219,14 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "drop-db").Add(1)
 
 			case *ast.CreateTableStmt:
-				if !matched {
-					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
-					return nil
-				}
-
 				tmp := *node
-				tmp.Table.Name = model.CIStr{
-					O: targetTable,
-				}
-				tmp.Table.Schema = model.CIStr{
-					O: targetSchema,
-				}
+				tmp.Table = toTableName(targetSchema, targetTable)
 
 				//handle create table like if the referenced table has been renamed
 				if tmp.ReferTable != nil {
-					var refSchema string
-					var refTable string
-					found := false
-					fakeMsg := core.Msg{
-						Database: tmp.ReferTable.Schema.O,
-						Table:    tmp.ReferTable.Name.O,
-					}
-					for _, route := range output.routes {
-						if route.Match(&fakeMsg) {
-							found = true
-							refSchema, refTable = route.GetTarget(fakeMsg.Database, fakeMsg.Table)
-							break
-						}
-					}
-					if found {
-						tmp.ReferTable.Schema = model.CIStr{O: refSchema}
-						tmp.ReferTable.Name = model.CIStr{O: refTable}
+					refSchema, refTable := output.route0(tmp.ReferTable.Schema.O, tmp.ReferTable.Name.O)
+					if refSchema != "" {
+						tmp.ReferTable = toTableName(refSchema, refTable)
 					}
 				}
 
@@ -247,18 +241,8 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
 
 			case *ast.DropTableStmt:
-				if !matched {
-					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
-					return nil
-				}
-
 				tmp := *node
-				tmp.Tables[0].Name = model.CIStr{
-					O: targetTable,
-				}
-				tmp.Tables[0].Schema = model.CIStr{
-					O: targetSchema,
-				}
+				tmp.Tables[0] = toTableName(targetSchema, targetTable)
 				tmp.IfExists = true
 				stmt := restore(&tmp)
 				err := output.executeDDL(targetSchema, stmt)
@@ -270,34 +254,18 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
 
 			case *ast.AlterTableStmt:
-				if !matched {
-					log.Info("[output-mysql] ignore no router table ddl:", msg.DdlMsg.Statement)
-					return nil
-				}
 				var targetDDLs []string
 				if output.isTiDB {
 					for _, spec := range node.Specs {
 						tmp := &ast.AlterTableStmt{
-							Table: &ast.TableName{
-								Name: model.CIStr{
-									O: targetTable,
-								},
-								Schema: model.CIStr{
-									O: targetSchema,
-								},
-							},
+							Table: toTableName(targetSchema, targetTable),
 							Specs: []*ast.AlterTableSpec{spec},
 						}
 						targetDDLs = append(targetDDLs, restore(tmp))
 					}
 				} else {
 					tmp := *node
-					tmp.Table.Name = model.CIStr{
-						O: targetTable,
-					}
-					tmp.Table.Schema = model.CIStr{
-						O: targetSchema,
-					}
+					tmp.Table = toTableName(targetSchema, targetTable)
 					targetDDLs = append(targetDDLs, restore(&tmp))
 				}
 				for _, stmt := range targetDDLs {
@@ -315,6 +283,43 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					}
 				}
 
+			case *ast.RenameTableStmt:
+				var targetDDLs []string
+				tmp := *node
+				for i, tt := range node.TableToTables {
+					os, ot := output.route0(tt.OldTable.Schema.O, tt.OldTable.Name.O)
+					ns, nt := output.route0(tt.NewTable.Schema.O, tt.NewTable.Name.O)
+
+					if output.isTiDB {
+						a := &ast.RenameTableStmt{
+							OldTable:      toTableName(os, ot),
+							NewTable:      toTableName(ns, nt),
+							TableToTables: make([]*ast.TableToTable, 1),
+						}
+						a.TableToTables[0].OldTable = a.OldTable
+						a.TableToTables[0].NewTable = a.NewTable
+						targetDDLs = append(targetDDLs, restore(a))
+					} else {
+						tmp.TableToTables[i].OldTable = toTableName(os, ot)
+						tmp.TableToTables[i].NewTable = toTableName(ns, nt)
+					}
+				}
+
+				if !output.isTiDB {
+					targetDDLs = append(targetDDLs, restore(&tmp))
+				}
+
+				for _, stmt := range targetDDLs {
+					err := output.executeDDL(targetSchema, stmt)
+					if err != nil {
+						log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
+					} else {
+						log.Info("[output-mysql] executed ddl: ", stmt)
+						metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "rename-table").Add(1)
+						output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
+					}
+				}
+
 			default:
 				log.Info("[output-mysql] ignore unsupported ddl: ", msg.DdlMsg.Statement)
 			}
@@ -322,8 +327,8 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 			return nil
 
 		case core.MsgDML:
-			// none of the routes matched, skip this msg
-			if !matched {
+			if targetSchema == "" {
+				log.Debugf("[output-mysql] ignore no router DML. schema: %s, table: %s, msg: %s", msg.Database, msg.Table, msg)
 				continue
 			}
 

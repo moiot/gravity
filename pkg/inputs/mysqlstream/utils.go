@@ -55,6 +55,10 @@ func extractSchemaNameFromDDLQueryEvent(p *parser.Parser, ev *replication.QueryE
 		db = append(db, v.Table.Schema.String())
 		table = append(table, v.Table.Name.String())
 		node = append(node, stmt)
+	case *ast.RenameTableStmt:
+		db = append(db, v.OldTable.Schema.String())
+		table = append(table, v.OldTable.Name.String())
+		node = append(node, stmt)
 	default:
 		db = append(db, "")
 		table = append(table, "")

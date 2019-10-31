@@ -197,6 +197,92 @@ func TestTableNotExists(t *testing.T) {
 	server.Close()
 }
 
+func TestRename(t *testing.T) {
+	r := require.New(t)
+	var err error
+
+	sourceDBName := strings.ToLower(t.Name()) + "_source"
+	targetDBName := strings.ToLower(t.Name()) + "_target"
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	pipelineConfig := config.PipelineConfigV3{
+		PipelineName: t.Name(),
+		Version:      config.PipelineConfigV3Version,
+		InputPlugin: config.InputConfig{
+			Type: inputs.Mysql,
+			Mode: config.Stream,
+			Config: utils.MustAny2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+				Source: sourceDBConfig,
+			}),
+		},
+		OutputPlugin: config.GenericPluginConfig{
+			Type: "mysql",
+			Config: utils.MustAny2Map(mysql.MySQLPluginConfig{
+				DBConfig:  targetDBConfig,
+				EnableDDL: true,
+				Routes: []map[string]interface{}{
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "a",
+						"target-schema": targetDBName,
+						"target-table":  "aa",
+					},
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "b",
+						"target-schema": targetDBName,
+						"target-table":  "bb",
+					},
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "*",
+						"target-schema": targetDBName,
+					},
+				},
+			}),
+		},
+	}
+
+	// start the server
+	server, err := app.NewServer(pipelineConfig)
+	r.NoError(err)
+
+	r.NoError(server.Start())
+
+	names := []string{"a", "a_gho", "b", "b_gho"}
+
+	for _, n := range names {
+		_, err = sourceDB.Exec(fmt.Sprintf("CREATE TABLE `%s`.`%s` (`id` int(11) unsigned NOT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", sourceDBName, n))
+		r.NoError(err)
+	}
+	_, err = sourceDB.Exec(fmt.Sprintf("rename table `%s`.`a` to `%s`.`a_old`, `%s`.`a_gho` to `%s`.`a`", sourceDBName, sourceDBName, sourceDBName, sourceDBName))
+	r.NoError(err)
+	_, err = sourceDB.Exec(fmt.Sprintf("rename table `%s`.`b` to `%s`.`b_old`", sourceDBName, sourceDBName))
+	r.NoError(err)
+	_, err = sourceDB.Exec(fmt.Sprintf("rename table `%s`.`b_gho` to `%s`.`b`", sourceDBName, sourceDBName))
+	r.NoError(err)
+
+	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
+	r.NoError(err)
+
+	server.Input.Wait()
+	server.Close()
+
+	expectedNames := []string{"a_old", "aa", "b_old", "bb"}
+
+	for _, n := range expectedNames {
+		_, err = targetDB.Exec(fmt.Sprintf("select * from `%s`.`%s`", targetDBName, n))
+		r.NoError(err)
+	}
+}
+
 func TestMySQLBatch(t *testing.T) {
 	r := require.New(t)
 

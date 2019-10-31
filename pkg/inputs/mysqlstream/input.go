@@ -136,7 +136,10 @@ func (plugin *mysqlStreamInputPlugin) NewPositionCache() (position_cache.Positio
 		return nil, errors.Trace(err)
 	}
 
-	sourceDB, err := utils.CreateDBConnection(plugin.cfg.Source)
+	dbc := *plugin.cfg.Source
+	dbc.MaxIdle = 1
+	dbc.MaxOpen = 1
+	sourceDB, err := utils.CreateDBConnection(&dbc)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

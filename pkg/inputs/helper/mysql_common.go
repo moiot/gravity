@@ -43,22 +43,24 @@ func DeserializeBinlogPositionValue(value string) (BinlogPositionsValue, error) 
 }
 
 func GetProbCfg(sourceProbeCfg *SourceProbeCfg, sourceDBCfg *config.DBConfig) (*config.DBConfig, string) {
-	var probeDBCfg *config.DBConfig
+	var probeDBCfg config.DBConfig
 	var probeAnnotation string
 
 	if sourceProbeCfg != nil {
 		if sourceProbeCfg.SourceMySQL != nil {
-			probeDBCfg = sourceProbeCfg.SourceMySQL
+			probeDBCfg = *sourceProbeCfg.SourceMySQL
 		} else {
-			probeDBCfg = sourceDBCfg
+			probeDBCfg = *sourceDBCfg
 		}
 		probeAnnotation = sourceProbeCfg.Annotation
 	} else {
-		probeDBCfg = sourceDBCfg
+		probeDBCfg = *sourceDBCfg
+		probeDBCfg.MaxIdle = 1
+		probeDBCfg.MaxOpen = 5
 	}
 
 	if probeAnnotation != "" {
 		probeAnnotation = fmt.Sprintf("/*%s*/", probeAnnotation)
 	}
-	return probeDBCfg, probeAnnotation
+	return &probeDBCfg, probeAnnotation
 }

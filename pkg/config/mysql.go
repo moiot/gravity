@@ -55,11 +55,10 @@ func (dbc *DBConfig) ValidateAndSetDefault() error {
 		dbc.Location = time.Local.String()
 	}
 
-	// set default values of connection related settings
-	// assume the response time of db is 2ms, then
-	// then a single connection can have tps of 500 TPS
 	if dbc.MaxOpen == 0 {
-		dbc.MaxOpen = 200
+		// for mysql, 20 is the default pool size in many conn pool implementations
+		// such as https://github.com/alibaba/druid/wiki/DruidDataSource%E9%85%8D%E7%BD%AE#1-%E9%80%9A%E7%94%A8%E9%85%8D%E7%BD%AE
+		dbc.MaxOpen = 20
 	}
 
 	if dbc.MaxIdle == 0 {
@@ -68,8 +67,8 @@ func (dbc *DBConfig) ValidateAndSetDefault() error {
 
 	var err error
 	if dbc.MaxLifeTimeDurationStr == "" {
-		dbc.MaxLifeTimeDurationStr = "15m"
-		dbc.MaxLifeTimeDuration = 15 * time.Minute
+		dbc.MaxLifeTimeDurationStr = "1h"
+		dbc.MaxLifeTimeDuration = time.Hour
 	} else {
 		dbc.MaxLifeTimeDuration, err = time.ParseDuration(dbc.MaxLifeTimeDurationStr)
 		if err != nil {
