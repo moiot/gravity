@@ -35,7 +35,7 @@ func GenPrimaryKeys(pkColumns []schema_store.Column, rowData map[string]interfac
 		pkName := pkColumns[i].Name
 		pks[pkName] = rowData[pkName]
 		if pks[pkName] == nil {
-			return nil, errors.Errorf("primary key nil, pkName: %v", pkName)
+			return nil, errors.Errorf("primary key nil, pkName: %v, data: %v", pkName, rowData)
 		}
 	}
 	return pks, nil
