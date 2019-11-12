@@ -488,9 +488,14 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 			}
 
 			if len(curBatch) > 0 {
-				queueIdx := round % uint(scheduler.cfg.NrWorker)
-				round++
-				scheduler.workerQueues[queueIdx] <- curBatch
+				if curBatch[0].Type == core.MsgDDL {
+					ddlIdx := utils.GenHashKey(utils.TableIdentity(curBatch[0].Database, curBatch[0].Table)) % uint32(scheduler.cfg.NrWorker)
+					scheduler.workerQueues[ddlIdx] <- curBatch
+				} else {
+					queueIdx := round % uint(scheduler.cfg.NrWorker)
+					round++
+					scheduler.workerQueues[queueIdx] <- curBatch
+				}
 			}
 
 			// delete the delivered messages

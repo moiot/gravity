@@ -268,6 +268,8 @@ func TestRename(t *testing.T) {
 	r.NoError(err)
 	_, err = sourceDB.Exec(fmt.Sprintf("rename table `%s`.`b_gho` to `%s`.`b`", sourceDBName, sourceDBName))
 	r.NoError(err)
+	_, err = sourceDB.Exec(fmt.Sprintf("rename table `test`.`t1` to `test`.`t2`"))
+	r.NoError(err)
 
 	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
@@ -1294,20 +1296,30 @@ func TestMySQLTagDDL(t *testing.T) {
 	r.NoError(server.Start())
 
 	tbl := "abc"
+	tbl2 := "abcd"
 	_, err = sourceDB.Exec(fmt.Sprintf("%screate table `%s`.`%s`(`id` int(11),  PRIMARY KEY (`id`)) ENGINE=InnoDB", consts.DDLTag, sourceDBName, tbl))
+	r.NoError(err)
+	_, err = sourceDB.Exec(fmt.Sprintf("create table `%s`.`%s`(`id` int(11),  PRIMARY KEY (`id`)) ENGINE=InnoDB", sourceDBName, tbl2))
+	r.NoError(err)
+	_, err = sourceDB.Exec(fmt.Sprintf("%sdrop table `%s`.`%s`;", consts.DDLTag, sourceDBName, tbl))
+	r.NoError(err)
+	_, err = sourceDB.Exec(fmt.Sprintf("%sdrop table `%s`.`%s`;", consts.DDLTag, sourceDBName, tbl2))
 	r.NoError(err)
 
 	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
 
 	<-server.Input.Done()
-
 	server.Close()
 
 	row := targetDB.QueryRow(fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE  TABLE_SCHEMA = '%s' and table_name = '%s'", targetDBName, tbl))
 	var tblName string
 	err = row.Scan(&tblName)
 	r.Equal(sql.ErrNoRows, err)
+
+	row = targetDB.QueryRow(fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE  TABLE_SCHEMA = '%s' and table_name = '%s'", targetDBName, tbl2))
+	err = row.Scan(&tblName)
+	r.NoError(err)
 }
 
 func TestMySQLDDL(t *testing.T) {

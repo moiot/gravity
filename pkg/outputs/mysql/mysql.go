@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -46,7 +47,13 @@ type MySQLOutput struct {
 	sqlExecutor              sql_execution_engine.EngineExecutor
 	tableConfigs             []config.TableConfig
 	isTiDB                   bool
+
+	// MySQL ignores comment in drop table stmt in some versions, see https://bugs.mysql.com/bug.php?id=87852
+	// to prevent endless bidirectional drop tables, we keep the recent dropped table names
+	droppedTable map[string]time.Time
 }
+
+const keepDropTableSeconds = 30
 
 func init() {
 	registry.RegisterPlugin(registry.OutputPlugin, Name, &MySQLOutput{}, false)
@@ -155,6 +162,30 @@ func (output *MySQLOutput) route0(s, t string) (schema, table string) {
 	return
 }
 
+func (output *MySQLOutput) markTableDropped(schema, table string) {
+	output.droppedTable[utils.TableIdentity(schema, table)] = time.Now()
+	output.cleanupDroppedTable()
+}
+
+func (output *MySQLOutput) markTableCreated(schema, table string) {
+	delete(output.droppedTable, utils.TableIdentity(schema, table))
+	output.cleanupDroppedTable()
+}
+
+func (output *MySQLOutput) hasDropped(schema, table string) bool {
+	_, ok := output.droppedTable[utils.TableIdentity(schema, table)]
+	return ok
+}
+
+func (output *MySQLOutput) cleanupDroppedTable() {
+	now := time.Now()
+	for k, v := range output.droppedTable {
+		if now.Sub(v).Seconds() > keepDropTableSeconds {
+			delete(output.droppedTable, k)
+		}
+	}
+}
+
 func toTableName(s, t string) *ast.TableName {
 	return &ast.TableName{
 		Schema: model.CIStr{
@@ -239,19 +270,25 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				log.Info("[output-mysql] executed ddl: ", stmt)
 				metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "create-table").Add(1)
 				output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
+				output.markTableCreated(msg.Database, msg.Table)
 
 			case *ast.DropTableStmt:
-				tmp := *node
-				tmp.Tables[0] = toTableName(targetSchema, targetTable)
-				tmp.IfExists = true
-				stmt := restore(&tmp)
-				err := output.executeDDL(targetSchema, stmt)
-				if err != nil {
-					log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
+				if output.hasDropped(msg.Database, msg.Table) {
+					tmp := *node
+					tmp.Tables[0] = toTableName(targetSchema, targetTable)
+					tmp.IfExists = true
+					stmt := restore(&tmp)
+					err := output.executeDDL(targetSchema, stmt)
+					if err != nil {
+						log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
+					}
+					log.Info("[output-mysql] executed ddl: ", stmt)
+					metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "drop-table").Add(1)
+					output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
+					output.markTableDropped(msg.Database, msg.Table)
+				} else {
+					log.Debugf("table %s has been dropped recently. This might be a bidirectional stmt, ignore", utils.TableIdentity(msg.Database, msg.Table))
 				}
-				log.Info("[output-mysql] executed ddl: ", stmt)
-				metrics.OutputCounter.WithLabelValues(output.pipelineName, targetSchema, targetTable, string(core.MsgDDL), "drop-table").Add(1)
-				output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
 
 			case *ast.AlterTableStmt:
 				var targetDDLs []string
