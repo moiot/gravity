@@ -19,16 +19,14 @@ package position_repos
 import (
 	"database/sql"
 	"fmt"
-
-	"github.com/mitchellh/mapstructure"
-
 	"time"
 
-	"github.com/moiot/gravity/pkg/registry"
-
 	"github.com/juju/errors"
+	"github.com/mitchellh/mapstructure"
+
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/consts"
+	"github.com/moiot/gravity/pkg/registry"
 	"github.com/moiot/gravity/pkg/utils"
 )
 

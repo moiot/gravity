@@ -83,7 +83,7 @@ func NewInsertMsgs(
 		dmlMsg.Data = data
 		pks, err := mysql.GenPrimaryKeys(pkColumns, data)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.Annotatef(err, "database: %s, table: %s", database, table)
 		}
 		dmlMsg.Pks = pks
 		msg.DmlMsg = dmlMsg
@@ -154,7 +154,7 @@ func NewUpdateMsgs(
 			dmlMsg.Operation = core.Update
 			pks, err := mysql.GenPrimaryKeys(pkColumns, data)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.Annotatef(err, "database: %s, table: %s", database, table)
 			}
 			dmlMsg.Pks = pks
 
@@ -184,7 +184,7 @@ func NewUpdateMsgs(
 
 			pks, err := mysql.GenPrimaryKeys(pkColumns, old)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.Annotatef(err, "database: %s, table: %s", database, table)
 			}
 			dmlMsg1.Pks = pks
 			dmlMsg1.Data = old
@@ -211,7 +211,7 @@ func NewUpdateMsgs(
 
 			pks, err = mysql.GenPrimaryKeys(pkColumns, data)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.Annotatef(err, "database: %s, table: %s", database, table)
 			}
 			dmlMsg2.Pks = pks
 
@@ -315,7 +315,7 @@ func NewDeleteMsgs(
 		dmlMsg.Data = data
 		pks, err := mysql.GenPrimaryKeys(pkColumns, data)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.Annotatef(err, "database: %s, table: %s", database, table)
 		}
 
 		dmlMsg.Pks = pks
