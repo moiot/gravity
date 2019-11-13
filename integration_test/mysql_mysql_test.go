@@ -268,8 +268,6 @@ func TestRename(t *testing.T) {
 	r.NoError(err)
 	_, err = sourceDB.Exec(fmt.Sprintf("rename table `%s`.`b_gho` to `%s`.`b`", sourceDBName, sourceDBName))
 	r.NoError(err)
-	_, err = sourceDB.Exec(fmt.Sprintf("rename table `test`.`t1` to `test`.`t2`"))
-	r.NoError(err)
 
 	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
