@@ -47,6 +47,9 @@ type MySQLBinlogInputPluginConfig struct {
 	// If we detect any internal txn tag that matches FailOnTxnTag, just fail.
 	FailOnTxnTags []string `mapstructure:"fail-on-txn-tags" toml:"fail-on-txn-tags"`
 
+	HeartbeatPeriodStr string        `toml:"heartbeat-period" json:"heartbeat-period" mapstructure:"heartbeat-period"`
+	HeartbeatPeriod    time.Duration `toml:"-" json:"-" mapstructure:"-"`
+
 	//
 	// internal configurations that is not exposed to users
 	//
@@ -99,6 +102,13 @@ func (plugin *mysqlStreamInputPlugin) Configure(pipelineName string, configInput
 	// By default, fail on txn tag start with the same pipelineName prefix.
 	if len(cfg.FailOnTxnTags) == 0 {
 		cfg.FailOnTxnTags = []string{fmt.Sprintf("%s*", pipelineName)}
+	}
+
+	if cfg.HeartbeatPeriodStr != "" {
+		cfg.HeartbeatPeriod, err = time.ParseDuration(cfg.HeartbeatPeriodStr)
+		if err != nil {
+			return errors.Annotatef(err, "invalid HeartbeatPeriodStr %s", cfg.HeartbeatPeriodStr)
+		}
 	}
 
 	// probe connection settings

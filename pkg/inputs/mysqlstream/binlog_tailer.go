@@ -89,7 +89,7 @@ func NewBinlogTailer(
 		parser:          parser.New(),
 		ctx:             c,
 		cancel:          cancel,
-		binlogSyncer:    utils.NewBinlogSyncer(gravityServerID, cfg.Source),
+		binlogSyncer:    utils.NewBinlogSyncer(gravityServerID, cfg.Source, cfg.HeartbeatPeriod),
 		emitter:         emitter,
 		router:          router,
 		positionCache:   positionCache,
@@ -686,7 +686,7 @@ func (tailer *BinlogTailer) getBinlogStreamer(gtid string) (*replication.BinlogS
 
 func (tailer *BinlogTailer) reopenBinlogSyncer(gtidString string) (*replication.BinlogStreamer, error) {
 	tailer.binlogSyncer.Close()
-	tailer.binlogSyncer = utils.NewBinlogSyncer(tailer.gravityServerID, tailer.cfg.Source)
+	tailer.binlogSyncer = utils.NewBinlogSyncer(tailer.gravityServerID, tailer.cfg.Source, tailer.cfg.HeartbeatPeriod)
 	return tailer.getBinlogStreamer(gtidString)
 }
 

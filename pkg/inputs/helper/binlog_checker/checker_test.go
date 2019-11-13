@@ -45,7 +45,7 @@ func TestBinlogChecker(t *testing.T) {
 		assert.FailNow(errors.ErrorStack(err))
 	}
 
-	syncer := utils.NewBinlogSyncer(1234, dbConfig)
+	syncer := utils.NewBinlogSyncer(1234, dbConfig, 0)
 
 	dbUtil := utils.NewMySQLDB(db)
 	_, gtid, err := dbUtil.GetMasterStatus()
