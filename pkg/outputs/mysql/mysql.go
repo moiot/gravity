@@ -168,6 +168,14 @@ func toTableName(s, t string) *ast.TableName {
 	}
 }
 
+func defaultIfEmpty(target, def string) string {
+	if target == "" {
+		return def
+	} else {
+		return target
+	}
+}
+
 // msgs in the same batch should have the same table name
 func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 	var targetTableDef *schema_store.Table
@@ -287,8 +295,16 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				var targetDDLs []string
 				tmp := *node
 				for i, tt := range node.TableToTables {
-					os, ot := output.route0(tt.OldTable.Schema.O, tt.OldTable.Name.O)
-					ns, nt := output.route0(tt.NewTable.Schema.O, tt.NewTable.Name.O)
+					os, ot := output.route0(defaultIfEmpty(tt.OldTable.Schema.O, msg.Database), tt.OldTable.Name.O)
+					ns, nt := output.route0(defaultIfEmpty(tt.NewTable.Schema.O, msg.Database), tt.NewTable.Name.O)
+
+					if ns == "" {
+						ns = tt.NewTable.Schema.O
+					}
+
+					if nt == "" {
+						nt = tt.NewTable.Name.O
+					}
 
 					if output.isTiDB {
 						a := &ast.RenameTableStmt{
