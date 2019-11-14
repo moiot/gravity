@@ -273,7 +273,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				output.markTableCreated(msg.Database, msg.Table)
 
 			case *ast.DropTableStmt:
-				if output.hasDropped(msg.Database, msg.Table) {
+				if !output.hasDropped(msg.Database, msg.Table) {
 					tmp := *node
 					tmp.Tables[0] = toTableName(targetSchema, targetTable)
 					tmp.IfExists = true
