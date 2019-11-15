@@ -1313,11 +1313,11 @@ func TestMySQLTagDDL(t *testing.T) {
 	row := targetDB.QueryRow(fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE  TABLE_SCHEMA = '%s' and table_name = '%s'", targetDBName, tbl))
 	var tblName string
 	err = row.Scan(&tblName)
-	r.Equal(sql.ErrNoRows, err)
+	r.Equal(sql.ErrNoRows, err) // create ignored by gravity
 
 	row = targetDB.QueryRow(fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE  TABLE_SCHEMA = '%s' and table_name = '%s'", targetDBName, tbl2))
 	err = row.Scan(&tblName)
-	r.NoError(err)
+	r.Equal(sql.ErrNoRows, err) // mysql ignores annotation in drop stmt, it will be executed
 }
 
 func TestMySQLDDL(t *testing.T) {
