@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
@@ -50,7 +51,7 @@ type MySQLOutput struct {
 
 	// MySQL ignores comment in drop table stmt in some versions, see https://bugs.mysql.com/bug.php?id=87852
 	// to prevent endless bidirectional drop tables, we keep the recent dropped table names
-	droppedTable map[string]time.Time
+	droppedTable sync.Map
 }
 
 const keepDropTableSeconds = 30
@@ -61,7 +62,6 @@ func init() {
 
 func (output *MySQLOutput) Configure(pipelineName string, data map[string]interface{}) error {
 	output.pipelineName = pipelineName
-	output.droppedTable = make(map[string]time.Time)
 
 	// setup plugin config
 	pluginConfig := MySQLPluginConfig{}
@@ -164,26 +164,32 @@ func (output *MySQLOutput) route0(s, t string) (schema, table string) {
 }
 
 func (output *MySQLOutput) markTableDropped(schema, table string) {
-	output.droppedTable[utils.TableIdentity(schema, table)] = time.Now()
+	output.droppedTable.Store(utils.TableIdentity(schema, table), time.Now())
 	output.cleanupDroppedTable()
 }
 
 func (output *MySQLOutput) markTableCreated(schema, table string) {
-	delete(output.droppedTable, utils.TableIdentity(schema, table))
+	output.droppedTable.Delete(utils.TableIdentity(schema, table))
 	output.cleanupDroppedTable()
 }
 
 func (output *MySQLOutput) hasDropped(schema, table string) bool {
-	_, ok := output.droppedTable[utils.TableIdentity(schema, table)]
+	_, ok := output.droppedTable.Load(utils.TableIdentity(schema, table))
 	return ok
 }
 
 func (output *MySQLOutput) cleanupDroppedTable() {
 	now := time.Now()
-	for k, v := range output.droppedTable {
-		if now.Sub(v).Seconds() > keepDropTableSeconds {
-			delete(output.droppedTable, k)
+	var toDelete []string
+	output.droppedTable.Range(func(key, value interface{}) bool {
+		if now.Sub(value.(time.Time)) > keepDropTableSeconds {
+			toDelete = append(toDelete, key.(string))
 		}
+		return true
+	})
+
+	for _, k := range toDelete {
+		output.droppedTable.Delete(k)
 	}
 }
 
