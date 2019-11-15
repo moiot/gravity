@@ -61,6 +61,7 @@ func init() {
 
 func (output *MySQLOutput) Configure(pipelineName string, data map[string]interface{}) error {
 	output.pipelineName = pipelineName
+	output.droppedTable = make(map[string]time.Time)
 
 	// setup plugin config
 	pluginConfig := MySQLPluginConfig{}
