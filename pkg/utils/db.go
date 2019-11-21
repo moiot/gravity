@@ -608,7 +608,7 @@ func SQLWithAnnotation(annotation string, sql string) string {
 	return fmt.Sprintf("%s%s", annotation, sql)
 }
 
-func NewBinlogSyncer(serverID uint32, dbConfig *config.DBConfig) *replication.BinlogSyncer {
+func NewBinlogSyncer(serverID uint32, dbConfig *config.DBConfig, heartbeatPeriod time.Duration) *replication.BinlogSyncer {
 	syncerConfig := replication.BinlogSyncerConfig{
 		ServerID:  serverID,
 		Flavor:    "mysql",
@@ -618,6 +618,11 @@ func NewBinlogSyncer(serverID uint32, dbConfig *config.DBConfig) *replication.Bi
 		Password:  dbConfig.Password,
 		ParseTime: true,
 	}
+
+	if heartbeatPeriod > 0 {
+		syncerConfig.HeartbeatPeriod = heartbeatPeriod
+	}
+
 	return replication.NewBinlogSyncer(syncerConfig)
 }
 
