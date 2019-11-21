@@ -182,7 +182,7 @@ func (output *MySQLOutput) cleanupDroppedTable() {
 	now := time.Now()
 	var toDelete []string
 	output.droppedTable.Range(func(key, value interface{}) bool {
-		if now.Sub(value.(time.Time)) > keepDropTableSeconds {
+		if now.Sub(value.(time.Time)).Seconds() > keepDropTableSeconds {
 			toDelete = append(toDelete, key.(string))
 		}
 		return true
@@ -294,7 +294,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 					output.targetSchemaStore.InvalidateSchemaCache(targetSchema)
 					output.markTableDropped(msg.Database, msg.Table)
 				} else {
-					log.Debugf("table %s has been dropped recently. This might be a bidirectional stmt, ignore", utils.TableIdentity(msg.Database, msg.Table))
+					log.Warnf("table %s has been dropped recently. This might be a bidirectional stmt, ignore", utils.TableIdentity(msg.Database, msg.Table))
 				}
 
 			case *ast.AlterTableStmt:
