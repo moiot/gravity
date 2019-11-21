@@ -230,19 +230,12 @@ func TestRename(t *testing.T) {
 				Routes: []map[string]interface{}{
 					{
 						"match-schema":  sourceDBName,
-						"match-table":   "a",
+						"match-table":   "a*",
 						"target-schema": targetDBName,
-						"target-table":  "aa",
 					},
 					{
 						"match-schema":  sourceDBName,
-						"match-table":   "b",
-						"target-schema": targetDBName,
-						"target-table":  "bb",
-					},
-					{
-						"match-schema":  sourceDBName,
-						"match-table":   "*",
+						"match-table":   "b*",
 						"target-schema": targetDBName,
 					},
 				},
@@ -256,7 +249,7 @@ func TestRename(t *testing.T) {
 
 	r.NoError(server.Start())
 
-	names := []string{"a", "a_gho", "b", "b_gho"}
+	names := []string{"a", "a_gho", "b", "b_gho", "c"}
 
 	for _, n := range names {
 		_, err = sourceDB.Exec(fmt.Sprintf("CREATE TABLE `%s`.`%s` (`id` int(11) unsigned NOT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", sourceDBName, n))
@@ -268,6 +261,10 @@ func TestRename(t *testing.T) {
 	r.NoError(err)
 	_, err = sourceDB.Exec(fmt.Sprintf("rename table `%s`.`b_gho` to `%s`.`b`", sourceDBName, sourceDBName))
 	r.NoError(err)
+	_, err = sourceDB.Exec(fmt.Sprintf("rename table `%s`.`c` to `%s`.`cc`", sourceDBName, sourceDBName))
+	r.NoError(err)
+	_, err = sourceDB.Exec(fmt.Sprintf("rename table `%s`.`cc` to `%s`.`ac`", sourceDBName, sourceDBName))
+	r.NoError(err)
 
 	err = mysql_test.SendDeadSignal(sourceDB, pipelineConfig.PipelineName)
 	r.NoError(err)
@@ -275,7 +272,7 @@ func TestRename(t *testing.T) {
 	server.Input.Wait()
 	server.Close()
 
-	expectedNames := []string{"a_old", "aa", "b_old", "bb"}
+	expectedNames := []string{"a_old", "a", "b_old", "b"}
 
 	for _, n := range expectedNames {
 		_, err = targetDB.Exec(fmt.Sprintf("select * from `%s`.`%s`", targetDBName, n))
