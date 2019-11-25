@@ -1239,6 +1239,118 @@ func TestMySQLToMyBidirection(t *testing.T) {
 	r.Equal(2, ids[0])
 }
 
+func TestMySQLToMyBidirectionDrop(t *testing.T) {
+	r := require.New(t)
+
+	sourceDBName := strings.ToLower(t.Name()) + "_source"
+	targetDBName := strings.ToLower(t.Name()) + "_target"
+
+	sourceDB := mysql_test.MustSetupSourceDB(sourceDBName)
+	defer sourceDB.Close()
+
+	err := utils.InitInternalTxnTags(sourceDB)
+	r.NoError(err)
+
+	targetDB := mysql_test.MustSetupTargetDB(targetDBName)
+	defer targetDB.Close()
+
+	sourceDBConfig := mysql_test.SourceDBConfig()
+	targetDBConfig := mysql_test.TargetDBConfig()
+
+	pipelineConfig1 := config.PipelineConfigV3{
+		PipelineName: t.Name() + "_1",
+		Version:      config.PipelineConfigV3Version,
+		InputPlugin: config.InputConfig{
+			Type: "mysql",
+			Mode: config.Stream,
+			Config: utils.MustAny2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+				IgnoreBiDirectionalData: true,
+				Source:                  sourceDBConfig,
+			}),
+		},
+		OutputPlugin: config.GenericPluginConfig{
+			Type: "mysql",
+			Config: utils.MustAny2Map(mysql.MySQLPluginConfig{
+				DBConfig:  targetDBConfig,
+				EnableDDL: true,
+				Routes: []map[string]interface{}{
+					{
+						"match-schema":  sourceDBName,
+						"match-table":   "*",
+						"target-schema": targetDBName,
+					},
+				},
+				EngineConfig: &config.GenericPluginConfig{
+					Type: sql_execution_engine.MySQLReplaceEngine,
+					Config: map[string]interface{}{
+						"tag-internal-txn": true,
+					},
+				},
+			}),
+		},
+	}
+
+	pipelineConfig2 := config.PipelineConfigV3{
+		PipelineName: t.Name() + "_2",
+		Version:      config.PipelineConfigV3Version,
+		InputPlugin: config.InputConfig{
+			Type: "mysql",
+			Mode: config.Stream,
+			Config: utils.MustAny2Map(mysqlstream.MySQLBinlogInputPluginConfig{
+				IgnoreBiDirectionalData: true,
+				Source:                  targetDBConfig,
+			}),
+		},
+		OutputPlugin: config.GenericPluginConfig{
+			Type: "mysql",
+			Config: utils.MustAny2Map(mysql.MySQLPluginConfig{
+				DBConfig:  sourceDBConfig,
+				EnableDDL: true,
+				Routes: []map[string]interface{}{
+					{
+						"match-schema":  targetDBName,
+						"match-table":   "*",
+						"target-schema": sourceDBName,
+					},
+				},
+				EngineConfig: &config.GenericPluginConfig{
+					Type: sql_execution_engine.MySQLReplaceEngine,
+					Config: map[string]interface{}{
+						"tag-internal-txn": true,
+					},
+				},
+			}),
+		},
+	}
+
+	server1, err := app.NewServer(pipelineConfig1)
+	r.NoError(err)
+	r.NoError(server1.Start())
+
+	server2, err := app.NewServer(pipelineConfig2)
+	r.NoError(err)
+	r.NoError(server2.Start())
+
+	_, err = sourceDB.Exec(fmt.Sprintf("create table `%s`.t(id int(11), primary key(id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ", sourceDBName))
+	r.NoError(err)
+
+	time.Sleep(time.Second)
+
+	var tblName string
+	row := targetDB.QueryRow(fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE TABLE_SCHEMA = '%s' and table_name = 't'", targetDBName))
+	r.NoError(row.Scan(&tblName))
+	r.Equal("t", tblName)
+
+	_, err = targetDB.Exec(fmt.Sprintf("drop table `%s`.t", targetDBName))
+	r.NoError(err)
+
+	time.Sleep(time.Second)
+
+	row = sourceDB.QueryRow(fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE TABLE_SCHEMA = '%s' and table_name = 't'", sourceDBName))
+	err = row.Scan(&tblName)
+	r.Equal(sql.ErrNoRows, err)
+}
+
 func TestMySQLTagDDL(t *testing.T) {
 	r := require.New(t)
 

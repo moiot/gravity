@@ -436,6 +436,8 @@ func (tailer *BinlogTailer) Start() error {
 					log.Fatalf("[binlogTailer] failed to flush position cache, err: %v", errors.ErrorStack(err))
 				}
 
+				sent := 0
+
 				for i := range dbNames {
 					dbName := dbNames[i]
 					table := tables[i]
@@ -473,23 +475,34 @@ func (tailer *BinlogTailer) Start() error {
 						ddlSQL,
 						int64(e.Header.Timestamp),
 						received)
+
+					// do not send messages without router to the system
+					if consts.IsInternalDBTraffic(dbName) ||
+						(tailer.router != nil && !tailer.router.Exists(ddlMsg)) {
+						continue
+					}
+
 					if err := tailer.emitter.Emit(ddlMsg); err != nil {
 						log.Fatalf("failed to emit ddl msg: %v", errors.ErrorStack(err))
 					}
+					sent++
 				}
 
-				// emit barrier msg
-				barrierMsg = NewBarrierMsg(tailer.AfterMsgCommit)
-				barrierMsg.InputContext = inputContext{op: ddl, position: currentPosition}
-				if err := tailer.emitter.Emit(barrierMsg); err != nil {
-					log.Fatalf("failed to emit barrier msg: %v", errors.ErrorStack(err))
-				}
-				<-barrierMsg.Done
-				if err := tailer.positionCache.Flush(); err != nil {
-					log.Fatalf("[binlogTailer] failed to flush position cache, err: %v", errors.ErrorStack(err))
+				if sent > 0 {
+					// emit barrier msg
+					barrierMsg = NewBarrierMsg(tailer.AfterMsgCommit)
+					barrierMsg.InputContext = inputContext{op: ddl, position: currentPosition}
+					if err := tailer.emitter.Emit(barrierMsg); err != nil {
+						log.Fatalf("failed to emit barrier msg: %v", errors.ErrorStack(err))
+					}
+					<-barrierMsg.Done
+					if err := tailer.positionCache.Flush(); err != nil {
+						log.Fatalf("[binlogTailer] failed to flush position cache, err: %v", errors.ErrorStack(err))
+					}
+
+					log.Infof("[binlogTailer] ddl done with gtid: %v, stmt: %s", ev.GSet.String(), string(ev.Query))
 				}
 
-				log.Infof("[binlogTailer] ddl done with gtid: %v, stmt: %s", ev.GSet.String(), string(ev.Query))
 			case *replication.GTIDEvent:
 				// GTID stands for Global Transaction IDentifier
 				// It is composed of two parts:
