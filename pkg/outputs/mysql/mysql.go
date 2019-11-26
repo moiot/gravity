@@ -352,12 +352,15 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 
 					if output.isTiDB {
 						a := &ast.RenameTableStmt{
-							OldTable:      toTableName(os, ot),
-							NewTable:      toTableName(ns, nt),
-							TableToTables: make([]*ast.TableToTable, 1),
+							OldTable: toTableName(os, ot),
+							NewTable: toTableName(ns, nt),
+							TableToTables: []*ast.TableToTable{
+								{
+									OldTable: toTableName(os, ot),
+									NewTable: toTableName(ns, nt),
+								},
+							},
 						}
-						a.TableToTables[0].OldTable = a.OldTable
-						a.TableToTables[0].NewTable = a.NewTable
 						targetDDLs = append(targetDDLs, restore(a))
 					} else {
 						tmp.TableToTables[i].OldTable = toTableName(os, ot)

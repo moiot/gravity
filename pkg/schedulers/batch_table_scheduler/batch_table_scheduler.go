@@ -391,7 +391,7 @@ func (scheduler *batchScheduler) dispatchMsg(msg *core.Msg) error {
 
 func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 	scheduler.tableBuffers[tableKey] = make(chan *core.Msg, scheduler.cfg.MaxBatchPerWorker*10)
-	scheduler.tableLatchC[tableKey] = make(chan uint64, scheduler.cfg.MaxBatchPerWorker*10)
+	scheduler.tableLatchC[tableKey] = make(chan uint64, scheduler.cfg.SlidingWindowSize)
 	scheduler.tableBufferWg.Add(1)
 
 	go func(c chan *core.Msg, tableLatchC chan uint64, key string) {
