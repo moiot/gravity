@@ -139,8 +139,12 @@ func (output *MySQLOutput) Start() error {
 }
 
 func (output *MySQLOutput) Close() {
-	output.db.Close()
-	output.targetSchemaStore.Close()
+	if output.db != nil {
+		output.db.Close()
+	}
+	if output.targetSchemaStore != nil {
+		output.targetSchemaStore.Close()
+	}
 }
 
 func (output *MySQLOutput) GetRouter() core.Router {
