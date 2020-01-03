@@ -481,7 +481,7 @@ func (c *Consumer) release() (err error) {
 	if e := c.commitOffsetsWithRetry(c.client.config.Group.Offsets.Retry.Max); e != nil {
 		err = e
 	}
-	log.Info("consumer commits the offset if necessary")
+	log.Debug("consumer commits the offset if necessary")
 
 	return
 }

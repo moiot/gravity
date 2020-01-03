@@ -132,16 +132,16 @@ PRIMARY KEY (id)
 `, consts.GravityDBName, deadSignalTable)
 
 const srcDBConfStr = `
-host = "source-db"
+host = "localhost"
 username = "root"
 password = ""
-port = 3306
+port = 4000
 `
 const targetDBConfStr = `
-host = "target-db"
+host = "localhost"
 username = "root"
 password = ""
-port = 3306
+port = 4000
 `
 
 const TestDBPrefix = "__test_drc__"
@@ -501,6 +501,21 @@ func MustCreateSourceDBConn() *sql.DB {
 
 // MustSetupSourceDB setup a test db, so that we can use different db in different test cases
 func MustSetupSourceDB(dbName string) *sql.DB {
+	db := MustCreateSourceDBConn()
+	err := setupTestDB(db, dbName)
+	if err != nil {
+		log.Fatalf("failed to setup source db err: %v", errors.ErrorStack(err))
+	}
+
+	SetMySQLGlobalVars(db)
+
+	db.SetMaxIdleConns(150)
+	db.SetMaxOpenConns(150)
+
+	return db
+}
+
+func MustSetupTiDB(dbName string) *sql.DB {
 	db := MustCreateSourceDBConn()
 	err := setupTestDB(db, dbName)
 	if err != nil {

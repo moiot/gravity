@@ -1,0 +1,58 @@
+name = "tidb2tidbDemo"
+version = "1.0"
+
+[input]
+type = "tidbkafka"
+mode = "stream"
+
+[input.config]
+ignore-bidirectional-data = true
+
+[input.config.position-repo]
+type = "mysql-repo"
+[input.config.position-repo.config.source]
+host = "127.0.0.1"
+username = "root"
+password = ""
+port = 4000
+
+[input.config.source-db]
+host = "127.0.0.1"
+username = "root"
+password = ""
+port = 4000
+
+[input.config.source-kafka]
+topics = ["obinlog"]
+consume-from = "oldest"
+group-id = "tidb2tidbDemo"
+[input.config.source-kafka.brokers]
+broker-addrs = ["localhost:9092", "localhost:9093", "localhost:9094"]
+
+[output]
+type = "mysql"
+
+[output.config]
+enable-ddl = true
+
+[output.config.target]
+host = "127.0.0.1"
+username = "root"
+password = ""
+port = 4000
+max-open = 30 # optional, max connections
+max-idle = 30 # optional, suggest to be the same as max-open
+
+# The definition of the routing rule
+[[output.config.routes]]
+match-schema = "test"
+match-table = "t"
+target-table = "t2"
+
+[scheduler]
+type = "batch-table-scheduler"
+[scheduler.config]
+nr-worker = 30
+batch-size = 1000
+queue-size = 1024
+sliding-window-size = 16384

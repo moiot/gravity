@@ -4,6 +4,7 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
+
 	"github.com/moiot/gravity/pkg/config"
 	"github.com/moiot/gravity/pkg/position_cache"
 	"github.com/moiot/gravity/pkg/position_repos"
@@ -74,6 +75,10 @@ func (store *OffsetStore) CommitOffset(req *offsets.OffsetCommitRequest) (*offse
 	positionValue, ok := position.Value.(KafkaPositionValue)
 	if !ok {
 		return nil, errors.Errorf("invalid position type")
+	}
+
+	if positionValue.Offsets == nil {
+		positionValue.Offsets = make(map[string]ConsumerGroupOffset)
 	}
 
 	if _, ok := positionValue.Offsets[req.ConsumerGroup]; !ok {
