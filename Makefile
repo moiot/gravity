@@ -27,6 +27,7 @@ dev-down:
 
 go-test:
 	go test -failfast -race ./integration_test
+	cd pkg/registry/test_data && make build
 	go test -timeout 10m -coverprofile=cover.out $(TEST_DIRS) && go tool cover -func=cover.out | tail -n 1
 
 test-local:
