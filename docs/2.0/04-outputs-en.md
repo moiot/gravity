@@ -144,17 +144,23 @@ target-table = "test_target_table"
 # The execution engine configuration of MySQL
 # Optional
 #
-[output.config.execution-engine]
+[output.config.sql-engine-config]
+type = "mysql-replace-engine"
+
+[output.config.sql-engine-config.config]
 # Whether to enable the write operation of the bidirectional synchronization identifier
-use-bidirection = false
+tag-internal-txn = false
 ```
 
-In the above configuration, if `use-bidirection` is set to "true" as follows, Gravity gets the internal identifier of bidirectional synchronization when writing data in the MySQL cluster (by wrapping in the Gravity internal table transaction). If `ignore-bidirectional-data` is configured in the source cluster, the write traffic from Gravity can be ignored.
+In the above configuration, if `tag-internal-txn` is set to "true" as follows, Gravity gets the internal identifier of bidirectional synchronization when writing data in the MySQL cluster (by wrapping in the Gravity internal table transaction). If `ignore-bidirectional-data` is configured in the source cluster, the write traffic from Gravity can be ignored.
 
 ```toml
-[output.config.execution-engine]
+[output.config.sql-engine-config]
+type = "mysql-replace-engine"
+
+[output.config.sql-engine-config.config]
 # "true" means enabling the write operation of the bidirectional synchronization identifier.
-use-bidirection = true
+tag-internal-txn = false
 ```
 
 ## `elasticsearch` configuration

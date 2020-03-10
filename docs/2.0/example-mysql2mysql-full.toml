@@ -68,8 +68,11 @@ port = 3306
 max-open = 20 # optional, max connections
 max-idle = 20 # optional, suggest to be the same as max-open
 
-[output.config.execution-engine]
-use-bidirection = true
+[output.config.sql-engine-config]
+type = "mysql-replace-engine"
+
+[output.config.sql-engine-config.config]
+tag-internal-txn = true
 
 [[output.config.routes]]
 match-schema = "test_db"
@@ -80,7 +83,7 @@ target-table = "*"
 [scheduler]
 type = "batch-table-scheduler"
 [scheduler.config]
-nr-worker = 1
-batch-size = 2
+nr-worker = 20
+batch-size = 10
 queue-size = 1024
 sliding-window-size = 1024
