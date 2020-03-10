@@ -140,18 +140,20 @@ target-table = "test_target_table"
 # MySQL 执行引擎配置
 # - 可选
 #
-[output.config.execution-engine]
-# 开启双向同步标识的写入
-use-bidirection = false
+[output.config.sql-engine-config]
+type = "mysql-replace-engine"
+
+[output.config.sql-engine-config.config]
+tag-internal-txn = false
 ```
 
 
 在上述配置中，如果配置了
 
 ```toml
-[output.config.execution-engine]
+[output.config.sql-engine-config.config]
 # 开启双向同步标识的写入
-use-bidirection = true
+tag-internal-txn = true
 ```
 
 Gravity 在写入目标端 MySQL 的时会打上双向同步的内部标识（通过封装内部表事务的方式），在源端配置好 `ignore-bidirectional-data` 就可以忽略 Gravity 内部的写流量。
