@@ -30,6 +30,7 @@ const (
 	ddl              binlogOp = "ddl"
 	xid              binlogOp = "xid"
 	barrier          binlogOp = "barrier"
+	heartbeat        binlogOp = "heartbeat"
 )
 
 type inputContext struct {
@@ -361,6 +362,20 @@ func NewBarrierMsg(callback core.MsgCallbackFunc) *core.Msg {
 		Timestamp:           time.Now(),
 		Done:                make(chan struct{}),
 		InputContext:        inputContext{op: barrier},
+		InputStreamKey:      utils.NewStringPtr(inputStreamKey),
+		AfterCommitCallback: callback,
+		Phase: core.Phase{
+			Start: time.Now(),
+		},
+	}
+}
+
+func NewHeartbeatMsg(callback core.MsgCallbackFunc) *core.Msg {
+	return &core.Msg{
+		Type:                core.MsgCtl,
+		Timestamp:           time.Now(),
+		Done:                make(chan struct{}),
+		InputContext:        inputContext{op: heartbeat},
 		InputStreamKey:      utils.NewStringPtr(inputStreamKey),
 		AfterCommitCallback: callback,
 		Phase: core.Phase{

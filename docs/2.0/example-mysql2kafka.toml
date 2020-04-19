@@ -54,7 +54,7 @@ id = "another_id"
 
 [output]
 type = "async-kafka"
-[output.config]
+[output.config.kafka-global-config]
 broker-addrs = ["1.2.3.4:9002"]
 mode = "async"
 

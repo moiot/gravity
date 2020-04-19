@@ -2,6 +2,8 @@ package mysql
 
 import (
 	"bytes"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/pingcap/parser/ast"
@@ -123,4 +125,18 @@ func TestDDL(t *testing.T) {
 		require.NoError(t, n.Restore(ctx))
 		require.Equal(t, expected[i], b.String())
 	}
+}
+
+func TestVarchar0(t *testing.T) {
+	s := "CREATE TABLE a (`scene` varchar(0) NOT NULL DEFAULT ' ' COMMENT '场景')"
+
+	p := parser.New()
+	stmt, err := p.ParseOneStmt(s, "", "")
+	require.NoError(t, err)
+
+	writer := &strings.Builder{}
+	ctx := format.NewRestoreCtx(format.RestoreStringSingleQuotes|format.RestoreKeyWordLowercase|format.RestoreNameBackQuotes, writer)
+	err = stmt.Restore(ctx)
+	require.NoError(t, err)
+	fmt.Println(writer.String())
 }
