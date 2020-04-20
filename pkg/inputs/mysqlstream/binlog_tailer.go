@@ -627,6 +627,12 @@ func (tailer *BinlogTailer) AppendMsgTxnBuffer(msg *core.Msg) {
 	if len(tailer.msgTxnBuffer) >= config.TxnBufferLimit {
 		tailer.FlushMsgTxnBuffer()
 		tailer.ClearMsgTxnBuffer()
+
+		// send heartbeat to prevent sliding window timeout
+		heartbeat := NewHeartbeatMsg(tailer.AfterMsgCommit)
+		if err := tailer.emitter.Emit(heartbeat); err != nil {
+			log.Fatalf("failed to emit heartbeat msg: %v", errors.ErrorStack(err))
+		}
 	}
 }
 
