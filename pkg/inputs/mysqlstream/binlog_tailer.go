@@ -412,6 +412,11 @@ func (tailer *BinlogTailer) Start() error {
 					continue
 				}
 
+				// ignore savepoint
+				if strings.HasPrefix(ddlSQL, "SAVEPOINT") {
+					continue
+				}
+
 				//
 				// Once we have extracted the schema, we should always invalidate the schema cache unless the
 				// schema is from MySQL's internal schema.
