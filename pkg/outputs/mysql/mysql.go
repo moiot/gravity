@@ -327,7 +327,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 				for _, stmt := range targetDDLs {
 					err := output.executeDDL(targetSchema, stmt)
 					if err != nil {
-						if e := errors.Cause(err).(*mysqldriver.MySQLError); e.Number == 1060 || e.Number == 1061 {
+						if e, ok := errors.Cause(err).(*mysqldriver.MySQLError); ok && (e.Number == 1060 || e.Number == 1061) {
 							log.Errorf("[output-mysql] ignore duplicate column or index. ddl: %s. err: %s", stmt, e)
 						} else {
 							log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
