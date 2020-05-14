@@ -1,34 +1,4 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_GRAVITY",
-      "label": "gravity",
-      "description": "",
-      "type": "datasource",
-      "pluginId": "prometheus",
-      "pluginName": "Prometheus"
-    }
-  ],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "5.2.1"
-    },
-    {
-      "type": "panel",
-      "id": "graph",
-      "name": "Graph",
-      "version": "5.0.0"
-    },
-    {
-      "type": "datasource",
-      "id": "prometheus",
-      "name": "Prometheus",
-      "version": "5.0.0"
-    }
-  ],
   "annotations": {
     "list": [
       {
@@ -45,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 1,
-  "id": null,
-  "iteration": 1562642097014,
+  "id": 17,
+  "iteration": 1589288199879,
   "links": [],
   "panels": [
     {
@@ -54,7 +24,8 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_GRAVITY}",
+      "datasource": "Prometheus",
+      "description": "event time = update time at source - end time\n\nprocess time= receive time at gravity - end time\n\nend time: the time point when a specific row and all its proceedings has been successfully written",
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -78,6 +49,7 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {},
       "percentage": false,
       "pointradius": 5,
       "points": false,
@@ -104,6 +76,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "80% Low Watermark",
       "tooltip": {
@@ -147,7 +120,8 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_GRAVITY}",
+      "datasource": "Prometheus",
+      "description": "",
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -171,6 +145,7 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {},
       "percentage": false,
       "pointradius": 5,
       "points": false,
@@ -197,6 +172,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "95% Low Watermark",
       "tooltip": {
@@ -240,7 +216,8 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_GRAVITY}",
+      "datasource": "Prometheus",
+      "description": "latency within each component",
       "fill": 1,
       "gridPos": {
         "h": 7,
@@ -264,6 +241,7 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {},
       "percentage": false,
       "pointradius": 5,
       "points": false,
@@ -332,6 +310,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "80% Latency",
       "tooltip": {
@@ -375,7 +354,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_GRAVITY}",
+      "datasource": "Prometheus",
       "fill": 1,
       "gridPos": {
         "h": 7,
@@ -399,6 +378,7 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {},
       "percentage": false,
       "pointradius": 5,
       "points": false,
@@ -467,6 +447,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "100% Latency",
       "tooltip": {
@@ -510,7 +491,8 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_GRAVITY}",
+      "datasource": "Prometheus",
+      "description": "throughput of each component",
       "fill": 1,
       "gridPos": {
         "h": 7,
@@ -536,6 +518,7 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {},
       "percentage": false,
       "pointradius": 5,
       "points": false,
@@ -583,6 +566,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Event Per Second",
       "tooltip": {
@@ -626,7 +610,8 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_GRAVITY}",
+      "datasource": "Prometheus",
+      "description": "actual batch size for output",
       "fill": 1,
       "gridPos": {
         "h": 7,
@@ -648,6 +633,7 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {},
       "percentage": false,
       "pointradius": 5,
       "points": false,
@@ -666,6 +652,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "actual batch size",
       "tooltip": {
@@ -709,7 +696,8 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_GRAVITY}",
+      "datasource": "Prometheus",
+      "description": "length of all kinds of internal queues",
       "fill": 1,
       "gridPos": {
         "h": 7,
@@ -735,6 +723,7 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {},
       "percentage": false,
       "pointradius": 5,
       "points": false,
@@ -754,6 +743,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Queue Length",
       "tooltip": {
@@ -797,7 +787,8 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_GRAVITY}",
+      "datasource": "Prometheus",
+      "description": "throughput of different tables in input component",
       "fill": 1,
       "gridPos": {
         "h": 10,
@@ -825,6 +816,7 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {},
       "percentage": false,
       "pointradius": 5,
       "points": false,
@@ -858,6 +850,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Input Detail",
       "tooltip": {
@@ -901,7 +894,8 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_GRAVITY}",
+      "datasource": "Prometheus",
+      "description": "throughput of different output target",
       "fill": 1,
       "gridPos": {
         "h": 10,
@@ -929,6 +923,7 @@
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
+      "options": {},
       "percentage": false,
       "pointradius": 5,
       "points": false,
@@ -964,6 +959,7 @@
       ],
       "thresholds": [],
       "timeFrom": null,
+      "timeRegions": [],
       "timeShift": null,
       "title": "Output Detail",
       "tooltip": {
@@ -1004,15 +1000,19 @@
     }
   ],
   "refresh": "10s",
-  "schemaVersion": 16,
+  "schemaVersion": 18,
   "style": "dark",
   "tags": [],
   "templating": {
     "list": [
       {
         "allValue": null,
-        "current": {},
-        "datasource": "${DS_GRAVITY}",
+        "current": {
+          "text": "cdb-mysql-kafka-mbk-intl",
+          "value": "cdb-mysql-kafka-mbk-intl"
+        },
+        "datasource": "Prometheus",
+        "definition": "",
         "hide": 0,
         "includeAll": false,
         "label": null,
@@ -1020,8 +1020,9 @@
         "name": "pipeline",
         "options": [],
         "query": "label_values(gravity_input_emitter_counter, pipeline)",
-        "refresh": 1,
+        "refresh": 2,
         "regex": "",
+        "skipUrlSync": false,
         "sort": 1,
         "tagValuesQuery": "",
         "tags": [],
@@ -1063,5 +1064,5 @@
   "timezone": "",
   "title": "Gravity Pipeline Detail",
   "uid": "7aulI8Xmz",
-  "version": 23
+  "version": 4
 }
