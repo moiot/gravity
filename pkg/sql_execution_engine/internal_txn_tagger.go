@@ -20,6 +20,7 @@ import (
 	"database/sql"
 
 	"github.com/juju/errors"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/moiot/gravity/pkg/utils"
 )
@@ -47,6 +48,9 @@ func ExecWithInternalTxnTag(
 	}
 
 	if !internalTxnTaggerCfg.TagInternalTxn {
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.Debugf("query: %v, args: %v", newQuery, args)
+		}
 		_, err := db.Exec(newQuery, args...)
 		return errors.Annotatef(err, "query: %v, args: %v", query, args)
 	}
@@ -64,6 +68,9 @@ func ExecWithInternalTxnTag(
 		return errors.Trace(err)
 	}
 
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.Debugf("query: %v, args: %v", newQuery, args)
+	}
 	_, err = txn.Exec(query, args...)
 	if err != nil {
 		txn.Rollback()
