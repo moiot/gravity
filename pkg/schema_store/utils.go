@@ -178,7 +178,10 @@ func GetTableDefFromDB(db *sql.DB, dbName string, tableName string) (*Table, err
 		} else {
 			column.IsPrimaryKey = false
 		}
-		if extra.Valid && strings.Contains(strings.ToUpper(extra.String), "GENERATED") {
+
+		// TiDB describes certain column as `DEFAULT_GENERATED`
+		if extra.Valid && (strings.Contains(strings.ToUpper(extra.String), "VIRTUAL GENERATED") ||
+			strings.Contains(strings.ToUpper(extra.String), "STORED GENERATED")) {
 			column.IsGenerated = true
 		}
 
