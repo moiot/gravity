@@ -94,7 +94,7 @@ func (repo *mysqlPositionRepo) Configure(pipelineName string, data map[string]in
 func (repo *mysqlPositionRepo) Init() error {
 	db, err := utils.CreateDBConnection(&repo.dbCfg)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.Annotatef(err, "%#v", repo.dbCfg)
 	}
 
 	_, err = db.Exec(fmt.Sprintf("%sCREATE DATABASE IF NOT EXISTS %s", repo.annotation, consts.GravityDBName))

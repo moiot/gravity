@@ -432,7 +432,7 @@ func SeedCompositePrimaryKeyInt(db *sql.DB, dbName string) {
 
 }
 
-func setupTestDB(db *sql.DB, dbName string) error {
+func SetupTestDB(db *sql.DB, dbName string) error {
 
 	// setup test tableNames
 	if _, err := db.Exec(dropDBStatement(dbName)); err != nil {
@@ -502,7 +502,7 @@ func MustCreateSourceDBConn() *sql.DB {
 // MustSetupSourceDB setup a test db, so that we can use different db in different test cases
 func MustSetupSourceDB(dbName string) *sql.DB {
 	db := MustCreateSourceDBConn()
-	err := setupTestDB(db, dbName)
+	err := SetupTestDB(db, dbName)
 	if err != nil {
 		log.Fatalf("failed to setup source db err: %v", errors.ErrorStack(err))
 	}
@@ -538,7 +538,7 @@ func MustCreateTargetDBConn() *sql.DB {
 func MustSetupTargetDB(dbName string) *sql.DB {
 	db := MustCreateTargetDBConn()
 
-	err := setupTestDB(db, dbName)
+	err := SetupTestDB(db, dbName)
 	if err != nil {
 		log.Fatalf("failed to setup source db1 err: %v", errors.ErrorStack(err))
 	}

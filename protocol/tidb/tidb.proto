@@ -1,6 +1,6 @@
 syntax = "proto2";
-package slave.binlog;
-import "gogoproto/gogo.proto";
+package tidb;
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 option (gogoproto.marshaler_all) = true;
 option (gogoproto.sizer_all) = true;
@@ -32,7 +32,7 @@ message ColumnInfo {
     // https://dev.mysql.com/doc/refman/8.0/en/data-types.html
     // for numeric type: int bigint smallint tinyint float double decimal bit
     // for string type: text longtext mediumtext char tinytext varchar
-    // blob longblog mediumblog binary tinyblob varbinary
+    // blob longblob mediumblob binary tinyblob varbinary
     // enum set
     // for json type: json
     optional string mysql_type = 2 [ (gogoproto.nullable) = false ];
@@ -53,6 +53,16 @@ message Table {
     optional string table_name = 2;
     repeated ColumnInfo column_info = 3;
     repeated TableMutation mutations = 4;
+    // will only be set with version >= 3.0.9
+    repeated Key unique_keys = 5;
+}
+
+
+// Key contains Key info.
+message Key {
+    // name will be PRIMARY if it's the primary key.
+    optional string name = 1;
+    repeated string column_names = 2;
 }
 
 message TableMutation {

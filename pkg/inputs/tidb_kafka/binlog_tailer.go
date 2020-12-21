@@ -1,14 +1,18 @@
 package tidb_kafka
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/OneOfOne/xxhash"
+	"github.com/mitchellh/hashstructure"
 
 	"github.com/Shopify/sarama"
 	"github.com/juju/errors"
+	"github.com/pingcap/parser"
 	log "github.com/sirupsen/logrus"
 
 	gCfg "github.com/moiot/gravity/pkg/config"
@@ -19,6 +23,7 @@ import (
 	"github.com/moiot/gravity/pkg/metrics"
 	"github.com/moiot/gravity/pkg/mysql_test"
 	"github.com/moiot/gravity/pkg/position_cache"
+	"github.com/moiot/gravity/pkg/position_repos"
 	pb "github.com/moiot/gravity/pkg/protocol/tidb"
 	"github.com/moiot/gravity/pkg/sarama_cluster"
 	"github.com/moiot/gravity/pkg/utils"
@@ -35,6 +40,7 @@ type BinlogTailer struct {
 	router         core.Router
 	binlogChecker  binlog_checker.BinlogChecker
 	mapLock        sync.Mutex
+	parser         *parser.Parser
 
 	wg sync.WaitGroup
 }
@@ -46,42 +52,29 @@ func (t *BinlogTailer) Start() error {
 	go func() {
 		defer t.wg.Done()
 
-	ListenPartitionLoop:
-		for {
-			select {
-			case partitionConsumer, ok := <-t.consumer.Partitions():
-				if !ok {
-					log.Info("cannot fetch partitionConsumers, the channel may be closed")
-					break ListenPartitionLoop
-				}
-
-				log.Infof("[mq_consumer] partition consumer topic: %v, partition: %v", partitionConsumer.Topic(), partitionConsumer.Partition())
-
-				t.wg.Add(1)
-				go func(partitionConsumer sarama_cluster.PartitionConsumer) {
-					defer t.wg.Done()
-
-					for msg := range partitionConsumer.Messages() {
-						log.Debugf("[tidb_binlog_tailer]: topic: %v, partition: %v, offset: %v", msg.Topic, msg.Partition, msg.Offset)
-						binlog := pb.Binlog{}
-						if err := binlog.Unmarshal(msg.Value); err != nil {
-							log.Fatalf("[binlog_tailer] failed to parse tidb binlog msg: %v", errors.ErrorStack(err))
-						}
-						jobs, err := t.createMsgs(binlog, msg)
-						if err != nil {
-							log.Fatalf("[tidb_binlog_tailer] failed to convert tidb binlog to gravity jobs. offset: %v.%v.%v, err: %v", msg.Topic, msg.Partition, msg.Offset, err)
-						}
-						for _, job := range jobs {
-							if err := t.dispatchMsg(job); err != nil {
-								log.Fatalf("[tidb_binlog_tailer] failed to dispatch job. offset: %v.%v.%v. err: %v", msg.Topic, msg.Partition, msg.Offset, err)
-							}
-						}
-					}
-				}(partitionConsumer)
+		for msg := range t.consumer.Messages() {
+			log.Debugf("[tidb_binlog_tailer]: topic: %v, partition: %v, offset: %v", msg.Topic, msg.Partition, msg.Offset)
+			binlog := pb.Binlog{}
+			if err := binlog.Unmarshal(msg.Value); err != nil {
+				log.Fatalf("[binlog_tailer] failed to parse tidb binlog msg: %v", errors.ErrorStack(err))
 			}
+			jobs, err := t.createMsgs(binlog, msg)
+			if err != nil {
+				log.Fatalf("[tidb_binlog_tailer] failed to convert tidb binlog to gravity jobs. offset: %v.%v.%v, err: %v", msg.Topic, msg.Partition, msg.Offset, err)
+			}
+			t.dispatchMsg(jobs)
 		}
-		log.Info("Get out of ListenPartitionLoop")
 	}()
+
+	t.wg.Add(1)
+	go func() {
+		defer t.wg.Done()
+
+		for err := range t.consumer.Errors() {
+			log.Fatalf("[tidb_binlog_tailer] received error: %s", err)
+		}
+	}()
+
 	return nil
 }
 
@@ -94,24 +87,6 @@ func (t *BinlogTailer) Close() {
 	t.Wait()
 }
 
-func buildPKColumnList(colInfoList []*pb.ColumnInfo) []*pb.ColumnInfo {
-	var pkCols []*pb.ColumnInfo
-	for _, colInfo := range colInfoList {
-		if colInfo.IsPrimaryKey {
-			pkCols = append(pkCols, colInfo)
-		}
-	}
-	return pkCols
-}
-
-func buildPKNameList(pkColList []*pb.ColumnInfo) []string {
-	pkNames := make([]string, len(pkColList))
-	for i, colInfo := range pkColList {
-		pkNames[i] = colInfo.Name
-	}
-	return pkNames
-}
-
 func buildPKValueMap(columnInfos []*pb.ColumnInfo, row *pb.Row) map[string]interface{} {
 	pkValues := make(map[string]interface{})
 	for i, columnInfo := range columnInfos {
@@ -122,56 +97,63 @@ func buildPKValueMap(columnInfos []*pb.ColumnInfo, row *pb.Row) map[string]inter
 	return pkValues
 }
 
-func (t *BinlogTailer) createMsgs(
-	binlog pb.Binlog,
-	kMsg *sarama.ConsumerMessage,
-) ([]*core.Msg, error) {
-
+func (t *BinlogTailer) createMsgs(binlog pb.Binlog, kMsg *sarama.ConsumerMessage) ([]*core.Msg, error) {
 	var msgList []*core.Msg
+
 	if binlog.Type == pb.BinlogType_DDL {
-		metrics.InputCounter.WithLabelValues(t.name, "", "", string(core.MsgDDL), "").Add(1)
-		ddlStmt := string(binlog.DdlData.DdlQuery)
-		if t.config.IgnoreBiDirectionalData && strings.Contains(ddlStmt, consts.DDLTag) {
-			log.Info("ignore internal ddl: ", ddlStmt)
-			return msgList, nil
-		} else {
-			//TODO support ddl for tidb
-			log.Infof("skip ddl %s", ddlStmt)
-			return msgList, nil
-		}
+		return msgList, t.handleDDL(binlog, kMsg)
 	}
-	received := time.Now()
+
+	processTime := time.Now()
+	eventTime := time.Unix(int64(ParseTimeStamp(uint64(binlog.CommitTs))), 0)
+
 	for _, table := range binlog.DmlData.Tables {
 		schemaName := *table.SchemaName
 		tableName := *table.TableName
 		for _, mutation := range table.Mutations {
 			msg := core.Msg{
 				Phase: core.Phase{
-					Start: received,
+					Start: processTime,
 				},
 				Type:      core.MsgDML,
 				Database:  schemaName,
 				Table:     tableName,
-				Timestamp: time.Unix(int64(ParseTimeStamp(uint64(binlog.CommitTs))), 0),
+				Timestamp: eventTime,
 				Done:      make(chan struct{}),
 			}
 
 			if binlog_checker.IsBinlogCheckerMsg(schemaName, tableName) {
 				msg.Type = core.MsgCtl
+
+				if *mutation.Type == pb.MutationType_Update {
+					row := *mutation.ChangeRow
+					checkerRow, err := binlog_checker.ParseTiDBRow(row)
+					if err != nil {
+						return msgList, errors.Trace(err)
+					}
+					if !t.binlogChecker.IsEventBelongsToMySelf(checkerRow) {
+						log.Debugf("skip other binlog checker row. row: %v", row)
+						continue
+					}
+					t.binlogChecker.MarkActive(checkerRow)
+				}
 			}
 
-			if binlog_checker.IsBinlogCheckerMsg(schemaName, tableName) && *mutation.Type == pb.MutationType_Update {
-				row := *mutation.ChangeRow
-				checkerRow, err := binlog_checker.ParseTiDBRow(row)
-				if err != nil {
-					return msgList, errors.Trace(err)
-				}
-				if !t.binlogChecker.IsEventBelongsToMySelf(checkerRow) {
-					log.Debugf("skip other binlog checker row. row: %v", row)
-					continue
-				}
-				t.binlogChecker.MarkActive(checkerRow)
+			// skip binlog position event
+			if position_repos.IsPositionStoreEvent(schemaName, tableName) {
+				log.Debugf("[binlogTailer] skip position event")
+				continue
 			}
+
+			// do not send messages without router to the system
+			if !consts.IsInternalDBTraffic(schemaName) &&
+				t.router != nil && !t.router.Exists(&core.Msg{
+				Database: schemaName,
+				Table:    tableName,
+			}) {
+				continue
+			}
+
 			dmlMsg := &core.DMLMsg{}
 			data := make(map[string]interface{})
 			colInfoList := table.ColumnInfo
@@ -197,7 +179,7 @@ func (t *BinlogTailer) createMsgs(
 					data[colInfoList[index].Name] = deserialize(value, colInfoList[index].MysqlType)
 				}
 			default:
-				log.Warnf("unexpected MutationType: %v", *mutation.Type)
+				log.Fatalf("unexpected MutationType: %v", *mutation.Type)
 				continue
 			}
 			metrics.InputCounter.WithLabelValues(t.name, msg.Database, msg.Table, string(msg.Type), string(dmlMsg.Operation)).Add(1)
@@ -210,15 +192,153 @@ func (t *BinlogTailer) createMsgs(
 			dmlMsg.Data = data
 			dmlMsg.Pks = buildPKValueMap(table.ColumnInfo, mutation.Row)
 			msg.DmlMsg = dmlMsg
+			msg.InputStreamKey = utils.NewStringPtr(inputStreamKey)
+			msg.OutputDepHashes = calculateOutputDep(table.UniqueKeys, msg)
 			msgList = append(msgList, &msg)
 		}
 	}
+
 	if len(msgList) > 0 {
 		lastMsg := msgList[len(msgList)-1]
 		lastMsg.InputContext = kMsg
 		lastMsg.AfterCommitCallback = t.AfterMsgCommit
 	}
 	return msgList, nil
+}
+
+func (t *BinlogTailer) handleDDL(binlog pb.Binlog, kMsg *sarama.ConsumerMessage) error {
+	metrics.InputCounter.WithLabelValues(t.name, "", "", string(core.MsgDDL), "").Add(1)
+	processTime := time.Now()
+	eventTime := time.Unix(int64(ParseTimeStamp(uint64(binlog.CommitTs))), 0)
+	ddlStmt := string(binlog.DdlData.DdlQuery)
+
+	if t.config.IgnoreBiDirectionalData && strings.Contains(ddlStmt, consts.DDLTag) {
+		log.Info("ignore internal ddl: ", ddlStmt)
+		return nil
+	}
+
+	dbNames, tables, asts := parseDDL(t.parser, binlog)
+
+	// emit barrier msg
+	barrierMsg := NewBarrierMsg()
+	if err := t.emitter.Emit(barrierMsg); err != nil {
+		log.Fatalf("failed to emit barrier msg: %v", errors.ErrorStack(err))
+	}
+	<-barrierMsg.Done
+
+	sent := 0
+
+	for i := range dbNames {
+		dbName := dbNames[i]
+		table := tables[i]
+		ast := asts[i]
+
+		if dbName == consts.MySQLInternalDBName {
+			continue
+		}
+
+		if dbName == consts.GravityDBName || dbName == consts.OldDrcDBName {
+			continue
+		}
+
+		log.Infof("QueryEvent: database: %s, sql: %s", dbName, ddlStmt)
+
+		// emit ddl msg
+		ddlMsg := &core.Msg{
+			Phase: core.Phase{
+				Start: processTime,
+			},
+			Type:                core.MsgDDL,
+			Timestamp:           eventTime,
+			Database:            dbName,
+			Table:               table,
+			DdlMsg:              &core.DDLMsg{Statement: ddlStmt, AST: ast},
+			Done:                make(chan struct{}),
+			InputStreamKey:      utils.NewStringPtr(inputStreamKey),
+			InputContext:        kMsg,
+			AfterCommitCallback: t.AfterMsgCommit,
+		}
+
+		// do not send messages without router to the system
+		if consts.IsInternalDBTraffic(dbName) || (t.router != nil && !t.router.Exists(ddlMsg)) {
+			continue
+		}
+
+		if err := t.emitter.Emit(ddlMsg); err != nil {
+			log.Fatalf("failed to emit ddl msg: %v", errors.ErrorStack(err))
+		}
+		sent++
+	}
+
+	if sent > 0 {
+		// emit barrier msg
+		barrierMsg = NewBarrierMsg()
+		if err := t.emitter.Emit(barrierMsg); err != nil {
+			log.Fatalf("failed to emit barrier msg: %v", errors.ErrorStack(err))
+		}
+		<-barrierMsg.Done
+		log.Infof("[binlogTailer] ddl done with commit ts: %d, offset: %d, stmt: %s", binlog.CommitTs, kMsg.Offset, ddlStmt)
+	}
+
+	return nil
+}
+
+var hasher = xxhash.New64()
+var hashOptions = hashstructure.HashOptions{
+	Hasher: hasher,
+}
+
+func calculateOutputDep(uniqueKeys []*pb.Key, msg core.Msg) (hashes []core.OutputHash) {
+	for _, uk := range uniqueKeys {
+		var isUKUpdate bool
+		isUKUpdate = ukUpdated(uk.ColumnNames, msg.DmlMsg.Data, msg.DmlMsg.Old)
+
+		// add hash based on new data
+		keyName, h := dataHash(msg.Database, msg.Table, uk.GetName(), uk.ColumnNames, msg.DmlMsg.Data)
+		if keyName != "" {
+			hashes = append(hashes, core.OutputHash{Name: keyName, H: h})
+		}
+
+		// add hash if unique key changed
+		if isUKUpdate {
+			keyName, h := dataHash(msg.Database, msg.Table, uk.GetName(), uk.ColumnNames, msg.DmlMsg.Old)
+			if keyName != "" {
+				hashes = append(hashes, core.OutputHash{Name: keyName, H: h})
+			}
+		}
+	}
+
+	return
+}
+
+func dataHash(schema string, table string, idxName string, idxColumns []string, data map[string]interface{}) (string, uint64) {
+	key := []interface{}{schema, table, idxName}
+	var nonNull bool
+	for _, columnName := range idxColumns {
+		if data[columnName] != nil {
+			key = append(key, columnName, data[columnName])
+			nonNull = true
+		}
+	}
+	if !nonNull {
+		return "", 0
+	}
+
+	h, err := hashstructure.Hash(key, &hashOptions)
+	if err != nil {
+		log.Fatalf("error hash: %v, uk: %v", err, idxName)
+	}
+	return fmt.Sprint(key), h
+}
+
+func ukUpdated(ukColumns []string, newData map[string]interface{}, oldData map[string]interface{}) bool {
+	for _, column := range ukColumns {
+		// if oldData[column] == nil, we consider this is a insert
+		if oldData[column] != nil && !reflect.DeepEqual(newData[column], oldData[column]) {
+			return true
+		}
+	}
+	return false
 }
 
 func (t *BinlogTailer) AfterMsgCommit(msg *core.Msg) error {
@@ -257,17 +377,53 @@ func deserialize(raw *pb.Column, colType string) interface{} {
 	case "json":
 		return raw.GetBytesValue()
 	default:
-		log.Warnf("un-recognized mysql type: %v", raw)
+		log.Fatalf("un-recognized mysql type: %v", raw)
 		return raw
 	}
 }
 
-func (t *BinlogTailer) dispatchMsg(msg *core.Msg) error {
-	msg.InputStreamKey = utils.NewStringPtr("tidbbinlog")
-	pkSign := msg.GetPkSign()
-	msg.OutputDepHashes = []core.OutputHash{{pkSign, xxhash.ChecksumString64(pkSign)}}
+func (t *BinlogTailer) dispatchMsg(msgs []*core.Msg) {
+	// ignore internal txn data
+	hasInternalTxnTag := false
+	for _, msg := range msgs {
+		if utils.IsCircularTrafficTag(msg.Database, msg.Table) {
+			hasInternalTxnTag = true
+			log.Debugf("[binlogTailer] internal traffic found")
+			break
+		}
+	}
 
-	return errors.Trace(t.emitter.Emit(msg))
+	if hasInternalTxnTag && t.config.IgnoreBiDirectionalData {
+		last := msgs[len(msgs)-1]
+		msgs = []*core.Msg{
+			{
+				Phase:               last.Phase,
+				Type:                core.MsgCtl,
+				Timestamp:           last.Timestamp,
+				Done:                last.Done,
+				InputContext:        last.InputContext,
+				InputStreamKey:      last.InputStreamKey,
+				AfterCommitCallback: last.AfterAckCallback,
+			},
+		}
+	} else {
+		log.Debugf("[binlogTailer] do not ignore traffic: hasInternalTxnTag %v, cfg.Ignore %v, msgTxnBufferLen: %v", hasInternalTxnTag, t.config.IgnoreBiDirectionalData, len(msgs))
+	}
+
+	for i, m := range msgs {
+		if binlog_checker.IsBinlogCheckerMsg(m.Database, m.Table) || m.Database == consts.GravityDBName {
+			m.Type = core.MsgCtl
+		}
+
+		// check circular traffic again before emitter emit the message
+		if pipelineName, circular := core.MatchTxnTagPipelineName(t.config.FailOnTxnTags, m); circular {
+			log.Fatalf("[binlog_tailer] detected internal circular traffic, txn tag: %v", pipelineName)
+		}
+
+		if err := t.emitter.Emit(m); err != nil {
+			log.Fatalf("failed to emit, idx: %d, schema: %v, table: %v, msgType: %v, err: %v", i, m.Database, m.Table, m.Type, errors.ErrorStack(err))
+		}
+	}
 }
 
 func NewBinlogTailer(
@@ -302,47 +458,54 @@ func NewBinlogTailer(
 		kafkaConfig.Net.SASL.Password = kafkaGlobalConfig.Net.SASL.Password
 	}
 
-	kafkaConfig.Group.Mode = sarama_cluster.ConsumerModePartitions
-
 	//
 	// common settings
 	//
-	kafkaConfig.ClientID = srcKafkaCfg.Common.ClientID
-	kafkaConfig.ChannelBufferSize = srcKafkaCfg.Common.ChannelBufferSize
+	if srcKafkaCfg.Common.ClientID != "" {
+		kafkaConfig.ClientID = srcKafkaCfg.Common.ClientID
+	} else {
+		kafkaConfig.ClientID = "_gravity"
+	}
+	if srcKafkaCfg.Common.ChannelBufferSize > 0 {
+		kafkaConfig.ChannelBufferSize = srcKafkaCfg.Common.ChannelBufferSize
+	}
 
 	//
 	// consumer related performance tuning
 	//
-	if srcKafkaCfg.Consumer == nil {
-		return nil, errors.Errorf("empty consumer config")
+	if srcKafkaCfg.Consumer != nil {
+		d, err := time.ParseDuration(srcKafkaCfg.Consumer.Offsets.CommitInterval)
+		if err != nil {
+			return nil, errors.Errorf("invalid commit interval: %v", srcKafkaCfg.Consumer.Offsets.CommitInterval)
+		}
+		kafkaConfig.Consumer.Offsets.CommitInterval = d
+
+		if srcKafkaCfg.Consumer.Fetch.Default != 0 {
+			kafkaConfig.Consumer.Fetch.Default = srcKafkaCfg.Consumer.Fetch.Default
+		}
+
+		if srcKafkaCfg.Consumer.Fetch.Max != 0 {
+			kafkaConfig.Consumer.Fetch.Max = srcKafkaCfg.Consumer.Fetch.Max
+		}
+
+		if srcKafkaCfg.Consumer.Fetch.Min != 0 {
+			kafkaConfig.Consumer.Fetch.Min = srcKafkaCfg.Consumer.Fetch.Min
+		}
+
+		maxWaitDuration, err := time.ParseDuration(srcKafkaCfg.Consumer.MaxWaitTime)
+		if err != nil {
+			return nil, errors.Errorf("invalid max wait time")
+		}
+
+		kafkaConfig.Consumer.MaxWaitTime = maxWaitDuration
+	}
+	kafkaConfig.Consumer.Return.Errors = true
+
+	if err := kafkaConfig.Validate(); err != nil {
+		log.Fatal(err)
 	}
 
-	d, err := time.ParseDuration(srcKafkaCfg.Consumer.Offsets.CommitInterval)
-	if err != nil {
-		return nil, errors.Errorf("invalid commit interval: %v", srcKafkaCfg.Consumer.Offsets.CommitInterval)
-	}
-	kafkaConfig.Consumer.Offsets.CommitInterval = d
-
-	if srcKafkaCfg.Consumer.Fetch.Default != 0 {
-		kafkaConfig.Consumer.Fetch.Default = srcKafkaCfg.Consumer.Fetch.Default
-	}
-
-	if srcKafkaCfg.Consumer.Fetch.Max != 0 {
-		kafkaConfig.Consumer.Fetch.Max = srcKafkaCfg.Consumer.Fetch.Max
-	}
-
-	if srcKafkaCfg.Consumer.Fetch.Min != 0 {
-		kafkaConfig.Consumer.Fetch.Min = srcKafkaCfg.Consumer.Fetch.Min
-	}
-
-	maxWaitDuration, err := time.ParseDuration(srcKafkaCfg.Consumer.MaxWaitTime)
-	if err != nil {
-		return nil, errors.Errorf("invalid max wait time")
-	}
-
-	kafkaConfig.Consumer.MaxWaitTime = maxWaitDuration
-
-	log.Infof("[tidb_binlog_tailer] consumer config: sarama config: %v, pipeline config: %+v", kafkaConfig, srcKafkaCfg)
+	log.Infof("[tidb_binlog_tailer] consumer config: sarama config: %#v", kafkaConfig)
 
 	consumer, err := sarama_cluster.NewConsumer(
 		srcKafkaCfg.BrokerConfig.BrokerAddrs,
@@ -364,6 +527,7 @@ func NewBinlogTailer(
 		emitter:         emitter,
 		router:          router,
 		binlogChecker:   binlogChecker,
+		parser:          parser.New(),
 	}
 	return tailer, nil
 }

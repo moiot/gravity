@@ -27,6 +27,8 @@ var (
 	BinlogCheckInterval = time.Second
 )
 
+const TiDBKafka = "tidbkafka"
+
 type tidbKafkaStreamInputPlugin struct {
 	pipelineName string
 
