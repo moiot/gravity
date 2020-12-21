@@ -236,6 +236,9 @@ func EncodeBatchPositionValue(v interface{}) (string, error) {
 		return "", errors.Errorf("invalid position value type: %v", reflect.TypeOf(v))
 	}
 	v1.SchemaVersion = SchemaVersionV1
+
+	mu.Lock()
+	defer mu.Unlock()
 	return myJson.MarshalToString(v1)
 }
 
