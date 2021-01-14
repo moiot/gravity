@@ -91,6 +91,11 @@ func (msg *Msg) String() string {
 		b.WriteString("0 ")
 	}
 	b.WriteString(string(msg.Type))
+
+	if msg.InputContext != nil {
+		b.WriteString(fmt.Sprintf(" %s", msg.InputContext))
+	}
+
 	if msg.Type == MsgDDL {
 		b.WriteString(" ")
 		b.WriteString(msg.DdlMsg.Statement)

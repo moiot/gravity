@@ -55,7 +55,7 @@ func (f *deleteDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err er
 	}
 
 	if msg.DmlMsg == nil {
-		return false, errors.Errorf("DmlMsg is null")
+		return true, nil
 	}
 
 	for _, name := range f.columns {
