@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"database/sql"
+	"github.com/shopspring/decimal"
 	"reflect"
 	"time"
 
@@ -105,6 +106,12 @@ func SQLDataPtrs2Val(dataPtrs []interface{}, columnTypes []*sql.ColumnType) map[
 				ret[columnName] = nil
 			} else {
 				ret[columnName] = v.Time
+			}
+		case decimal.NullDecimal:
+			if !v.Valid {
+				ret[columnName] = nil
+			} else {
+				ret[columnName] = v.Decimal
 			}
 		default:
 			log.Fatalf("failed to catch columnName: %v, type: %v", columnName, reflect.TypeOf(columnData))
