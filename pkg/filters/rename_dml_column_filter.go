@@ -80,7 +80,7 @@ func (f *renameDmlColumnFilter) Filter(msg *core.Msg) (continueNext bool, err er
 	}
 
 	if msg.DmlMsg == nil {
-		return false, errors.Errorf("DmlMsg is null")
+		return true, nil
 	}
 
 	for i, fromColumn := range f.from {

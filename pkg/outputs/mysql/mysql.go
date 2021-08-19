@@ -330,7 +330,7 @@ func (output *MySQLOutput) Execute(msgs []*core.Msg) error {
 						if e, ok := errors.Cause(err).(*mysqldriver.MySQLError); ok && (e.Number == 1060 || e.Number == 1061) {
 							log.Errorf("[output-mysql] ignore duplicate column or index. ddl: %s. err: %s", stmt, e)
 						} else {
-							log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err)
+							log.Fatal("[output-mysql] error exec ddl: ", stmt, ". err:", err, ". gtid: ", msg.InputContext)
 						}
 					} else {
 						log.Info("[output-mysql] executed ddl: ", stmt)
