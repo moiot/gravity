@@ -158,10 +158,13 @@ func (cache *defaultPositionCache) GetEncodedPersistentPosition() (position_repo
 }
 
 func (cache *defaultPositionCache) Flush() error {
-	cache.positionMutex.Lock()
-	defer cache.positionMutex.Unlock()
+	checkDirty := func() bool {
+		cache.positionMutex.Lock()
+		defer cache.positionMutex.Unlock()
+		return cache.dirty
+	}
 
-	if !cache.dirty {
+	if !checkDirty() {
 		return nil
 	}
 
@@ -169,6 +172,10 @@ func (cache *defaultPositionCache) Flush() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	
+	cache.positionMutex.Lock()
+	defer cache.positionMutex.Unlock()
+	
 	cache.positionValueString = s
 
 	err = cache.repo.Put(cache.pipelineName, cache.position.PositionMeta, s)
