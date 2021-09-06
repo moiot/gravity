@@ -1,9 +1,10 @@
 package position_cache
 
 import (
-	"github.com/moiot/gravity/pkg/position_repos"
 	"sync"
 	"time"
+
+	"github.com/moiot/gravity/pkg/position_repos"
 
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
@@ -29,15 +30,16 @@ type defaultPositionCache struct {
 	flushDuration time.Duration
 	pipelineName  string
 	exist         bool
-	dirty         bool
 	repo          position_repos.PositionRepo
 
 	closeMutex sync.Mutex
 	closed     bool
 
-	position            position_repos.Position
-	positionValueString string
-	positionMutex       sync.Mutex
+	position               position_repos.Position
+	positionValueString    string
+	positionVersion        int64
+	positionFlushedVersion int64
+	positionMutex          sync.Mutex
 
 	closeC chan struct{}
 	wg     sync.WaitGroup
@@ -108,10 +110,10 @@ func (cache *defaultPositionCache) Put(position position_repos.Position) error {
 		if err := cache.repo.Put(cache.pipelineName, position.PositionMeta, s); err != nil {
 			return errors.Trace(err)
 		}
-		cache.dirty = false
+		cache.positionFlushedVersion = cache.positionVersion
 		cache.exist = true
 	} else {
-		cache.dirty = true
+		cache.positionVersion++
 	}
 	cache.position = position
 	return nil
@@ -158,24 +160,39 @@ func (cache *defaultPositionCache) GetEncodedPersistentPosition() (position_repo
 }
 
 func (cache *defaultPositionCache) Flush() error {
+	var version int64
+	var pos position_repos.Position
+
+	cache.positionMutex.Lock()
+
+	if cache.positionFlushedVersion >= cache.positionVersion {
+		cache.positionMutex.Unlock()
+		return nil
+	} else {
+		version = cache.positionVersion
+		pos = cache.position
+		cache.positionMutex.Unlock()
+	}
+
+	s, err := cache.encodePositionValueString(&pos)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	cache.positionMutex.Lock()
 	defer cache.positionMutex.Unlock()
 
-	if !cache.dirty {
-		return nil
+	if cache.positionVersion == version {
+		cache.positionValueString = s
+
+		err = cache.repo.Put(cache.pipelineName, cache.position.PositionMeta, s)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		cache.positionFlushedVersion = version
 	}
 
-	s, err := cache.encodePositionValueString(&cache.position)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	cache.positionValueString = s
-
-	err = cache.repo.Put(cache.pipelineName, cache.position.PositionMeta, s)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	cache.dirty = false
 	return nil
 }
 
@@ -197,7 +214,7 @@ func (cache *defaultPositionCache) Clear() error {
 
 	cache.repo.Close()
 
-	cache.dirty = false
+	cache.positionFlushedVersion = cache.positionVersion
 	cache.exist = false
 	cache.closed = true
 	return nil
