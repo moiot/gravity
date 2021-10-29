@@ -171,19 +171,26 @@ func (w *staticSlidingWindow) reportMetrics() {
 	for {
 		select {
 		case <-ticker.C:
-			watermark := w.Watermark()
+			waitingCnt := len(w.waitingItemC)
 
-			// ProcessTime can be seen as the duration that event are in the queue.
-			seconds := time.Since(watermark.ProcessTime).Seconds()
-			if seconds > ProcessDelayWarningThreshold {
-				log.Warnf("[sliding_window] item not ack after %f seconds. %s", seconds, w.nextItemToCommit)
+			if waitingCnt > 0 {
+				watermark := w.Watermark()
+
+				// ProcessTime can be seen as the duration that event are in the queue.
+				seconds := time.Since(watermark.ProcessTime).Seconds()
+				if seconds > ProcessDelayWarningThreshold {
+					log.Warnf("[sliding_window] item not ack after %f seconds. %s", seconds, w.nextItemToCommit)
+				}
+				metrics.End2EndProcessTimeHistogram.WithLabelValues(env.PipelineName).Observe(seconds)
+
+				// EventTime can be seen as the end to end duration of event process time.
+				metrics.End2EndEventTimeHistogram.WithLabelValues(env.PipelineName).Observe(time.Since(watermark.EventTime).Seconds())
+			} else {
+				metrics.End2EndProcessTimeHistogram.WithLabelValues(env.PipelineName).Observe(0)
+				metrics.End2EndEventTimeHistogram.WithLabelValues(env.PipelineName).Observe(0)
 			}
-			metrics.End2EndProcessTimeHistogram.WithLabelValues(env.PipelineName).Observe(seconds)
 
-			// EventTime can be seen as the end to end duration of event process time.
-			metrics.End2EndEventTimeHistogram.WithLabelValues(env.PipelineName).Observe(time.Since(watermark.EventTime).Seconds())
-
-			metrics.QueueLength.WithLabelValues(env.PipelineName, "sliding-window-waiting-chan", w.name).Set(float64(len(w.waitingItemC)))
+			metrics.QueueLength.WithLabelValues(env.PipelineName, "sliding-window-waiting-chan", w.name).Set(float64(waitingCnt))
 			metrics.QueueLength.WithLabelValues(env.PipelineName, "sliding-window-ready-chan", w.name).Set(float64(len(w.readyC)))
 			metrics.QueueLength.WithLabelValues(env.PipelineName, "sliding-window-ready-heap", w.name).Set(float64(atomic.LoadInt64(&w.heapSize)))
 
