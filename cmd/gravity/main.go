@@ -210,6 +210,7 @@ func statusHandler(server *app.Server, name, hash string) func(http.ResponseWrit
 			Name:       name,
 			ConfigHash: hash,
 			Position:   v,
+			Watermarks: server.Scheduler.Watermarks(),
 			Stage:      state,
 			Version:    utils.Version,
 		}
