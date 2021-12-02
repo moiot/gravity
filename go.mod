@@ -42,6 +42,7 @@ require (
 	github.com/pingcap/tidb v0.0.0-20190118125846-54b6de0880f0
 	github.com/pingcap/tipb v0.0.0-20191127084114-0820b784842f // indirect
 	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
+	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/serialx/hashring v0.0.0-20170811022404-6a9381c5a83e
 	github.com/shirou/gopsutil v2.18.12+incompatible // indirect
