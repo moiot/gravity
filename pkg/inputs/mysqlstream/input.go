@@ -40,7 +40,7 @@ type MySQLBinlogInputPluginConfig struct {
 	IgnoreBiDirectionalData bool                        `mapstructure:"ignore-bidirectional-data" toml:"ignore-bidirectional-data" json:"ignore-bidirectional-data"`
 	StartPosition           *config.MySQLBinlogPosition `mapstructure:"start-position" toml:"start-position" json:"start-position"`
 
-	SourceProbeCfg *helper.SourceProbeCfg `mapstructure:"source-probe-config"json:"source-probe-config"`
+	SourceProbeCfg *helper.SourceProbeCfg `mapstructure:"source-probe-config" json:"source-probe-config"`
 
 	PositionRepo *config.GenericPluginConfig `mapstructure:"position-repo" toml:"position-repo" json:"position-repo"`
 
@@ -53,9 +53,9 @@ type MySQLBinlogInputPluginConfig struct {
 	//
 	// internal configurations that is not exposed to users
 	//
-	DisableBinlogChecker bool   `mapstructure:"-"json:"-"`
-	DebugBinlog          bool   `mapstructure:"-"json:"-"`
-	BinlogSyncerTimeout  string `mapstructure:"-"json:"-"`
+	DisableBinlogChecker bool   `mapstructure:"-" json:"-"`
+	DebugBinlog          bool   `mapstructure:"-" json:"-"`
+	BinlogSyncerTimeout  string `mapstructure:"-" json:"-"`
 }
 
 type mysqlStreamInputPlugin struct {
