@@ -74,10 +74,10 @@ var (
 const BatchTableSchedulerName = "batch-table-scheduler"
 
 type BatchSchedulerConfig struct {
-	NrWorker          int           `mapstructure:"nr-worker"json:"nr-worker"`
-	MaxBatchPerWorker int           `mapstructure:"batch-size"json:"batch-size"`
-	QueueSize         int           `mapstructure:"queue-size"json:"queue-size"`
-	SlidingWindowSize int           `mapstructure:"sliding-window-size"json:"sliding-window-size"`
+	NrWorker          int           `mapstructure:"nr-worker" json:"nr-worker"`
+	MaxBatchPerWorker int           `mapstructure:"batch-size" json:"batch-size"`
+	QueueSize         int           `mapstructure:"queue-size" json:"queue-size"`
+	SlidingWindowSize int           `mapstructure:"sliding-window-size" json:"sliding-window-size"`
 	NrRetries         int           `mapstructure:"nr-retries" json:"nr-retries"`
 	RetrySleepString  string        `mapstructure:"retry-sleep" json:"retry-sleep"`
 	HealthyThreshold  int           `mapstructure:"healthy-threshold" json:"healthy-threshold"`
