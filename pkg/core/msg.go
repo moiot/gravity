@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moiot/gravity/pkg/sliding_window"
+
 	"github.com/juju/errors"
 	"github.com/pingcap/parser/ast"
 	log "github.com/sirupsen/logrus"
@@ -190,11 +192,12 @@ const (
 )
 
 type TaskReportStatus struct {
-	Name       string          `json:"name"`
-	ConfigHash string          `json:"configHash"`
-	Position   string          `json:"position"`
-	Stage      TaskReportStage `json:"stage"`
-	Version    string          `json:"version"`
+	Name       string                              `json:"name"`
+	ConfigHash string                              `json:"configHash"`
+	Position   string                              `json:"position"`
+	Watermarks map[string]sliding_window.Watermark `json:"watermarks"`
+	Stage      TaskReportStage                     `json:"stage"`
+	Version    string                              `json:"version"`
 }
 
 func HashConfig(config string) string {

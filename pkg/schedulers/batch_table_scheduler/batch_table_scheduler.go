@@ -173,6 +173,23 @@ func (scheduler *batchScheduler) Healthy() bool {
 	}
 }
 
+func (scheduler *batchScheduler) Watermarks() (result map[string]sliding_window.Watermark) {
+	if scheduler.cfg.SlidingWindowSize == 0 {
+		return
+	}
+
+	result = make(map[string]sliding_window.Watermark)
+
+	scheduler.windowMutex.Lock()
+	defer scheduler.windowMutex.Unlock()
+
+	for k, w := range scheduler.slidingWindows {
+		result[k] = w.Watermark()
+	}
+
+	return
+}
+
 func (scheduler *batchScheduler) Start(output core.Output) error {
 	if scheduler.cfg.MaxBatchPerWorker > config.TxnBufferLimit-1 {
 		return errors.Errorf("max batch per worker exceed txn buffer limit")
