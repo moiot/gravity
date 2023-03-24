@@ -106,8 +106,8 @@ func getUniqueKeysFromDB(db *sql.DB, dbName string, tableName string) (map[strin
 	for _, value := range resultRows {
 		keyName := value[2].String
 		columnName := value[4].String
-		if columns, ok := uniqueKeyMap[keyName]; ok {
-			columns = append(columns, columnName)
+		if _, ok := uniqueKeyMap[keyName]; ok {
+			uniqueKeyMap[keyName] = append(uniqueKeyMap[keyName], columnName)
 		} else {
 			uniqueKeyMap[keyName] = []string{columnName}
 		}
