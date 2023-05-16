@@ -96,9 +96,6 @@ func GetSingleSqlPlaceHolderAndArgWithEncodedData(msg *core.Msg, tableDef *schem
 			columnData, ok := data[columnName]
 			if !ok {
 				placeHolders = append(placeHolders, "DEFAULT")
-			} else if (column.Type == schema_store.TypeDatetime || column.Type == schema_store.TypeTimestamp) &&
-				column.DefaultVal.ValueString == "CURRENT_TIMESTAMP" {
-				placeHolders = append(placeHolders, "DEFAULT")
 			} else {
 				args = append(args, adjustArgs(columnData, &column))
 				placeHolders = append(placeHolders, "?")
