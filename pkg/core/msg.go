@@ -95,7 +95,7 @@ func (msg *Msg) String() string {
 	b.WriteString(string(msg.Type))
 
 	if msg.InputContext != nil {
-		b.WriteString(fmt.Sprintf(" %s", msg.InputContext))
+		b.WriteString(fmt.Sprintf(" %v", msg.InputContext))
 	}
 
 	if msg.Type == MsgDDL {
