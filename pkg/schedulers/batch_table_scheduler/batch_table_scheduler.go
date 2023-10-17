@@ -97,7 +97,7 @@ type batchScheduler struct {
 	tableBuffersMutex sync.Mutex
 	tableBuffers      map[string]chan *core.Msg
 	tableBufferWg     sync.WaitGroup
-	tableLatchC       map[string]chan uint64
+	tableLatchC       map[string]chan []uint64
 
 	workerQueues []chan []*core.Msg
 	workerWg     sync.WaitGroup
@@ -275,7 +275,7 @@ func (scheduler *batchScheduler) Start(output core.Output) error {
 	}
 
 	scheduler.tableBuffers = make(map[string]chan *core.Msg)
-	scheduler.tableLatchC = make(map[string]chan uint64)
+	scheduler.tableLatchC = make(map[string]chan []uint64)
 	return nil
 }
 
@@ -408,10 +408,10 @@ func (scheduler *batchScheduler) dispatchMsg(msg *core.Msg) error {
 
 func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 	scheduler.tableBuffers[tableKey] = make(chan *core.Msg, scheduler.cfg.MaxBatchPerWorker*10)
-	scheduler.tableLatchC[tableKey] = make(chan uint64, scheduler.cfg.SlidingWindowSize)
+	scheduler.tableLatchC[tableKey] = make(chan []uint64, scheduler.cfg.SlidingWindowSize)
 	scheduler.tableBufferWg.Add(1)
 
-	go func(c chan *core.Msg, tableLatchC chan uint64, key string) {
+	go func(c chan *core.Msg, tableLatchC chan []uint64, key string) {
 		defer scheduler.tableBufferWg.Done()
 
 		var batch []*core.Msg
@@ -423,9 +423,11 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 		latches := make(map[uint64]int)
 
 		defaultCB := func(message *core.Msg) error {
-			for _, h := range message.OutputDepHashes {
-				tableLatchC <- h.H
+			hashes := make([]uint64, len(message.OutputDepHashes))
+			for i, h := range message.OutputDepHashes {
+				hashes[i] = h.H
 			}
+			tableLatchC <- hashes
 			return nil
 		}
 
@@ -468,6 +470,13 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 				for _, h := range m.OutputDepHashes {
 					if latches[h.H] > 0 || curLatches[h.H] > 0 {
 						latched = true
+
+						now := time.Now()
+
+						if now.Sub(m.EnterScheduler).Seconds() > 5 {
+							log.Warnf("[%s] latch for long, latch: %s, EnterScheduler: %s, msg: %s", now, h.Name, m.EnterScheduler, m)
+						}
+
 						break
 					}
 				}
@@ -563,13 +572,21 @@ func (scheduler *batchScheduler) startTableDispatcher(tableKey string) {
 				batch = append(batch, msg)
 				tryFlush()
 
-			case h := <-tableLatchC:
-				latches[h]--
-				if latches[h] < 0 {
-					log.Fatalf("latch operation bug: h = %v", h)
+			case locks := <-tableLatchC:
+				flush := false
+
+				for _, h := range locks {
+					latches[h]--
+					if latches[h] < 0 {
+						log.Fatalf("latch operation bug: h = %v", h)
+					}
+					if latches[h] == 0 {
+						delete(latches, h)
+						flush = true
+					}
 				}
-				if latches[h] == 0 {
-					delete(latches, h)
+
+				if flush {
 					tryFlush()
 				}
 

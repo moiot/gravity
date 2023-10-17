@@ -19,9 +19,11 @@ package stdout
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/mitchellh/mapstructure"
+
 	"github.com/moiot/gravity/pkg/outputs/routers"
 
 	"github.com/moiot/gravity/pkg/core"
@@ -87,11 +89,11 @@ func (plugin *stdOutput) Execute(msgs []*core.Msg) error {
 
 		if !plugin.disableLog {
 			if msg.DmlMsg != nil {
-				fmt.Fprintf(os.Stdout, "schema: %v, table: %v, dml op: %v, data: %v\n", msg.Database, msg.Table, msg.DmlMsg.Operation, msg.DmlMsg.Data)
+				fmt.Fprintf(os.Stdout, "[%s] schema: %v, table: %v, dml op: %v, data: %v\n", time.Now(), msg.Database, msg.Table, msg.DmlMsg.Operation, msg.DmlMsg.Data)
 			} else if msg.DdlMsg != nil {
-				fmt.Fprintf(os.Stdout, "schema: %v, table: %v, ddl: %v\n", msg.Database, msg.Table, msg.DdlMsg.Statement)
+				fmt.Fprintf(os.Stdout, "[%s] schema: %v, table: %v, ddl: %v\n", time.Now(), msg.Database, msg.Table, msg.DdlMsg.Statement)
 			} else {
-				fmt.Fprintf(os.Stdout, "schema: %v, table: %v, type: %v", msg.Database, msg.Table, msg.Type)
+				fmt.Fprintf(os.Stdout, "[%s] schema: %v, table: %v, type: %v", time.Now(), msg.Database, msg.Table, msg.Type)
 			}
 		}
 	}
