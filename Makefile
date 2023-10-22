@@ -27,6 +27,7 @@ dev-down:
 
 go-test:
 	go test -failfast -race ./integration_test
+	cd pkg/registry/test_data && make build
 	go test -timeout 10m -coverprofile=cover.out $(TEST_DIRS) && go tool cover -func=cover.out | tail -n 1
 
 test-local:
@@ -49,8 +50,6 @@ run-dev:
 
 build:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity cmd/gravity/main.go
-	#$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/padder cmd/padder/main.go
-
 
 build-linux:
 	GOARCH=amd64 GOOS=linux $(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/gravity-linux-amd64 cmd/gravity/main.go
@@ -74,13 +73,20 @@ proto:
 	@ which protoc >/dev/null || brew install protobuf
 	@ which protoc-gen-gofast >/dev/null || go get github.com/gogo/protobuf/protoc-gen-gofast
 
-	protoc -I=protocol/msgpb -I=${GOPATH}/src -I=${GOPATH}/src/github.com/gogo/protobuf/protobuf --gofast_out=\
+	protoc -I=protocol/msgpb -I=${GOPATH}/src -I=${GOPATH}/src/github.com/gogo/protobuf/protobuf --gofast_out=.\
 	plugins=grpc,\
 	Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,\
 	Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types,\
 	Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,\
 	Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types:./pkg/protocol/msgpb \
 	protocol/msgpb/message.proto
+
+	protoc -I=protocol/tidb -I=${GOPATH}/src -I=${GOPATH}/src/github.com/gogo/protobuf/protobuf --gofast_out=.\
+	Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,\
+	Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types,\
+	Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,\
+	Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types:./pkg/protocol/tidb \
+	protocol/tidb/tidb.proto
 
 
 mock:

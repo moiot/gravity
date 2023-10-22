@@ -233,7 +233,7 @@ func IsInternalTrafficV2(db string, tbl string) bool {
 }
 
 func MatchTxnTagPipelineName(patterns []string, msg *Msg) (string, bool) {
-	if IsInternalTrafficV2(msg.Database, msg.Table) {
+	if len(patterns) > 0 && IsInternalTrafficV2(msg.Database, msg.Table) {
 		pipelineName := msg.DmlMsg.Data["pipeline_name"].(string)
 		for _, pattern := range patterns {
 			if utils.Glob(pattern, pipelineName) {

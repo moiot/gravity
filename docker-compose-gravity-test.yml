@@ -1,7 +1,7 @@
 version: '3.2'
 services:
   source-db:
-    image: mysql:5.7.18
+    image: mysql:5.7
     container_name: source-db-test
     environment:
       - MYSQL_ALLOW_EMPTY_PASSWORD=yes
@@ -14,7 +14,7 @@ services:
       - ./mycnf:/etc/mysql/conf.d
 
   target-db:
-    image: mysql:5.7.18
+    image: mysql:5.7
     container_name: target-db-test
     environment:
       - MYSQL_ALLOW_EMPTY_PASSWORD=yes
@@ -62,6 +62,91 @@ services:
       - "ES_JAVA_OPTS=-Xms750m -Xmx750m"
     logging:
       driver: none
+      
+  pd:
+    image: pingcap/pd:latest
+    ports:
+      - "2379"
+    volumes:
+      - ./integration_test/config/pd.toml:/pd.toml:ro
+    command:
+      - --name=pd
+      - --client-urls=http://0.0.0.0:2379
+      - --peer-urls=http://0.0.0.0:2380
+      - --advertise-client-urls=http://pd:2379
+      - --advertise-peer-urls=http://pd:2380
+      - --initial-cluster=pd=http://pd:2380
+      - --data-dir=/data/pd
+      - --config=/pd.toml
+    restart: on-failure
+
+  tikv:
+    image: pingcap/tikv:latest
+    volumes:
+      - ./integration_test/config/tikv.toml:/tikv.toml:ro
+    command:
+      - --addr=0.0.0.0:20160
+      - --advertise-addr=tikv:20160
+      - --data-dir=/data/tikv
+      - --pd=pd:2379
+      - --config=/tikv.toml
+    depends_on:
+      - "pd"
+    restart: on-failure
+
+  pump:
+    image: pingcap/tidb-binlog:latest
+    logging:
+      driver: none
+    volumes:
+      - ./integration_test/config/pump.toml:/pump.toml:ro
+    command:
+      - /pump
+      - --addr=0.0.0.0:8250
+      - --advertise-addr=pump:8250
+      - --data-dir=/data/pump
+      - --node-id=pump
+      - --pd-urls=http://pd:2379
+      - --config=/pump.toml
+    depends_on:
+      - "pd"
+    restart: on-failure
+
+  drainer:
+    image: pingcap/tidb-binlog:latest
+    logging:
+      driver: none
+    volumes:
+      - ./integration_test/config/drainer.toml:/drainer.toml:ro
+    command:
+      - /drainer
+      - --addr=drainer:8249
+      - --data-dir=/data/data.drainer
+      - --pd-urls=http://pd:2379
+      - --config=/drainer.toml
+      - --initial-commit-ts=0
+      - --dest-db-type=kafka
+    depends_on:
+      - "pd"
+      - "kafka"
+    restart: on-failure
+
+  tidb:
+    image: pingcap/tidb:latest
+    ports:
+      - "4000:4000"
+      - "10080:10080"
+    volumes:
+      - ./integration_test/config/tidb.toml:/tidb.toml:ro
+    command:
+      - --store=tikv
+      - --path=pd:2379
+      - --config=/tidb.toml
+      - --enable-binlog=true
+    depends_on:
+      - "tikv"
+      - "pump"
+    restart: on-failure
 
   gravity-test:
     build:
@@ -69,6 +154,7 @@ services:
       dockerfile: Dockerfile.test.gravity
     depends_on:
       - mongo
+      - tidb
     environment:
       - MONGO_HOST=mongo
       - KAFKA_BROKER=kafka:9092
@@ -78,4 +164,5 @@ services:
               "--", "./wait-for-it.sh", "mongo:27017", "-t", "0",
               "--", "./wait-for-it.sh", "kafka:9092", "-t", "0",
               "--", "./wait-for-it.sh", "elasticsearch:9200", "-t", "0",
+              "--", "./wait-for-it.sh", "tidb:4000", "-t", "0",
               "--", "make", "go-test"]

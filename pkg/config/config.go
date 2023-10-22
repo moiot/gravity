@@ -121,6 +121,7 @@ type SourceTiDBConfig struct {
 	// OffsetStoreConfig       *SourceProbeCfg    `mapstructure:"offset-store" toml:"offset-store" json:"offset-store"`
 	PositionRepo            *GenericPluginConfig `mapstructure:"position-repo" toml:"position-repo" json:"position-repo"`
 	IgnoreBiDirectionalData bool                 `mapstructure:"ignore-bidirectional-data" toml:"ignore-bidirectional-data" json:"ignore-bidirectional-data"`
+	FailOnTxnTags           []string             `mapstructure:"fail-on-txn-tags" toml:"fail-on-txn-tags" json:"fail-on-txn-tags"`
 }
 
 type GtmConfig struct {
