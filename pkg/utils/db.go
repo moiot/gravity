@@ -3,6 +3,7 @@ package utils
 import (
 	"database/sql"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"math"
 	"math/rand"
 	"net/url"
@@ -149,7 +150,7 @@ func GetScanType(columnType *sql.ColumnType) reflect.Type {
 	if IsColumnString(columnType) {
 		return reflect.TypeOf(sql.NullString{})
 	} else if IsColumnFloat(columnType) {
-		return reflect.TypeOf(sql.NullFloat64{})
+		return reflect.TypeOf(decimal.NullDecimal{})
 	} else {
 		return columnType.ScanType()
 	}
@@ -610,13 +611,14 @@ func SQLWithAnnotation(annotation string, sql string) string {
 
 func NewBinlogSyncer(serverID uint32, dbConfig *config.DBConfig, heartbeatPeriod time.Duration) *replication.BinlogSyncer {
 	syncerConfig := replication.BinlogSyncerConfig{
-		ServerID:  serverID,
-		Flavor:    "mysql",
-		Host:      dbConfig.Host,
-		Port:      uint16(dbConfig.Port),
-		User:      dbConfig.Username,
-		Password:  dbConfig.Password,
-		ParseTime: true,
+		ServerID:   serverID,
+		Flavor:     "mysql",
+		Host:       dbConfig.Host,
+		Port:       uint16(dbConfig.Port),
+		User:       dbConfig.Username,
+		Password:   dbConfig.Password,
+		ParseTime:  true,
+		UseDecimal: true,
 	}
 
 	if heartbeatPeriod > 0 {
